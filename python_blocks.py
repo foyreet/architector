@@ -1,4 +1,4 @@
-"""Validate Python block data and call the isolated broker; never execute code here."""
+"""Validate Python block data and run code in a separate local process."""
 import ast
 import hashlib
 import json
@@ -48,26 +48,30 @@ def receive(sock, size):
     result = bytearray()
     while len(result) < size:
         part = sock.recv(min(65536, size - len(result)))
-        if not part: ml.error('Изолированная среда прервала ответ.', 503)
+        if not part: ml.error('Python-исполнитель прервал ответ.', 503)
         result.extend(part)
     return result
 
 
 def sandbox(payload):
-    path = os.environ.get('ARCHITECT_CODE_SOCKET', '/run/architect-code/runner.sock')
+    path = os.environ.get('ARCHITECT_CODE_SOCKET')
     raw = ml.encode(payload)
     if len(raw) > MAX_BYTES: ml.error('Входные данные Python-блока больше 32 МиБ.', 413)
-    try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
-            connection.settimeout(payload['timeout'] + 30); connection.connect(path)
-            connection.sendall(struct.pack('!I', len(raw)))
-            connection.sendall(raw)
-            del raw
-            size = struct.unpack('!I', receive(connection, 4))[0]
-            if not 0 < size <= MAX_BYTES: ml.error('Некорректный размер ответа среды.', 503)
-            response = json.loads(receive(connection, size))
-    except (OSError, ValueError, RecursionError):
-        ml.error('Изолированная среда Python недоступна. Запустите приложение через Docker Compose или run_local.py. Код без изоляции не выполняется.', 503)
+    if not path:
+        import code_sandbox
+        response = code_sandbox.run(payload)
+    else:
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+                connection.settimeout(payload['timeout'] + 30); connection.connect(path)
+                connection.sendall(struct.pack('!I', len(raw)))
+                connection.sendall(raw)
+                del raw
+                size = struct.unpack('!I', receive(connection, 4))[0]
+                if not 0 < size <= MAX_BYTES: ml.error('Некорректный размер ответа среды.', 503)
+                response = json.loads(receive(connection, size))
+        except (OSError, ValueError, RecursionError):
+            ml.error('Python-исполнитель недоступен. Перезапустите приложение через run_local.py.', 503)
     if not isinstance(response, dict): ml.error('Некорректный ответ среды Python.', 503)
     if response.get('error'):
         ml.error(str(response['error'])[:8000] + ('\nЖурнал:\n' + str(response.get('logs', ''))[:8000] if response.get('logs') else ''), 422)

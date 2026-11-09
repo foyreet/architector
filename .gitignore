@@ -10,7 +10,6 @@ server-access.txt
 *.log
 .env
 .env.*
-!.env.example
 
 # Optional local AI Chat document parsers.
 .chat-deps/

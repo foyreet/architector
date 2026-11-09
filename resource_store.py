@@ -4,7 +4,6 @@ import json
 import os
 from pathlib import Path
 import re
-import resource
 import shutil
 import sys
 import time
@@ -47,7 +46,7 @@ def inventory(context):
             if path.suffix != '.json': continue
             count += 1
             if count > 10000 or path.stat().st_size > 32 * 1024 * 1024: raise bc.ContractError('Хранилище слишком большое для безопасной автоматической проверки ссылок.', 413)
-            try: value = json.loads(path.read_text())
+            try: value = json.loads(path.read_text(encoding='utf-8'))
             except (OSError, ValueError): raise bc.ContractError('Не удалось проверить ссылки в истории. Очистка остановлена.', 409) from None
             for identity in refs(value): reached.add(identity); sources.setdefault(identity, set()).add(category)
     pending = list(reached)
@@ -57,7 +56,7 @@ def inventory(context):
         if not path.exists(): continue
         try:
             if path.stat().st_size > ml.MAX_BYTES: raise ValueError()
-            content = json.loads(path.read_text())
+            content = json.loads(path.read_text(encoding='utf-8'))
         except (OSError, ValueError): raise bc.ContractError('Повреждён артефакт, автоматическая очистка остановлена.', 409) from None
         for ref in refs(content):
             sources.setdefault(ref, set()).add('Зависимость модели/таблицы')
@@ -68,7 +67,7 @@ def inventory(context):
         stat = path.stat(); identity = path.stem
         reference = None
         if identity in pins:
-            reference = bc.artifact(json.loads(path.read_text())['kind'], 'local', identity)
+            reference = bc.artifact(json.loads(path.read_text(encoding='utf-8'))['kind'], 'local', identity)
         assets.append({'id': identity, 'bytes': stat.st_size, 'pinned': identity in pins, 'label': pins.get(identity, ''), 'artifact': reference,
                        'referenced': identity in reached, 'sources': sorted(sources.get(identity, [])),
                        'removable': identity not in reached and time.time() - stat.st_mtime >= 60})
@@ -85,12 +84,22 @@ def inventory(context):
                 raw = (folder/name).read_text().strip()
                 memory[key] = int(raw) if raw.isdecimal() else None
         except (OSError, StopIteration): pass
+    elif os.name == 'nt':
+        import psutil
+        info = psutil.virtual_memory()
+        memory.update(total=info.total, available=info.available)
     else:
         try: memory['total'] = os.sysconf('SC_PHYS_PAGES') * os.sysconf('SC_PAGE_SIZE')
         except (ValueError, OSError): pass
-    memory['process_peak'] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform == 'darwin' else 1024)
+    if os.name == 'nt':
+        import psutil
+        info = psutil.Process().memory_info()
+        memory['process_peak'] = getattr(info, 'peak_wset', info.rss)
+    else:
+        import resource
+        memory['process_peak'] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform == 'darwin' else 1024)
     return {'memory': memory, 'disk': {'total': disk.total, 'free': disk.free}, 'sizes': sizes, 'artifacts': assets,
-            'removable_bytes': sum(a['bytes'] for a in assets if a['removable']), 'load': list(os.getloadavg()), 'cpu_count': os.cpu_count(),
+            'removable_bytes': sum(a['bytes'] for a in assets if a['removable']), 'load': list(os.getloadavg()) if hasattr(os, 'getloadavg') else [], 'cpu_count': os.cpu_count(),
             'note': 'RAM и диск относятся к серверу; размеры разделов и артефакты — к вашему аккаунту. Очистка затрагивает только JSON-артефакты без ссылок старше минуты. Датасеты и веса автоматически не удаляются.'}
 
 

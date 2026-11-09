@@ -82,6 +82,21 @@ class LocalTests(unittest.TestCase):
         self.assertFalse(ai.config(self.root)['api_key'])
         self.assertEqual(self.post('/api/codex/configure',{'provider':'compatible','base_url':'http://external.invalid','model':'local'})[0],400)
 
+    def test_codex_readiness_does_not_launch_process_or_change_provider(self):
+        ai.save(self.root, {'provider':'compatible','base_url':'http://localhost:11434/v1','model':'local','api_key':'test-only'})
+        with patch.object(chat.shutil,'which',return_value=None), patch.object(chat,'client',side_effect=AssertionError('Must not start CLI')):
+            code, value=self.post('/api/codex/config')
+            self.assertEqual(code,200);self.assertFalse(value['codex']['available']);self.assertNotIn('api_key',value)
+            self.assertEqual(self.post('/api/codex/configure',{'provider':'codex'})[0],409)
+            self.assertEqual(ai.config(self.root)['provider'],'compatible')
+        with patch.object(chat.shutil,'which',return_value='/test/bin/program'):
+            self.assertTrue(self.post('/api/codex/config')[1]['codex']['available'])
+            self.assertEqual(self.post('/api/codex/configure',{'provider':'codex'})[0],200)
+        with patch.object(chat.shutil,'which',return_value=None), patch.object(chat,'client',side_effect=AssertionError('Must not start CLI')):
+            self.assertEqual(self.post('/api/codex/status')[1]['reason'],'codex_missing')
+            self.assertEqual(self.post('/api/codex/login')[0],409)
+
+
 class ModelTests(unittest.TestCase):
     def test_real_http_compatible_api_and_no_redirect_secret_forwarding(self):
         calls=[]

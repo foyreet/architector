@@ -29,7 +29,7 @@ def save(root, body):
         u = urlsplit(base)
         if (not u.hostname or u.username or u.password or u.query or u.fragment or len(base)>2048 or
             any(c.isspace() for c in base) or u.scheme not in ('http', 'https') or
-            u.scheme == 'http' and u.hostname not in ('localhost', '127.0.0.1', '::1', 'host.docker.internal')):
+            u.scheme == 'http' and u.hostname not in ('localhost', '127.0.0.1', '::1')):
             raise bc.ContractError('Укажите HTTPS-адрес API или HTTP-адрес локальной модели. Например: http://localhost:11434/v1')
         if not model or len(model)>160 or len(key)>4096 or '\n' in key or '\r' in key: raise bc.ContractError('Проверьте название модели и ключ.')
         old = config(root)
@@ -66,7 +66,7 @@ class Compatible:
         except HTTPError as e:
             raise bc.ContractError(f'API модели вернул HTTP {e.code}. Проверьте адрес, модель, ключ и поддержку вызова инструментов. Автоматического повтора нет.',502) from None
         except (URLError,TimeoutError,OSError):
-            raise bc.ContractError('Не удалось связаться с API модели. Проверьте адрес и запущена ли локальная модель. Из Docker используйте host.docker.internal вместо localhost.',502) from None
+            raise bc.ContractError('Не удалось связаться с API модели. Проверьте адрес и запущена ли локальная модель.',502) from None
         except (ValueError,UnicodeError): raise bc.ContractError('API вернул некорректный JSON.',502) from None
     def answer(self,prompt,draft=None,model=None,effort=None,documents=None):
         import codex_edits, codex_documents

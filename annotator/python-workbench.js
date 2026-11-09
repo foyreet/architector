@@ -142,7 +142,7 @@ window.PythonWorkbench = ({api, node, diagram, context, save, update, pack, down
   $('python-test').onclick = async () => {
     if (codeRunning || !applyCode()) return;
     const request = ++codeRequest; codeRunning = true; $('python-test').disabled = true; $('python-result').hidden = true;
-    $('python-status').textContent = 'Код выполняется в изолированной среде…';
+    $('python-status').textContent = 'Код выполняется в локальном процессе Python…';
     try {
       const result = await api('/api/code/test', body(codeNode));
       if (request !== codeRequest || !$('python-dialog').open) return;

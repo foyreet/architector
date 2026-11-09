@@ -22,7 +22,7 @@ GET/DELETE return 405 (no persistent sessions).
 7. Return the local editor URL. The user reviews and launches the scheme.
 
 Tools do not execute arbitrary code, run training, publish, or access remote
-projects. Project JSON can contain Python code for the sandbox but does not
+projects. Project JSON can contain Python code for the local executor but does not
 execute it when saved. Dataset files and model artifacts are separate from
 portable scheme JSON. Do not put secrets into diagrams.
 

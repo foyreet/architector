@@ -1,7 +1,11 @@
 name: Local application
 on:
   push:
+    branches: [main]
   pull_request:
+concurrency:
+  group: local-application-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -13,21 +17,23 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install -r requirements-ml.txt -r requirements-chat.txt playwright
+      - run: pip install -r requirements.txt playwright
       - run: python -m playwright install --with-deps chromium
       - run: python -m unittest discover -s tests -p 'test_*.py'
       - run: python tests/browser_local.py
+      - run: python tests/browser_ai_setup.py
       - run: python tests/browser_create_schema.py
-  docker:
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - run: docker compose config --quiet
-      - run: docker compose up --build -d
-      - run: docker compose exec -T runner docker version
-      - run: python3 tests/docker_smoke.py
-      - if: failure()
-        run: docker compose logs --tail=150
-      - if: always()
-        run: docker compose down -v
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - run: python tests/native_smoke.py

@@ -214,10 +214,11 @@ if __name__ == '__main__':
     # Optional project-local dependency directory for system Python deployments.
     vendor = Path(__file__).resolve().parent / '.chat-deps'
     if vendor.is_dir(): sys.path.insert(0, str(vendor))
-    import resource
-    if sys.platform == 'linux':
-        resource.setrlimit(resource.RLIMIT_AS, (1024 * 1024 * 1024, 1024 * 1024 * 1024))
-    resource.setrlimit(resource.RLIMIT_CPU, (30, 30))
+    if sys.platform != 'win32':
+        import resource
+        if sys.platform == 'linux':
+            resource.setrlimit(resource.RLIMIT_AS, (1024 * 1024 * 1024, 1024 * 1024 * 1024))
+        resource.setrlimit(resource.RLIMIT_CPU, (30, 30))
     try: output = {'text': extract(Path(sys.argv[1]).read_bytes(), Path(sys.argv[1]).suffix)}
     except ModuleNotFoundError: output = {'error': 'На сервере не установлен обработчик этого формата. Установите зависимости requirements-chat.txt.'}
     except bc.ContractError as error: output = {'error': str(error)}

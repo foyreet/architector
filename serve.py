@@ -516,7 +516,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--port', type=int, default=8770)
     args = parser.parse_args()
-    with ThreadingHTTPServer(('0.0.0.0' if os.environ.get('ARCHITECTOR_CONTAINER') == '1' else '127.0.0.1', args.port), Handler) as server:
+    with ThreadingHTTPServer(('127.0.0.1', args.port), Handler) as server:
         app_config.configure_server(server)
         origin = server.public_origin or f'http://127.0.0.1:{server.server_port}'
         print(f'Architect: {origin}/architecture.html', flush=True)

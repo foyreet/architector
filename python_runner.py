@@ -1,4 +1,4 @@
-"""This file runs ONLY inside the disposable, restricted container."""
+"""Worker for an ordinary local Python subprocess, with the current user permissions."""
 import contextlib
 import io
 import json
@@ -16,6 +16,10 @@ class Log(io.TextIOBase):
     def flush(self): pass
 
 
+# -I ignores PYTHONIOENCODING; explicitly use UTF-8 on Windows too.
+sys.stdin.reconfigure(encoding='utf-8')
+sys.stdout.reconfigure(encoding='utf-8')
+sys.stderr.reconfigure(encoding='utf-8')
 payload = json.load(sys.stdin)
 log = Log()
 try:
@@ -25,7 +29,7 @@ try:
         if not callable(namespace.get('run')): raise ValueError('Определите функцию run(inputs, params).')
         result = namespace['run'](payload['inputs'], payload['params'])
         if not isinstance(result, dict): raise ValueError('run() должна вернуть словарь выходов.')
-        # Check serialization inside the sandbox; the host validates the schema again.
+        # Check serialization inside the worker; the host validates the schema again.
         json.dumps(result, allow_nan=False)
     response = {'result': result, 'logs': ''.join(log.parts)}
 except BaseException:

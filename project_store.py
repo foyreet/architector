@@ -2,7 +2,6 @@
 from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime, timezone
-import fcntl
 import json
 import os
 from pathlib import Path
@@ -71,12 +70,22 @@ class ProjectStore:
         with LOCK:
             try:
                 self.path('projects').mkdir(parents=True, exist_ok=True)
-                with self.path('projects/.store.lock').open('a') as lock:
-                    fcntl.flock(lock, fcntl.LOCK_EX)
+                with self.path('projects/.store.lock').open('a+b') as lock:
+                    if os.name == 'nt':
+                        import msvcrt
+                        if lock.seek(0, os.SEEK_END) == 0:
+                            lock.write(b'0'); lock.flush()
+                        lock.seek(0); msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
+                    else:
+                        import fcntl
+                        fcntl.flock(lock, fcntl.LOCK_EX)
                     try:
                         yield
                     finally:
-                        fcntl.flock(lock, fcntl.LOCK_UN)
+                        if os.name == 'nt':
+                            lock.seek(0); msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+                        else:
+                            fcntl.flock(lock, fcntl.LOCK_UN)
             except OSError:
                 raise bc.ContractError('Хранилище проектов недоступно.', 507) from None
 
