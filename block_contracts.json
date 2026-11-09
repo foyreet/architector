@@ -1,0 +1,768 @@
+{
+  "format": "architect.block-contracts",
+  "version": 1,
+  "types": {
+    "annotation": {
+      "label": "Описание",
+      "storage": "none"
+    },
+    "text": {
+      "label": "Текст",
+      "storage": "inline"
+    },
+    "dataset": {
+      "label": "Датасет",
+      "storage": "artifact"
+    },
+    "model": {
+      "label": "Файлы модели",
+      "storage": "artifact"
+    },
+    "rows": {
+      "label": "Строки таблицы",
+      "storage": "inline"
+    },
+    "row": {
+      "label": "Строка таблицы",
+      "storage": "inline"
+    },
+    "table": {
+      "label": "Подготовленная таблица",
+      "storage": "artifact"
+    },
+    "trained_model": {
+      "label": "Обученный классификатор",
+      "storage": "artifact"
+    },
+    "metrics": {
+      "label": "Метрики классификации",
+      "storage": "artifact"
+    },
+    "model_bundle": {
+      "label": "Сохранённая модель",
+      "storage": "artifact"
+    },
+    "json": {
+      "label": "JSON",
+      "storage": "inline"
+    },
+    "python_data": {
+      "label": "Данные Python",
+      "storage": "artifact"
+    }
+  },
+  "blocks": [
+    {
+      "kind": "note",
+      "available_for_new": false,
+      "version": 1,
+      "label": "Описание компонента",
+      "inputs": [],
+      "outputs": [],
+      "settings": [],
+      "operation": {
+        "id": "annotation",
+        "available": false,
+        "description": "Блок описания не выполняет вычислений."
+      }
+    },
+    {
+      "kind": "kaggle",
+      "version": 1,
+      "label": "Датасет Kaggle",
+      "inputs": [
+        {
+          "id": "source",
+          "label": "Ссылка Kaggle",
+          "type": "text",
+          "required": true,
+          "field": "dataset",
+          "default": "",
+          "maxLength": 500
+        }
+      ],
+      "outputs": [
+        {
+          "id": "dataset",
+          "label": "Датасет",
+          "type": "dataset"
+        }
+      ],
+      "settings": [],
+      "operation": {
+        "id": "kaggle.download",
+        "available": true,
+        "description": "Скачивает датасет и возвращает ссылку на локальный артефакт."
+      }
+    },
+    {
+      "kind": "csv",
+      "version": 1,
+      "label": "Чтение CSV",
+      "inputs": [
+        {
+          "id": "dataset",
+          "label": "Датасет",
+          "type": "dataset",
+          "required": true
+        },
+        {
+          "id": "file",
+          "label": "Имя CSV",
+          "type": "text",
+          "required": false,
+          "description": "Точное имя с путём внутри датасета и учётом регистра. Пустое значение выбирает единственный CSV автоматически; если CSV несколько, требуется точное имя. Не угадывайте имя файла.",
+          "field": "csv_file",
+          "default": "",
+          "maxLength": 1000
+        }
+      ],
+      "outputs": [
+        {
+          "id": "rows",
+          "label": "Строки",
+          "type": "rows"
+        },
+        {
+          "id": "row",
+          "label": "Выбранная строка",
+          "type": "row"
+        }
+      ],
+      "settings": [
+        {
+          "id": "delimiter",
+          "label": "Разделитель",
+          "type": "string",
+          "field": "csv_delimiter",
+          "default": ",",
+          "enum": [
+            ",",
+            ";",
+            "\t",
+            "|"
+          ]
+        },
+        {
+          "id": "encoding",
+          "label": "Кодировка",
+          "type": "string",
+          "field": "csv_encoding",
+          "default": "auto",
+          "enum": ["auto", "utf-8", "cp1251", "cp1252", "latin-1", "utf-16", "utf-16-le", "utf-16-be", "koi8-r"],
+          "description": "Авто читает UTF-8 и UTF-16/32 с BOM. Другие кодировки выбирайте по данным источника и проверяйте в предпросмотре. cp1251 — Windows-1251, cp1252 — Windows-1252. Не угадывайте кодировку по языку интерфейса. Загруженный через мастер датасет уже преобразован в Unicode."
+        },
+        {
+          "id": "row_index",
+          "label": "Номер выбранной строки (с 0)",
+          "type": "integer",
+          "field": "csv_row_index",
+          "default": 0,
+          "minimum": 0
+        }
+      ],
+      "operation": {
+        "id": "csv.read",
+        "available": true,
+        "description": "Читает все строки CSV из локального датасета без ограничения их количества и дополнительно выбирает одну строку. Если имя пустое, автоматически выбирает единственный CSV; при нескольких файлах нужно указать точное имя."
+      }
+    },
+    {
+      "kind": "template",
+      "available_for_new": false,
+      "version": 1,
+      "label": "Шаблон промпта",
+      "inputs": [
+        {
+          "id": "row",
+          "label": "Строка таблицы",
+          "type": "row",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "id": "text",
+          "label": "Промпт",
+          "type": "text"
+        }
+      ],
+      "settings": [
+        {
+          "id": "template",
+          "label": "Шаблон",
+          "type": "string",
+          "field": "prompt_template",
+          "default": "",
+          "maxLength": 32000
+        }
+      ],
+      "operation": {
+        "id": "prompt.render",
+        "available": true,
+        "description": "Подставляет поля входной строки в шаблон {{имя_колонки}} и возвращает текст."
+      }
+    },
+    {
+      "kind": "openrouter",
+      "version": 1,
+      "label": "Запрос к OpenRouter",
+      "inputs": [
+        {
+          "id": "text",
+          "label": "Промпт",
+          "type": "text",
+          "required": true,
+          "field": "prompt",
+          "default": "",
+          "maxLength": 32000
+        }
+      ],
+      "outputs": [
+        {
+          "id": "text",
+          "label": "Ответ модели",
+          "type": "text"
+        }
+      ],
+      "settings": [
+        {
+          "id": "model",
+          "label": "ID модели",
+          "type": "string",
+          "field": "model",
+          "default": "",
+          "maxLength": 160
+        },
+        {
+          "id": "system",
+          "label": "Системная инструкция",
+          "type": "string",
+          "field": "system",
+          "default": "",
+          "maxLength": 16000
+        },
+        {
+          "id": "max_tokens",
+          "label": "Лимит ответа",
+          "type": "integer",
+          "field": "max_tokens",
+          "default": 1024,
+          "minimum": 1,
+          "maximum": 16384
+        },
+        {
+          "id": "temperature",
+          "label": "Температура",
+          "type": "number",
+          "field": "temperature",
+          "default": 0.7,
+          "minimum": 0,
+          "maximum": 2
+        }
+      ],
+      "operation": {
+        "id": "openrouter.chat",
+        "available": true,
+        "description": "Отправляет текст выбранной модели и возвращает текст ответа."
+      }
+    },
+    {
+      "kind": "huggingface",
+      "version": 1,
+      "label": "Модель Hugging Face",
+      "inputs": [
+        {
+          "id": "repo",
+          "label": "ID модели",
+          "type": "text",
+          "required": true,
+          "field": "hf_repo",
+          "default": "",
+          "maxLength": 500
+        }
+      ],
+      "outputs": [
+        {
+          "id": "model",
+          "label": "Файлы модели",
+          "type": "model"
+        }
+      ],
+      "settings": [
+        {
+          "id": "revision",
+          "label": "Ветка или тег",
+          "type": "string",
+          "field": "hf_revision",
+          "default": "main",
+          "maxLength": 160
+        },
+        {
+          "id": "commit",
+          "label": "Зафиксированная версия",
+          "type": "string",
+          "field": "hf_commit",
+          "default": "",
+          "pattern": "^(?:[a-f0-9]{40})?$"
+        },
+        {
+          "id": "files",
+          "label": "Выбранные файлы",
+          "type": "string[]",
+          "field": "hf_files",
+          "default": [],
+          "maxItems": 5000,
+          "maxLength": 500
+        }
+      ],
+      "operation": {
+        "id": "huggingface.download",
+        "available": true,
+        "description": "Скачивает выбранные файлы зафиксированной версии и возвращает ссылку на модель."
+      }
+    },
+    {
+      "kind": "local_model",
+      "version": 1,
+      "label": "Локальная модель",
+      "inputs": [
+        {
+          "id": "model",
+          "label": "Файлы модели",
+          "type": "model",
+          "required": true
+        },
+        {
+          "id": "text",
+          "label": "Промпт",
+          "type": "text",
+          "required": true,
+          "field": "local_prompt",
+          "default": "",
+          "maxLength": 32000
+        }
+      ],
+      "outputs": [
+        {
+          "id": "text",
+          "label": "Результат",
+          "type": "text"
+        }
+      ],
+      "settings": [
+        {
+          "id": "max_tokens",
+          "label": "Лимит ответа",
+          "type": "integer",
+          "field": "local_max_tokens",
+          "default": 256,
+          "minimum": 1,
+          "maximum": 16384
+        }
+      ],
+      "operation": {
+        "id": "model.generate",
+        "available": false,
+        "description": "Контракт локальной модели. Среда исполнения модели пока не подключена."
+      }
+    },
+    {
+      "kind": "ml_prepare",
+      "available_for_new": false,
+      "version": 1,
+      "label": "Подготовка данных",
+      "inputs": [
+        {
+          "id": "rows",
+          "label": "Строки CSV",
+          "type": "rows",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "id": "table",
+          "label": "Таблица",
+          "type": "table"
+        }
+      ],
+      "settings": [
+        {
+          "id": "target",
+          "label": "Целевая колонка",
+          "type": "string",
+          "default": "",
+          "maxLength": 200
+        },
+        {
+          "id": "features",
+          "label": "Числовые признаки через запятую (пусто — все, кроме цели и исключённых)",
+          "type": "string",
+          "default": "",
+          "maxLength": 4000
+        },
+        {
+          "id": "drop",
+          "label": "Исключить колонки через запятую",
+          "type": "string",
+          "default": "Id",
+          "maxLength": 4000
+        },
+        {
+          "id": "missing",
+          "label": "Пропуски и некорректные числа",
+          "type": "string",
+          "default": "error",
+          "enum": [
+            "error",
+            "drop"
+          ],
+          "choices": {
+            "error": "Остановить с ошибкой",
+            "drop": "Удалить такие строки"
+          }
+        },
+        {
+          "id": "duplicates",
+          "label": "Полные дубли признаков и цели",
+          "type": "string",
+          "default": "keep",
+          "enum": [
+            "keep",
+            "drop"
+          ],
+          "choices": {
+            "keep": "Сохранить",
+            "drop": "Удалить"
+          }
+        }
+      ],
+      "operation": {
+        "id": "ml_prepare.execute",
+        "available": true,
+        "description": "Выбирает числовые признаки и целевую колонку. Проверяет данные, при необходимости удаляет неполные строки и дубли. Не вычисляет статистики по test."
+      }
+    },
+    {
+      "kind": "ml_split",
+      "available_for_new": false,
+      "version": 1,
+      "label": "Разделение train/test",
+      "inputs": [
+        {
+          "id": "table",
+          "label": "Таблица",
+          "type": "table",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "id": "train",
+          "label": "Train",
+          "type": "table"
+        },
+        {
+          "id": "test",
+          "label": "Test",
+          "type": "table"
+        }
+      ],
+      "settings": [
+        {
+          "id": "test_size",
+          "label": "Доля test",
+          "type": "number",
+          "default": 0.2,
+          "minimum": 0.1,
+          "maximum": 0.5
+        },
+        {
+          "id": "seed",
+          "label": "Seed",
+          "type": "integer",
+          "default": 42,
+          "minimum": 0,
+          "maximum": 2147483647
+        }
+      ],
+      "operation": {
+        "id": "ml_split.execute",
+        "available": true,
+        "description": "Разделяет таблицу с сохранением пропорций классов. Seed фиксирует случайное разбиение."
+      }
+    },
+    {
+      "kind": "ml_train",
+      "available_for_new": false,
+      "version": 1,
+      "label": "Обучение Random Forest",
+      "inputs": [
+        {
+          "id": "train",
+          "label": "Train",
+          "type": "table",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "id": "model",
+          "label": "Модель",
+          "type": "trained_model"
+        }
+      ],
+      "settings": [
+        {
+          "id": "n_estimators",
+          "label": "Количество деревьев",
+          "type": "integer",
+          "default": 100,
+          "minimum": 10,
+          "maximum": 200
+        },
+        {
+          "id": "max_depth",
+          "label": "Максимальная глубина",
+          "type": "integer",
+          "default": 8,
+          "minimum": 1,
+          "maximum": 12
+        },
+        {
+          "id": "seed",
+          "label": "Seed",
+          "type": "integer",
+          "default": 42,
+          "minimum": 0,
+          "maximum": 2147483647
+        }
+      ],
+      "operation": {
+        "id": "ml_train.execute",
+        "available": true,
+        "description": "Обучает классификатор Random Forest на CPU, только на выходе Train. До 1000 строк, 100 признаков и 30 классов."
+      }
+    },
+    {
+      "kind": "gpu_train",
+      "version": 1,
+      "label": "Нейросеть · GPU компьютера",
+      "inputs": [
+        {
+          "id": "train",
+          "label": "Train",
+          "type": "table",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "id": "model",
+          "label": "Модель",
+          "type": "trained_model"
+        }
+      ],
+      "settings": [
+        {
+          "id": "epochs",
+          "label": "Эпохи",
+          "type": "integer",
+          "default": 50,
+          "minimum": 1,
+          "maximum": 200
+        },
+        {
+          "id": "hidden_size",
+          "label": "Нейроны скрытого слоя",
+          "type": "integer",
+          "default": 32,
+          "minimum": 4,
+          "maximum": 128
+        },
+        {
+          "id": "learning_rate",
+          "label": "Скорость обучения",
+          "type": "number",
+          "default": 0.01,
+          "minimum": 0.0001,
+          "maximum": 0.1
+        },
+        {
+          "id": "seed",
+          "label": "Seed",
+          "type": "integer",
+          "default": 42,
+          "minimum": 0,
+          "maximum": 2147483647
+        }
+      ],
+      "operation": {
+        "id": "gpu_train.execute",
+        "available": true,
+        "description": "Обучает нейросеть классификации на GPU подключённого компьютера (Apple MPS / NVIDIA CUDA). Один скрытый слой, до 1000 строк, 100 числовых признаков и 30 классов. Подключение: Ресурсы → GPU компьютера. Нормализация обучается только на Train."
+      }
+    },
+    {
+      "kind": "ml_evaluate",
+      "available_for_new": false,
+      "version": 1,
+      "label": "Оценка модели",
+      "inputs": [
+        {
+          "id": "model",
+          "label": "Модель",
+          "type": "trained_model",
+          "required": true
+        },
+        {
+          "id": "test",
+          "label": "Test",
+          "type": "table",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "id": "model",
+          "label": "Модель",
+          "type": "trained_model"
+        },
+        {
+          "id": "metrics",
+          "label": "Метрики",
+          "type": "metrics"
+        }
+      ],
+      "settings": [],
+      "operation": {
+        "id": "ml_evaluate.execute",
+        "available": true,
+        "description": "Проверяет модель на отложенной части того же разбиения. Сохраняет accuracy, macro F1, матрицу ошибок и предсказания."
+      }
+    },
+    {
+      "kind": "ml_save",
+      "available_for_new": false,
+      "version": 1,
+      "label": "Сохранение модели",
+      "inputs": [
+        {
+          "id": "model",
+          "label": "Модель",
+          "type": "trained_model",
+          "required": true
+        },
+        {
+          "id": "metrics",
+          "label": "Метрики",
+          "type": "metrics",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "id": "bundle",
+          "label": "Сохранённая модель",
+          "type": "model_bundle"
+        }
+      ],
+      "settings": [
+        {
+          "id": "name",
+          "label": "Имя модели",
+          "type": "string",
+          "default": "iris-random-forest",
+          "maxLength": 100
+        }
+      ],
+      "operation": {
+        "id": "ml_save.execute",
+        "available": true,
+        "description": "Сохраняет JSON-пакет модели: деревья, признаки, классы, параметры, версии и метрики. Пакет можно скачать из истории шага."
+      }
+    },
+    {
+      "kind": "python_code",
+      "version": 1,
+      "label": "Python-код",
+      "inputs": [
+        {
+          "id": "rows",
+          "label": "Строки",
+          "type": "rows",
+          "default": []
+        },
+        {
+          "id": "data",
+          "label": "Данные Python",
+          "type": "python_data"
+        },
+        {
+          "id": "value",
+          "label": "JSON",
+          "type": "json",
+          "default": {}
+        },
+        {
+          "id": "table",
+          "label": "Таблица ML",
+          "type": "table"
+        },
+        {
+          "id": "model",
+          "label": "Модель ML",
+          "type": "trained_model"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "rows",
+          "label": "Строки",
+          "type": "rows"
+        },
+        {
+          "id": "data",
+          "label": "Данные Python",
+          "type": "python_data"
+        },
+        {
+          "id": "report",
+          "label": "Результат JSON",
+          "type": "json"
+        }
+      ],
+      "settings": [
+        {
+          "id": "code",
+          "label": "Python-код",
+          "type": "string",
+          "default": "def run(inputs, params):\n    # rows: строки из CSV или другого Python-блока.\n    # data: произвольные данные предыдущего Python-блока.\n    # table/model: содержимое артефактов встроенных ML-блоков.\n    rows = inputs.get(\"rows\", [])\n    print(\"Получено строк:\", len(rows))\n    return {\"rows\": rows, \"data\": inputs.get(\"data\", {}),\n            \"report\": {\"rows\": len(rows)}}\n",
+          "maxLength": 64000
+        },
+        {
+          "id": "params",
+          "label": "Параметры JSON",
+          "type": "string",
+          "default": "{}",
+          "maxLength": 64000
+        },
+        {
+          "id": "timeout",
+          "label": "Лимит времени (сек.)",
+          "type": "integer",
+          "default": 30,
+          "minimum": 1,
+          "maximum": 60
+        }
+      ],
+      "operation": {
+        "id": "python.isolated",
+        "available": true,
+        "description": "Выполняет run(inputs, params) в изолированной среде Python с NumPy, pandas и scikit-learn. Подходит для любого этапа обработки. Выходы: rows, data, report."
+      }
+    }
+  ]
+}
+

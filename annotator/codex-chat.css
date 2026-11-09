@@ -1,0 +1,185 @@
+/* Fixed side panel above the wide scene; a separate row on smaller screens. */
+body { --chat-width: 340px; --chat-height: min(430px, 48dvh); }
+body.chat-open .workspace-main { margin-left: calc(var(--sidebar-width) + var(--chat-width)); }
+#codex-chat[open] {
+  position: fixed; inset: 0 auto 0 var(--sidebar-width); width: var(--chat-width);
+  height: 100dvh; max-height: 100dvh; max-width: none; margin: 0;
+  padding: 18px; border: 0; border-right: 1px solid var(--line); border-radius: 0;
+  display: flex; flex-direction: column; gap: 12px; overflow: hidden;
+  background: #fff; box-shadow: none; z-index: 25;
+}
+#codex-chat[hidden], #codex-chat:not([open]) { display: none; }
+#codex-chat .dialog-heading { margin: 0; gap: 12px; flex: none; }
+#codex-chat .dialog-heading h2 { font-size: 20px; }
+.codex-spark { color: #9961ff; margin-right: 5px; }
+#codex-chat .dialog-heading > button { font-size: 24px; width: 36px; padding: 0; }
+#codex-context { margin: 5px 0 0; font-size: 12px; max-width: 245px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.codex-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 12px; flex: none; }
+#codex-connection { flex: 1; }
+#codex-connect { font-size: 12px; padding: 8px; }
+.codex-options { position: relative; }
+.codex-options > summary { list-style: none; cursor: pointer; min-width: 36px; min-height: 36px; display: grid; place-items: center; font-size: 20px; }
+.codex-options > summary::-webkit-details-marker { display: none; }
+.codex-options > div { position: absolute; top: 100%; right: 0; width: 190px; padding: 6px; background: white; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px #182b4920; z-index: 2; }
+.codex-context-choice { padding: 8px; font-size: 12px; }
+.codex-options button { width: 100%; text-align: left; border: 0; font-size: 13px; }
+.codex-login { border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: var(--surface-subtle); flex: none; max-height: 180px; overflow: auto; }
+.codex-login p { margin: 0 0 8px; font-size: 12px; }
+.codex-login > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.codex-login a { color: var(--accent); }
+#codex-login-code { font: bold 20px ui-monospace, monospace; letter-spacing: 2px; user-select: all; }
+.codex-transcript { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 4px; display: flex; flex-direction: column; }
+.codex-empty { margin: auto 0; padding: 16px 0; text-align: left; }
+.codex-empty h3 { font-size: 22px; margin: 0 0 12px; }
+.codex-empty p { color: var(--muted); font-size: 14px; }
+.codex-empty > div { display: grid; gap: 8px; margin-top: 20px; }
+.codex-empty button { text-align: left; font-size: 13px; white-space: normal; }
+.codex-bubble { padding: 12px; margin: 0 0 12px; border-radius: 12px; background: var(--surface-subtle); }
+.codex-bubble.user { background: #edf2ff; }
+.codex-bubble .codex-author { display: block; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.codex-bubble p { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; font-size: 14px; line-height: 1.6; }
+.codex-markdown { min-width: 0; font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.codex-markdown > :first-child { margin-top: 0; }
+.codex-markdown > :last-child { margin-bottom: 0; }
+.codex-markdown p { white-space: normal; margin: 0 0 10px; }
+.codex-markdown :is(h3, h4, h5, h6) { font-size: 15px; line-height: 1.4; margin: 14px 0 8px; }
+.codex-markdown strong { font-weight: 650; }
+.codex-markdown :is(ul, ol) { padding-left: 22px; margin: 8px 0 12px; }
+.codex-markdown li { margin: 5px 0; }
+.codex-markdown li > :is(ul, ol, p) { margin-bottom: 5px; }
+.codex-markdown code { font: .9em ui-monospace, SFMono-Regular, Consolas, monospace; background: #e8edf6; padding: 2px 4px; border-radius: 4px; }
+.codex-markdown pre { max-width: 100%; overflow: auto; padding: 10px; border-radius: 6px; background: #e8edf6; white-space: pre; overflow-wrap: normal; overscroll-behavior: contain; }
+.codex-markdown pre code { padding: 0; border-radius: 0; }
+.codex-markdown blockquote { margin: 10px 0; padding-left: 10px; border-left: 3px solid #bbc9e0; color: #52617a; }
+.codex-markdown a { color: #2054c7; text-decoration: underline; text-underline-offset: 2px; }
+.codex-markdown hr { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
+.codex-markdown-table { max-width: 100%; overflow: auto; margin: 10px 0; overscroll-behavior: contain; }
+.codex-markdown table { border-collapse: collapse; width: max-content; min-width: 100%; font-size: 12px; }
+.codex-markdown :is(th, td) { padding: 6px 8px; border: 1px solid #d5ddea; text-align: left; }
+.codex-markdown th { background: #e8edf6; }
+.codex-markdown-fallback { white-space: pre-wrap; }
+.codex-proposal { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.codex-proposal h3 { font-size: 15px; margin: 0 0 6px; }
+.codex-proposal p, .codex-proposal details { margin-bottom: 10px; }
+.codex-proposal pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 200px; overflow: auto; font-size: 11px; }
+.codex-proposal details > div { margin-top: 12px; }
+.codex-proposal > button { width: 100%; min-height: 40px; margin-top: 6px; }
+.codex-proposal .codex-proposal-note { font-size: 12px; color: var(--muted); }
+.codex-composer { display: block; flex: none; border-top: 1px solid var(--line); padding-top: 10px; margin: 0; }
+#codex-form .inline-label { margin: 0; font-size: 12px; }
+#codex-form textarea { display: block; width: 100%; min-height: 60px; height: 80px; max-height: 160px; margin: 8px 0; padding: 10px; resize: vertical; }
+.codex-send-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.codex-send-row .muted { font-size: 10px; }
+#codex-error { color: #a12b32; margin: 0 0 8px; font-size: 12px; max-height: 60px; overflow: auto; overflow-wrap: anywhere; }
+@media (min-width: 1360px) {
+  html:not(.mobile-ui) body { --chat-width: var(--workspace-chat-slot); }
+  html:not(.mobile-ui) body .workspace-main {
+    margin-left: var(--sidebar-width); display: grid;
+    grid-template-columns: var(--workspace-chat-slot) minmax(0, 1fr) var(--workspace-inspector-slot);
+  }
+  html:not(.mobile-ui) .workspace-main:has(#schema-view:not([hidden])) {
+    height: 100dvh; grid-template-rows: auto auto minmax(0, 1fr);
+  }
+  html:not(.mobile-ui) .project-header { grid-area: 1 / 1 / 2 / -1; }
+  html:not(.mobile-ui) .project-navigation { grid-area: 2 / 1 / 3 / -1; }
+  html:not(.mobile-ui) #schema-view { display: contents; }
+  html:not(.mobile-ui) #schema-view > .layout { grid-area: 3 / 1 / 4 / -1; height: 100%; min-height: 0; }
+  html:not(.mobile-ui) #project-panel { grid-area: 3 / 1 / 4 / -1; }
+  html:not(.mobile-ui) body.chat-open #project-panel { margin-left: var(--workspace-chat-slot); }
+  html:not(.mobile-ui) #codex-chat[open] {
+    grid-area: 3 / 1 / 4 / 2; position: relative; inset: auto;
+    width: auto; height: auto; min-height: 0; max-height: none; align-self: stretch;
+    contain: size;
+  }
+}
+@media (max-width: 1359px) {
+  body.chat-open .workspace-main { margin-left: var(--sidebar-width); height: calc(100dvh - var(--chat-height)); overflow: auto; }
+  #codex-chat[open] { inset: auto 0 0 var(--sidebar-width); width: auto; height: var(--chat-height); border: 0; border-top: 1px solid var(--line); padding: 12px; }
+  body.chat-open #schema-view > .layout, body.chat-open #schema-view > .layout.has-selection { height: calc(100dvh - var(--chat-height) - 160px); min-height: 120px; }
+  body.chat-open #schema-view .editor { height: 100%; min-height: 120px; }
+  body.chat-open #schema-view .inspector { max-height: 100%; }
+  #codex-chat .codex-empty { padding: 4px 0; }
+  #codex-chat .codex-empty h3 { font-size: 16px; margin: 0 0 6px; }
+  #codex-chat .codex-empty p { margin: 6px 0; }
+  #codex-chat .codex-empty > div { margin-top: 8px; }
+}
+html.mobile-ui body { --chat-height: min(260px, calc(var(--app-height, 100dvh) * .48)); }
+
+
+
+html.mobile-ui body.chat-open .workspace-main { margin-left: 0; height: calc(var(--app-height, 100dvh) - var(--chat-height)); overflow: hidden; }
+html.mobile-ui #codex-chat[open] { inset: auto 0 0 0; width: 100%; height: var(--chat-height); max-height: none; max-width: none; padding: 8px 12px max(8px, env(safe-area-inset-bottom)); border-radius: 0; border: 0; border-top: 1px solid var(--line); gap: 6px; }
+html.mobile-ui body.chat-open #schema-view > .layout, html.mobile-ui body.chat-open #schema-view > .layout.has-selection { height: auto; min-height: 0; }
+html.mobile-ui body.chat-open #schema-view .editor { height: auto; min-height: 0; }
+.mobile-ui #codex-chat .dialog-heading h2 { font-size: 16px; }
+.mobile-ui #codex-chat .dialog-heading > button, .mobile-ui .codex-options > summary { min-width: 44px; min-height: 44px; }
+.mobile-ui #codex-context, .mobile-ui #codex-empty, .mobile-ui #codex-form .inline-label { display: none; }
+.mobile-ui #codex-chat.codex-ready .codex-toolbar { display: contents; }
+.mobile-ui #codex-chat.codex-ready #codex-connection { display: none; }
+.mobile-ui #codex-chat.codex-ready .codex-options { position: absolute; top: 8px; right: 62px; }
+.mobile-ui #codex-chat:not(.codex-has-history) #codex-transcript { display: none; }
+.mobile-ui #codex-form { display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 8px; align-items: end; margin-top: auto; padding-top: 6px; border-top: 0; }
+.mobile-ui #codex-error { grid-column: 1 / -1; margin: 0; }
+.mobile-ui #codex-chat .codex-toolbar button { min-height: 44px; }
+.mobile-ui #codex-form textarea { font-size: 16px; height: 52px; min-height: 52px; max-height: 80px; margin: 0; padding: 8px; }
+.mobile-ui #codex-send { min-width: 44px; width: 44px; min-height: 44px; padding: 0; font-size: 0; }
+.mobile-ui #codex-send::after { content: '↑'; font-size: 24px; }
+.mobile-ui .codex-send-row .muted { display: none; }
+.mobile-ui .codex-send-row { justify-content: flex-end; }
+.mobile-ui .codex-login { max-height: 100px; }
+.mobile-ui #codex-chat.codex-auth .codex-composer { display: none; }
+.mobile-ui #codex-chat .codex-empty h3 { font-size: 15px; }
+.mobile-ui #codex-chat .codex-empty p { font-size: 13px; }
+/* Under a keyboard/landscape, preserve a strip of diagram and prioritize the composer. */
+html.mobile-ui body.chat-keyboard:has(#codex-chat) { --chat-height: min(220px, calc(var(--app-height, 100dvh) - 90px)); }
+.mobile-ui body.chat-keyboard #codex-context, .mobile-ui body.chat-keyboard #codex-chat .codex-toolbar { display: none; }
+.mobile-ui body.chat-keyboard #codex-form .inline-label { display: none; }
+.mobile-ui body.chat-keyboard #codex-form textarea { height: 44px; min-height: 44px; }
+.mobile-ui body.chat-keyboard.chat-open .project-header, .mobile-ui body.chat-keyboard.chat-open .project-navigation { display: none; }
+
+/* Model settings and dictation remain reachable even with a phone keyboard. */
+.codex-model-settings { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; margin-bottom: 8px; }
+.codex-model-settings label { display: grid; gap: 4px; min-width: 0; font-size: 12px; }
+.codex-model-settings select { width: 100%; min-width: 0; min-height: 44px; font-size: 13px; padding: 8px; text-overflow: ellipsis; }
+.codex-model-notice, .codex-voice-status { font-size: 12px; line-height: 1.4; margin: 0 0 8px; overflow-wrap: anywhere; }
+.codex-model-notice button { min-height: 44px; font-size: 12px; margin-top: 4px; }
+.codex-send-row { flex-wrap: wrap; justify-content: flex-end; }
+.codex-send-row .muted { flex-basis: 100%; }
+#codex-voice, #codex-send { min-height: 44px; }
+#codex-voice[aria-pressed="true"] { background: #fff1f0; color: #9c252d; border-color: #d56c73; }
+#codex-form { max-height: calc(100% - 56px); min-height: 0; flex-shrink: 1; overflow-y: auto; }
+html.mobile-ui body:has(#codex-chat) { --chat-height: min(390px, calc(var(--app-height, 100dvh) * .62)); }
+.mobile-ui #codex-form { display: block; width: 100%; min-height: 0; flex-shrink: 1; }
+.mobile-ui #codex-form textarea { margin: 6px 0; }
+.mobile-ui .codex-send-row { flex-wrap: nowrap; }
+.mobile-ui #codex-send { width: auto; min-width: 110px; font-size: 14px; padding: 8px 14px; }
+.mobile-ui #codex-send::after { content: none; }
+.mobile-ui #codex-voice { font-size: 14px; padding: 8px 12px; }
+html.mobile-ui body.chat-keyboard:has(#codex-chat) { --chat-height: min(310px, calc(var(--app-height, 100dvh) - 30px)); }
+
+#codex-settings { margin: 0; padding: 0; border: 0; }
+#codex-settings > summary { display: none; }
+body.chat-compact #codex-settings > summary { display: block; cursor: pointer; min-height: 44px; padding: 12px 0; font-size: 13px; }
+body.chat-compact #codex-settings > summary::before { content: '▸ '; }
+body.chat-compact #codex-settings[open] > summary::before { content: '▾ '; }
+
+#codex-form .codex-send-row { position: sticky; bottom: 0; background: #fff; padding-top: 4px; }
+
+/* Document attachments stay compact; the text remains on the server. */
+#codex-attach { flex: 0 0 44px; width: 44px; min-height: 44px; padding: 10px; display: inline-flex; align-items: center; justify-content: center; }
+#codex-attachments { display: grid; gap: 4px; max-height: 96px; overflow-y: auto; }
+.codex-attachment { display: flex; align-items: center; gap: 6px; min-width: 0; background: #f5f7fb; border: 1px solid var(--line); border-radius: 8px; padding-left: 8px; font-size: 12px; }
+.codex-attachment span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.codex-attachment small { flex-shrink: 0; color: var(--muted); }
+.codex-attachment button { min-width: 44px; min-height: 44px; border: 0; background: transparent; padding: 8px; }
+.codex-sent-attachment { font-size: 12px; overflow-wrap: anywhere; margin-top: 6px; }
+#codex-upload-status { font-size: 12px; margin: 4px 0; }
+
+#codex-chat #codex-form { display: flex; flex-direction: column; overflow: hidden; }
+.codex-composer-context { min-height: 0; overflow-y: auto; flex: 0 1 auto; }
+#codex-chat #codex-form > textarea, #codex-chat #codex-form > .codex-send-row { flex: 0 0 auto; }
+#codex-chat #codex-form > .codex-send-row { position: static; }
+.mobile-ui #codex-attachments, body.chat-compact #codex-attachments { max-height: 48px; }
+
+#codex-chat #codex-form > #codex-attachments { flex: 0 0 auto; }
+

@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+.venv/
+.DS_Store
+logs/
+workspace/
+# Private user projects, revisions, block definitions and run history.
+/projects/
+server-access.txt
+*.log
+.env
+.env.*
+!.env.example
+
+# Optional local AI Chat document parsers.
+.chat-deps/
+
+
+/data/
+*.sock
+*.pem
+*.key
