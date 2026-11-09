@@ -26,7 +26,7 @@ with tempfile.TemporaryDirectory(prefix='native-pipeline-') as data, tempfile.Te
 from sklearn.linear_model import LogisticRegression
 def run(inputs, params):
     model=LogisticRegression().fit([[0],[1],[9],[10]],[0,0,1,1])
-    print("native-python-ok")
+    print("локальный-python-ok")
     return {"report":{"accuracy":float(model.score([[0],[10]],[0,1]))},"rows":[{"x":int(np.sum([1,2]))}]}
 '''
         graph={'format':'architect','version':3,'name':'CI native Python','types':[{'id':'python','name':'Python','description':'','color':'#6366f1','block':{'kind':'python_code','version':1}}], 'nodes':[{'id':'code','typeId':'python','name':'Python','description':'','x':80,'y':80,'block':{'kind':'python_code','version':1,'settings':{'code':code,'params':'{}','timeout':30}}}],'edges':[]}
@@ -42,7 +42,8 @@ def run(inputs, params):
         assert step['outputs']['rows']==[{'x':3}],step
         assert step['details']['runtime']['memory_mb']==1024,step
         assert step['details']['runtime']['executor'] == 'local-process',step
-        assert 'native-python-ok' in step['details']['logs'],step
+        assert 'локальный-python-ok' in step['details']['logs'],step
+        assert api('resources/status')['memory']['process_peak'] > 0
         print('PASS: local project, real native Python process and sklearn training')
     except BaseException:
         log.seek(0);print(log.read().decode(errors='replace')[-12000:])

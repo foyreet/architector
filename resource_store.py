@@ -4,7 +4,6 @@ import json
 import os
 from pathlib import Path
 import re
-import resource
 import shutil
 import sys
 import time
@@ -85,12 +84,22 @@ def inventory(context):
                 raw = (folder/name).read_text().strip()
                 memory[key] = int(raw) if raw.isdecimal() else None
         except (OSError, StopIteration): pass
+    elif os.name == 'nt':
+        import psutil
+        info = psutil.virtual_memory()
+        memory.update(total=info.total, available=info.available)
     else:
         try: memory['total'] = os.sysconf('SC_PHYS_PAGES') * os.sysconf('SC_PAGE_SIZE')
         except (ValueError, OSError): pass
-    memory['process_peak'] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform == 'darwin' else 1024)
+    if os.name == 'nt':
+        import psutil
+        info = psutil.Process().memory_info()
+        memory['process_peak'] = getattr(info, 'peak_wset', info.rss)
+    else:
+        import resource
+        memory['process_peak'] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform == 'darwin' else 1024)
     return {'memory': memory, 'disk': {'total': disk.total, 'free': disk.free}, 'sizes': sizes, 'artifacts': assets,
-            'removable_bytes': sum(a['bytes'] for a in assets if a['removable']), 'load': list(os.getloadavg()), 'cpu_count': os.cpu_count(),
+            'removable_bytes': sum(a['bytes'] for a in assets if a['removable']), 'load': list(os.getloadavg()) if hasattr(os, 'getloadavg') else [], 'cpu_count': os.cpu_count(),
             'note': 'RAM и диск относятся к серверу; размеры разделов и артефакты — к вашему аккаунту. Очистка затрагивает только JSON-артефакты без ссылок старше минуты. Датасеты и веса автоматически не удаляются.'}
 
 

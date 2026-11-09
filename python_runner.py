@@ -16,6 +16,10 @@ class Log(io.TextIOBase):
     def flush(self): pass
 
 
+# -I ignores PYTHONIOENCODING; explicitly use UTF-8 on Windows too.
+sys.stdin.reconfigure(encoding='utf-8')
+sys.stdout.reconfigure(encoding='utf-8')
+sys.stderr.reconfigure(encoding='utf-8')
 payload = json.load(sys.stdin)
 log = Log()
 try:
