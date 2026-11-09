@@ -64,7 +64,8 @@ def request(hub, user, body, action):
                 raise ContractError('Выберите файл дизайн-документа Архитектора.')
             name, sections = payload(package)
         else:
-            name, sections = payload({'title': 'Новый дизайн-документ', 'sections': {k: '' for k in SECTIONS}})
+            name, sections = payload(body if 'title' in body or 'sections' in body else
+                                     {'title': 'Новый дизайн-документ', 'sections': {k: '' for k in SECTIONS}})
         with hub.db() as db:
             db.execute('BEGIN IMMEDIATE')
             previous = db.execute('SELECT * FROM design_documents WHERE id=?', (doc_id,)).fetchone()
@@ -79,6 +80,11 @@ def request(hub, user, body, action):
         db.execute('BEGIN IMMEDIATE')
         row = owned(db, user, body.get('id'))
         if action == 'get': return {'document': public(row)}
+        if action == 'delete':
+            if type(body.get('revision')) is not int or body['revision'] != row['revision']:
+                raise ContractError('Документ изменён в другой вкладке. Обновите список перед удалением.', 409)
+            db.execute('DELETE FROM design_documents WHERE id=? AND owner=?', (row['id'], user['id']))
+            return {'deleted': row['id']}
         if action == 'save':
             name, sections = payload(body)
             revision = body.get('revision')

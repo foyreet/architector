@@ -63,5 +63,12 @@ class DesignChat(unittest.TestCase):
             self.assertIsNotNone(self.call('design-get')['document'])
         finally:chat.JOBS.pop(key,None)
 
+    def test_deleted_source_keeps_attached_snapshot(self):
+        attached=self.attach()
+        docs.request(self.s.hub,self.user,self.doc,'delete')
+        current=self.call('design-get')
+        self.assertTrue(current['unavailable'])
+        self.assertEqual(current['document'],attached['document'])
+
 if __name__=='__main__':unittest.main()
 
