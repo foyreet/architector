@@ -6,18 +6,19 @@ from urllib.request import Request,urlopen
 
 def api(route,body=None):
     req=Request(origin+'/api/'+route,json.dumps(body or {}).encode(),{'Content-Type':'application/json','X-Architect-Request':'1'})
-    with urlopen(req,timeout=90) as r:return json.load(r)
+    with urlopen(req,timeout=10) as r:return json.load(r)
 
 root=Path(__file__).resolve().parents[1]
 with socket.socket() as sock:
     sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
 origin=f'http://127.0.0.1:{port}'
-with tempfile.TemporaryDirectory(prefix='native-pipeline-') as data:
+with tempfile.TemporaryDirectory(prefix='native-pipeline-') as data, tempfile.TemporaryFile(mode='w+b') as log:
     env={**os.environ,'ARCHITECT_DATA_DIR':data,'ARCHITECTOR_PYTHON_MEMORY_MB':'1024'}
     env.pop('ARCHITECT_CODE_SOCKET',None)
-    app=subprocess.Popen([sys.executable,str(root/'serve.py'),'--port',str(port)],cwd=root,env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    app=subprocess.Popen([sys.executable,str(root/'serve.py'),'--port',str(port)],cwd=root,env=env,stdout=log,stderr=subprocess.STDOUT)
     try:
-        for _ in range(120):
+        for _ in range(40):
+            if app.poll() is not None: raise AssertionError('Application exited during startup')
             try:api('local/info');break
             except OSError:time.sleep(1)
         else:raise AssertionError('Application failed to start')
@@ -43,5 +44,8 @@ def run(inputs, params):
         assert step['details']['runtime']['executor'] == 'local-process',step
         assert 'native-python-ok' in step['details']['logs'],step
         print('PASS: local project, real native Python process and sklearn training')
+    except BaseException:
+        log.seek(0);print(log.read().decode(errors='replace')[-12000:])
+        raise
     finally:
         app.terminate();app.wait(timeout=10)
