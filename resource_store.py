@@ -46,7 +46,7 @@ def inventory(context):
             if path.suffix != '.json': continue
             count += 1
             if count > 10000 or path.stat().st_size > 32 * 1024 * 1024: raise bc.ContractError('Хранилище слишком большое для безопасной автоматической проверки ссылок.', 413)
-            try: value = json.loads(path.read_text())
+            try: value = json.loads(path.read_text(encoding='utf-8'))
             except (OSError, ValueError): raise bc.ContractError('Не удалось проверить ссылки в истории. Очистка остановлена.', 409) from None
             for identity in refs(value): reached.add(identity); sources.setdefault(identity, set()).add(category)
     pending = list(reached)
@@ -56,7 +56,7 @@ def inventory(context):
         if not path.exists(): continue
         try:
             if path.stat().st_size > ml.MAX_BYTES: raise ValueError()
-            content = json.loads(path.read_text())
+            content = json.loads(path.read_text(encoding='utf-8'))
         except (OSError, ValueError): raise bc.ContractError('Повреждён артефакт, автоматическая очистка остановлена.', 409) from None
         for ref in refs(content):
             sources.setdefault(ref, set()).add('Зависимость модели/таблицы')
@@ -67,7 +67,7 @@ def inventory(context):
         stat = path.stat(); identity = path.stem
         reference = None
         if identity in pins:
-            reference = bc.artifact(json.loads(path.read_text())['kind'], 'local', identity)
+            reference = bc.artifact(json.loads(path.read_text(encoding='utf-8'))['kind'], 'local', identity)
         assets.append({'id': identity, 'bytes': stat.st_size, 'pinned': identity in pins, 'label': pins.get(identity, ''), 'artifact': reference,
                        'referenced': identity in reached, 'sources': sorted(sources.get(identity, [])),
                        'removable': identity not in reached and time.time() - stat.st_mtime >= 60})

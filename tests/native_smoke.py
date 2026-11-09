@@ -3,10 +3,15 @@ from pathlib import Path
 import os, socket, subprocess, sys, tempfile
 import json,time
 from urllib.request import Request,urlopen
+from urllib.error import HTTPError
 
 def api(route,body=None):
     req=Request(origin+'/api/'+route,json.dumps(body or {}).encode(),{'Content-Type':'application/json','X-Architect-Request':'1'})
-    with urlopen(req,timeout=10) as r:return json.load(r)
+    try:
+        with urlopen(req,timeout=10) as r:return json.load(r)
+    except HTTPError as error:
+        detail = error.read().decode('utf-8', errors='replace')
+        raise AssertionError(f'{route}: HTTP {error.code}: {detail}') from error
 
 root=Path(__file__).resolve().parents[1]
 with socket.socket() as sock:

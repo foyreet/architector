@@ -1,7 +1,11 @@
 name: Local application
 on:
   push:
+    branches: [main]
   pull_request:
+concurrency:
+  group: local-application-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -21,6 +25,7 @@ jobs:
       - run: python tests/browser_create_schema.py
   native:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
