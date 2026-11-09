@@ -1,0 +1,8 @@
+/* Android web interface: independent touch targets and surface treatment. */
+html[data-ui=android] { font-family: Roboto, "Segoe UI", sans-serif; text-size-adjust: 100%; }
+html[data-ui=android] dialog:not(.project-screen, #mobile-nav-dialog) { margin: auto auto 0; border-radius: 24px 24px 0 0; }
+html[data-ui=android] :is(button, summary) { touch-action: manipulation; }
+html[data-ui=android] #mobile-selection button, html[data-ui=android] .project-tabs button,
+html[data-ui=android] .mobile-sheet-actions button { min-height: 48px; }
+html[data-ui=android] .project-tabs button[aria-current=page] { background: #edf2ff; border-radius: 24px; }
+

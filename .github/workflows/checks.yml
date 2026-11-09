@@ -1,0 +1,33 @@
+name: Local application
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  unit-and-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements-ml.txt -r requirements-chat.txt playwright
+      - run: python -m playwright install --with-deps chromium
+      - run: python -m unittest discover -s tests -p 'test_*.py'
+      - run: python tests/browser_local.py
+      - run: python tests/browser_create_schema.py
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose config --quiet
+      - run: docker compose up --build -d
+      - run: docker compose exec -T runner docker version
+      - run: python3 tests/docker_smoke.py
+      - if: failure()
+        run: docker compose logs --tail=150
+      - if: always()
+        run: docker compose down -v

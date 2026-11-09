@@ -1,0 +1,7 @@
+/* iPhone web interface: bottom sheets, system type and safe screen edges. */
+html[data-ui=ios] { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; -webkit-text-size-adjust: 100%; }
+html[data-ui=ios] dialog:not(.project-screen, #mobile-nav-dialog) { margin: auto auto 0; border-radius: 22px 22px 0 0; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+html[data-ui=ios] #mobile-properties { padding-bottom: 0; }
+html[data-ui=ios] :is(button, summary) { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+html[data-ui=ios] .project-tabs button[aria-current=page] { background: #edf2ff; border-radius: 9px 9px 0 0; }
+

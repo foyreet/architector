@@ -1,0 +1,4 @@
+# Document text extraction for AI Chat (Python 3.10+).
+pypdf==6.21.4
+striprtf==0.0.35
+

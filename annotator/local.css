@@ -1,0 +1,9 @@
+#ai-setup{width:560px;max-width:calc(100vw - 24px);max-height:90dvh;overflow:auto}
+#ai-setup label{display:block;margin:12px 0 6px;font-size:13px}
+#ai-setup input,#ai-setup select{width:100%;box-sizing:border-box;min-height:42px}
+#ai-setup p{line-height:1.55;overflow-wrap:anywhere;font-size:13px}
+#ai-setup button{min-height:42px}#ai-setup details{border-top:1px solid var(--line);padding-top:14px}
+#ai-setup code{display:block;white-space:pre-wrap;overflow-wrap:anywhere;padding:12px;background:#f5f7fb}
+#ai-setup-status{color:#435675;min-height:20px}
+#community,#blocks-global-tab,#blocks-global,#iris-example,#discuss-node,#project-proposals,#publish-project,#propose-project,#community-catalog,#practice-card,#python-example,#python-load-example{display:none!important}
+.local-only-hidden{display:none!important}

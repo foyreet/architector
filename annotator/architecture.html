@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Архитектор — новая схема</title>
+  <link rel="icon" href="data:,">
+  <script src="/device-ui.js"></script>
+  <link rel="stylesheet" href="/architecture.css">
+  <script defer src="/block-contracts.js"></script>
+  <script defer src="/workspace-navigation.js"></script>
+  <script defer src="/community.js"></script>
+  <link rel="stylesheet" href="/learning.css">
+  <link rel="stylesheet" href="/design-system.css">
+  <link rel="stylesheet" href="/mobile-workspace.css">
+  <link rel="stylesheet" href="/ios.css">
+  <link rel="stylesheet" href="/android.css">
+  <script defer src="/mobile-workspace.js"></script>
+  <script defer src="/learning.js"></script>
+  <script defer src="/python-workbench.js"></script>
+  <script defer src="/experiments.js"></script>
+  <script defer src="/discussions.js"></script>
+  <script defer src="/project-insights.js"></script>
+  <script defer src="/pipeline-debug.js"></script>
+  <script defer src="/lab-tools.js"></script>
+  <script defer src="/training-console.js"></script>
+  <script defer src="/experiment-wizard.js"></script>
+  <link rel="stylesheet" href="/codex-chat.css">
+  
+  <script defer src="/vendor/marked-18.1.1.js"></script>
+  <script defer src="/chat-markdown.js"></script>
+  <script defer src="/design-chat.js"></script><script defer src="/codex-chat.js"></script>
+  
+  <script defer src="/architecture.js"></script>
+<link rel="stylesheet" href="/design-chat.css"><link rel="stylesheet" href="/local.css"><script defer src="/ai-connection.js"></script></head>
+<body>
+  <aside class="app-sidebar" id="app-sidebar" aria-label="Навигация приложения">
+    <div class="sidebar-brand"><a href="/architecture.html" class="brand" aria-label="Архитектор"><span class="brand-mark" aria-hidden="true">A</span><span class="sidebar-label">Архитектор</span></a><button id="sidebar-toggle" aria-label="Свернуть меню" aria-expanded="true" aria-controls="sidebar-navigation" title="Свернуть меню">«</button></div>
+    <span class="sidebar-caption sidebar-label">РАБОЧЕЕ ПРОСТРАНСТВО</span>
+    <nav id="sidebar-navigation" aria-label="Основные разделы">
+      <button id="new-diagram" title="Создать схему" aria-label="Создать схему"><span class="nav-icon" aria-hidden="true">+</span><span class="sidebar-label">Создать схему</span></button>
+      <button id="design-document-create" title="Создать дизайн-документ" aria-label="Создать дизайн-документ"><span class="nav-icon" aria-hidden="true">▤</span><span class="sidebar-label">Создать дизайн-документ</span></button>
+      <button id="codex-chat-open" title="AI Chat" aria-expanded="false" aria-controls="codex-chat"><span class="nav-icon" aria-hidden="true">◌</span><span class="sidebar-label">AI Chat</span></button>
+      <button id="board-open" title="Доска"><span class="nav-icon" aria-hidden="true">▱</span><span class="sidebar-label">Доска</span></button>
+      <details id="workspace-tools" class="workspace-tools"><summary title="Инструменты: проекты, блоки и подключения" aria-label="Инструменты"><span class="nav-icon" aria-hidden="true">⚙</span><span class="sidebar-label">Инструменты</span></summary>
+      <button id="connections" title="Подключения"><span class="nav-icon" aria-hidden="true">⇄</span><span class="sidebar-label">Подключения</span></button>
+      </details>
+    </nav>
+    <div class="sidebar-footer">
+      <button id="learning" disabled title="Обучение"><span class="nav-icon" aria-hidden="true">?</span><span class="sidebar-label">Обучение</span></button>
+      <button id="community" class="account-button" aria-label="Аккаунт" title="Аккаунт"><span class="nav-icon" aria-hidden="true">◎</span><span id="account-label" class="sidebar-label">Войти</span></button>
+      <span class="sidebar-caption sidebar-label">opensource</span>
+    </div>
+  </aside>
+  <div class="workspace-main">
+    <header class="project-header">
+      <button id="mobile-menu" class="mobile-only" aria-label="Меню приложения">☰</button>
+      <div class="project-heading"><p id="project-status" hidden>Новая схема</p><div class="project-name-row"><input id="diagram-name" aria-label="Название схемы" maxlength="160" value="Новая схема">
+        <details id="project-menu" class="project-menu" hidden><summary aria-label="Меню схемы" title="Меню схемы">···</summary><div class="project-menu-items">
+          <button id="overview-tab">План эксперимента</button>
+          <span class="menu-group-label">Совместная работа</span>
+          <button id="project-proposals">Предложения <span id="proposal-count" class="count" hidden>0</span></button>
+          <label class="compute-picker"><span >Вычисления</span><select id="compute-target" aria-label="Вычисления"><option value="cpu">CPU этого компьютера</option></select></label><button id="debug-pipeline">Выполнить по шагам</button><button id="create-type" title="Создать собственный тип блока">Создать свой блок</button><button id="experiment-wizard-open" title="Новый эксперимент из CSV">Новый эксперимент</button><button id="project-catalog">Каталог сообщества</button><button id="publish-project">Опубликовать</button><button id="propose-project" hidden>Предложить изменения</button>
+          <span class="menu-group-label">Файлы проекта</span>
+          <button id="import-subgraph">Импорт подсхемы</button><input type="file" id="subgraph-file" accept="application/json,.json" hidden><button id="import">Импорт</button><button id="export">Экспорт JSON</button>
+        </div></details>
+      </div></div>
+      <div id="run-view-actions" hidden><span id="run-view-label"></span><button id="run-view-return">К текущей схеме</button><button id="run-view-log">Журнал</button></div>
+      <span class="save-status sr-only" id="save-status" role="status">Новая схема</span>
+    </header>
+    <div class="project-navigation">
+      <nav class="project-tabs" aria-label="Разделы проекта">
+        <button id="schema-tab" aria-current="page">Схема</button>
+        <button id="experiments">Запуски</button>
+        <button id="results-tab">Результаты</button>
+      </nav>
+      <div class="project-actions-main"><button id="save" title="Сохранить проект">Сохранить</button><div id="schema-actions" class="schema-run-actions"><button id="run-pipeline" class="primary" title="Выполнить схему и получить результаты">▶ Запустить</button></div><div id="pipeline-live" class="pipeline-live" hidden><span id="pipeline-live-status" role="status" aria-live="polite"></span><button id="cancel-pipeline-live" type="button">Отменить запуск</button></div></div>
+
+    </div>
+    <section id="project-panel" hidden aria-label="Содержимое раздела проекта"></section>
+    <div id="schema-view">
+  <div class="layout">
+    <aside class="library block-picker" id="block-library" aria-label="Каталог" hidden>
+      <div class="section-heading"><h2 id="picker-title">Каталог</h2><button id="library-close" aria-label="Закрыть панель блоков">×</button></div>
+      <label class="sr-only" for="picker-mode">Раздел каталога</label>
+      <select id="picker-mode"><option value="blocks">Блоки</option><option value="data">Данные и датасеты</option><option value="projects">Каталог проектов</option></select>
+      <label class="sr-only" for="block-search">Поиск блоков и категорий</label>
+      <input id="block-search" type="search" placeholder="Найти блок или категорию" autocomplete="off" maxlength="160">
+      <div class="block-picker-tabs" role="tablist" aria-label="Источник блоков">
+        <button id="blocks-local-tab" role="tab" aria-selected="true" aria-controls="blocks-local">Мои блоки</button>
+        <button id="blocks-community-tab" role="tab" aria-selected="false" aria-controls="blocks-community" tabindex="-1">Библиотека</button>
+        <button id="blocks-global-tab" role="tab" aria-selected="false" aria-controls="blocks-global" aria-label="Поиск по всем блокам сообщества" tabindex="-1">Поиск</button>
+      </div>
+      <div class="block-picker-body">
+        <div id="blocks-local" role="tabpanel" aria-labelledby="blocks-local-tab">
+          <div id="library-list"></div>
+          <p class="muted" id="library-empty" role="status">У вас пока нет своих блоков.</p>
+          <button id="personal-block-retry" hidden>Повторить</button>
+          <button id="library-create">Создать свой блок</button>
+        </div>
+        <div id="blocks-community" role="tabpanel" aria-labelledby="blocks-community-tab" hidden>
+          <div id="builtin-blocks"></div>
+          <p id="block-search-empty" class="muted" role="status" hidden>Ничего не найдено.</p>
+        </div>
+        <div id="blocks-global" role="tabpanel" aria-labelledby="blocks-global-tab" hidden>
+          <p class="muted">По всем блокам сообщества</p>
+          <div id="global-block-list"></div>
+          <p id="global-block-status" role="status">Введите название блока или автора.</p>
+          <button id="global-block-retry" hidden>Повторить</button>
+        </div>
+        <section id="picker-data" hidden><div id="dataset-list"></div><p id="dataset-status" role="status"></p><button id="dataset-retry" hidden>Повторить</button></section>
+        <section id="projects-dialog" hidden aria-label="Каталог проектов"><div id="project-list"></div><p id="project-message" role="status"></p><button id="project-retry" hidden>Повторить</button></section>
+      </div>
+    </aside>
+    <div class="canvas-stage" id="canvas-stage">
+    <main class="editor" id="canvas-editor">
+      <div class="canvas-frame-bar">
+        <button id="canvas-frame-move" title="Перетащите рамку или используйте стрелки" aria-label="Переместить рамку полотна. Стрелки — перемещение">⠿ Полотно</button>
+        <button id="canvas-frame-fill" title="Увеличить поле до всей доступной области">Заполнить область</button>
+      </div>
+      <div class="canvas-fullscreen-toolbar" id="canvas-fullscreen-toolbar" hidden>
+        <strong>Пайплайн</strong>
+        <div class="zoom-tools"><button id="fullscreen-fit">Вписать всё</button><button id="fullscreen-zoom-out" aria-label="Уменьшить масштаб">−</button><span id="fullscreen-zoom-value">100%</span><button id="fullscreen-zoom-in" aria-label="Увеличить масштаб">＋</button></div>
+        <button id="canvas-fullscreen-exit">Свернуть · Esc</button>
+      </div>
+      <section id="viewport" aria-label="Полотно схемы" tabindex="0">
+        <nav class="canvas-add-tools" aria-label="Инструменты схемы">
+          <button id="library-toggle" aria-label="Блоки, данные и проекты" title="Блоки, данные и проекты" aria-expanded="false" aria-controls="block-library"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg></button>
+
+          <button id="pack-subgraph" hidden>Создать блок из выделенного</button>
+          <div class="history-actions"><button id="undo" aria-label="Отменить изменение" title="Отменить (⌘/Ctrl Z)">↶</button><button id="redo" aria-label="Повторить изменение" title="Повторить (⌘/Ctrl Shift Z)">↷</button></div>
+        </nav>
+        <div id="mobile-selection" class="mobile-only" hidden><strong id="mobile-selected-name"></strong><div><button id="mobile-edit">Настройки</button><button id="mobile-connect">Соединить</button><button id="mobile-move" aria-pressed="false">Двигать</button><button id="mobile-deselect" aria-label="Снять выделение">×</button></div></div>
+        <div id="world"><svg id="edges" aria-label="Связи между блоками"></svg><div id="nodes"></div></div>
+        <div class="welcome" id="welcome" hidden>
+          <div class="welcome-icon" aria-hidden="true"><span></span><span></span><span></span></div>
+          <span class="eyebrow">ОТ ДАННЫХ К ПЕРВОЙ МОДЕЛИ</span>
+          <h1>Создайте первый эксперимент</h1>
+          <p>Загрузите CSV и выберите, что предсказывать.<br>Мы соберём схему обучения — вы сможете изменить любой шаг.</p>
+          <button class="primary" id="welcome-experiment">＋ Новый эксперимент из CSV</button>
+          <button id="first-block">Собрать схему вручную</button>
+          <button id="welcome-learning" disabled>Пройти интерактивное обучение</button>
+          <span class="welcome-note">Схема → запуск → результаты.</span>
+        </div>
+        <div id="connection-hint" class="connection-hint" hidden>Выберите вход другого блока · Esc — отмена</div>
+        <div class="canvas-bottom"><div class="zoom-tools"><button id="zoom-out" aria-label="Уменьшить масштаб">−</button><button id="zoom-value" title="Вернуть масштаб блоков к 100%" aria-label="Вернуть масштаб блоков к 100%">100%</button><button id="zoom-in" aria-label="Увеличить масштаб">＋</button><button id="fit">Вписать</button><button id="canvas-fullscreen" aria-controls="canvas-editor" aria-expanded="false" title="На весь экран">⛶</button></div><span class="canvas-tip">Перетаскивайте фон для навигации · Прокрутка — масштаб · Shift + клик — выделение</span></div>
+      </section>
+      <button id="canvas-frame-resize" title="Потяните угол или используйте стрелки для изменения размера" aria-label="Размер рамки полотна. Стрелки — изменить ширину и высоту">◢</button>
+    </main>
+    </div>
+    <aside class="inspector" aria-label="Свойства блока" hidden>
+      <div class="section-heading inspector-heading"><h2>Настройка блока</h2><button id="inspector-back" type="button">К схеме ↑</button></div>
+      <div id="inspector-empty"><div class="inspector-symbol" aria-hidden="true">↖</div><strong>Ничего не выбрано</strong><p class="muted">Выберите блок на схеме, чтобы изменить его название и описание.</p></div>
+      <form id="inspector-form" hidden>
+        <label>Название<input id="node-name" maxlength="100" required></label>
+        <label>Описание<textarea id="node-description" maxlength="2000" rows="2"></textarea></label>
+        <label>Поведение<select id="node-behavior"><option value="python_code">Python-код</option><option value="openrouter">Запрос к OpenRouter</option><option value="kaggle">Датасет Kaggle</option><option value="huggingface">Модель Hugging Face</option><option value="csv">Чтение CSV</option><option value="local_model">Локальная модель</option></select></label>
+        <details class="block-contract" id="block-contract"><summary>Входы и выходы</summary><ul id="contract-ports"></ul></details>
+        <section id="ml-fields" hidden><div id="ml-parameters"></div>
+          </section>
+        <div id="run-view-code" hidden><label>Код Python<textarea id="run-view-code-text" rows="12" readonly></textarea></label><label>Параметры Python<textarea id="run-view-code-params" rows="4" readonly></textarea></label></div>
+        <div id="python-fields" hidden>
+          <button type="button" id="open-python-code" class="primary">Открыть Python-код</button>
+          <button type="button" id="save-python-block">Создать свой блок из кода</button>
+
+        </div>
+        <button type="button" id="preview-data" hidden>Просмотреть данные и настроить колонки</button>
+        <button type="button" id="discuss-node">Обсудить блок</button>
+        <button type="button" id="debug-node-open">Входы и выполнение блока</button>
+        <div id="csv-fields" hidden>
+          <label>Имя файла в датасете<input id="csv-file" maxlength="1000" placeholder="Автоматически, если CSV один"></label>
+
+          <label>Кодировка<select id="csv-encoding"><option value="auto">Авто (UTF-8 / BOM)</option><option value="utf-8">UTF-8</option><option value="cp1251">Windows-1251 (кириллица)</option><option value="cp1252">Windows-1252 (латиница)</option><option value="latin-1">Latin-1 (ISO-8859-1)</option><option value="utf-16">UTF-16 (с BOM)</option><option value="utf-16-le">UTF-16 LE</option><option value="utf-16-be">UTF-16 BE</option><option value="koi8-r">KOI8-R</option></select></label>
+
+          <label>Разделитель<select id="csv-delimiter"><option value=",">Запятая</option><option value=";">Точка с запятой</option><option value="&#9;">Табуляция</option><option value="|">Вертикальная черта</option></select></label>
+          <label>Номер выбранной строки (с 0)<input id="csv-row-index" type="number" min="0" value="0"></label>
+        </div>
+        <section id="subgraph-fields" hidden>
+          <p class="muted" id="subgraph-version"></p>
+          <div id="subgraph-parameters"></div>
+          <button type="button" id="unpack-subgraph">Развернуть для редактирования</button>
+        </section>
+        <div id="template-fields" hidden>
+          <label>Шаблон промпта<textarea id="prompt-template" rows="4" maxlength="32000" placeholder="Обработай текст: {{text}}"></textarea></label>
+
+        </div>
+        <div id="local-model-fields" hidden>
+          <label>Промпт<textarea id="local-prompt" maxlength="32000" rows="3"></textarea></label>
+          <label>Лимит ответа<input id="local-max-tokens" type="number" min="1" max="16384" value="256"></label>
+
+        </div>
+        <div id="hf-fields" hidden>
+          <label>Модель Hugging Face<input id="hf-repo" maxlength="500" placeholder="owner/model или https://huggingface.co/owner/model" autocomplete="off" spellcheck="false"></label>
+          <label>Ветка, тег или commit SHA<input id="hf-revision" maxlength="160" value="main" placeholder="main" autocomplete="off" spellcheck="false"></label>
+          <label>Токен · для приватных моделей<input id="hf-token" type="password" maxlength="2048" placeholder="hf_…" autocomplete="off" spellcheck="false"></label>
+          <p class="muted" id="hf-token-status" hidden></p>
+
+          <button type="button" id="hf-forget-token">Убрать токен вкладки</button>
+          <button type="button" id="hf-info" class="primary">Загрузить список файлов</button>
+          <p class="muted" id="hf-model-info"></p>
+          <div id="hf-selection" hidden>
+            <div class="model-file-actions"><button type="button" id="hf-select-all">Выбрать все</button><button type="button" id="hf-select-none">Снять выбор</button></div>
+            <div id="hf-file-list" class="model-file-list" aria-label="Файлы модели"></div>
+            <p class="muted" id="hf-selected-size"></p>
+            <button type="button" class="primary" id="hf-download">Скачать выбранные файлы</button>
+          </div>
+          <button type="button" id="hf-local">Показать локальные файлы</button>
+
+          <p id="hf-status" role="status" class="muted"></p>
+          <progress id="hf-progress" hidden aria-label="Скачивание модели"></progress>
+          <p id="hf-path" class="muted"></p>
+          <ul id="hf-local-files" class="model-local-files" aria-label="Скачанные файлы модели"></ul>
+        </div>
+        <div id="kaggle-fields" hidden>
+          <label>Ссылка на датасет<input id="kg-dataset" maxlength="500" placeholder="https://www.kaggle.com/datasets/owner/dataset" autocomplete="off" spellcheck="false"></label>
+          <label>API-токен · если нужен доступ<input id="kg-token" type="password" maxlength="2048" autocomplete="off" spellcheck="false" placeholder="Необязательно для публичных датасетов"></label>
+
+          <button type="button" class="primary" id="kg-download">Скачать датасет</button>
+          <button type="button" id="kg-files">Показать скачанные файлы</button>
+
+          <p id="kg-status" role="status" class="muted"></p>
+          <progress id="kg-progress" hidden aria-label="Скачивание датасета"></progress>
+          <p id="kg-path" class="muted"></p>
+          <label id="kg-file-label" hidden>Файлы датасета<select id="kg-file"></select></label>
+          <button type="button" id="kg-preview-button" hidden>Посмотреть файл</button>
+          <section id="kg-preview" aria-label="Предпросмотр файла" hidden>
+            <h3 id="kg-preview-title"></h3>
+            <p class="muted" id="kg-preview-note" role="status"></p>
+            <div id="kg-table" class="dataset-table" tabindex="0" role="region" aria-label="Строки CSV"></div>
+            <pre id="kg-text"></pre>
+          </section>
+        </div>
+        <div id="openrouter-fields" hidden>
+          <label>Модель<input id="or-model" maxlength="160" list="model-options" placeholder="ID модели из OpenRouter" autocomplete="off"></label>
+          <button type="button" id="load-models">Загрузить каталог моделей</button>
+          <p class="muted" id="models-status" role="status"></p>
+          <label>Системная инструкция<textarea id="or-system" maxlength="16000" rows="3" placeholder="Роль и правила для модели"></textarea></label>
+          <label>Промпт<textarea id="or-prompt" maxlength="32000" rows="5" placeholder="Что должна сделать модель?"></textarea></label>
+          <div class="parameter-pair"><label>Лимит токенов<input id="or-max-tokens" type="number" min="1" max="16384" step="1" value="1024"></label><label>Температура<input id="or-temperature" type="number" min="0" max="2" step="0.1" value="0.7"></label></div>
+
+          <button type="button" class="primary" id="run-block">Запустить блок</button>
+
+          <section id="run-result" hidden aria-label="Ответ OpenRouter"><h3>Последний запрос</h3><p id="run-status" role="status"></p><pre id="run-output"></pre><p class="muted" id="run-usage"></p><button type="button" id="copy-result" hidden>Скопировать ответ</button></section>
+        </div>
+
+        <button class="primary" type="submit">Применить</button>
+        <div class="connections"><h3>Связи</h3><div id="node-connections"></div></div>
+        <button id="delete-node" type="button" class="danger">Удалить со схемы</button>
+      </form>
+
+    </aside>
+  </div>
+    </div>
+  </div>
+  <dialog id="codex-chat" aria-labelledby="codex-chat-title">
+    <div class="dialog-heading"><div><h2 id="codex-chat-title"><span class="codex-spark" aria-hidden="true">✦</span> AI Chat</h2><p id="codex-context" class="muted">Без проекта</p></div><button id="codex-chat-close" type="button" aria-label="Закрыть AI Chat" title="Закрыть чат">×</button></div>
+    <div class="codex-toolbar"><span id="codex-connection" role="status">Проверяем подключение…</span><button id="codex-connect" type="button">Подключить Codex</button><details class="codex-options"><summary aria-label="Параметры чата" title="Параметры чата">···</summary><div><button id="codex-disconnect" type="button" hidden>Отключить</button><button id="codex-clear" type="button">Очистить историю</button><label class="inline-label codex-context-choice"><input id="codex-include-context" type="checkbox" checked> Передавать схему, журналы и фрагменты CSV</label></div></details></div>
+    <section id="codex-login" class="codex-login" aria-label="Вход в Codex" hidden>
+      <p>Откройте страницу OpenAI и введите одноразовый код. После входа вернитесь сюда.</p>
+      <div><a id="codex-login-link" target="_blank" rel="noopener noreferrer">Открыть вход в Codex ↗</a><output id="codex-login-code" aria-label="Одноразовый код"></output><button id="codex-copy-code" type="button">Скопировать код</button></div>
+      <p class="muted">Если вход по коду выключен, включите его в настройках безопасности ChatGPT. Не передавайте код другим людям.</p>
+    </section>
+    <div id="codex-transcript" class="codex-transcript" role="log" aria-label="Переписка с AI" aria-live="polite" aria-relevant="additions">
+      <div id="codex-empty" class="codex-empty"><h3>Помощник по вашей схеме</h3><p>Опишите нужный пайплайн — AI подготовит схему. Проверьте изменения и примените их одной кнопкой. Для разбора ошибок помощник может читать журналы запусков и небольшие фрагменты CSV текущего проекта, чтобы подобрать кодировку.</p><div><button type="button" data-codex-example="Объясни текущую схему простыми словами">Объясни схему</button><button type="button" data-codex-example="Помоги разобраться с ошибкой в эксперименте">Помоги с ошибкой</button><button type="button" data-codex-example="Помоги выбрать модель и метрику для моей задачи. Сначала уточни цель и данные.">Помоги выбрать модель</button></div></div>
+      <div id="codex-messages"></div>
+      <p id="codex-pending" role="status" hidden>AI готовит ответ… Можно вернуться к схеме.</p>
+    </div>
+    <form id="codex-form" class="codex-composer">
+      <div class="codex-composer-context">
+      <p id="codex-error" role="alert" hidden></p>
+      <details id="codex-settings" open><summary>Модель и рассуждение</summary><div class="codex-model-settings"><label>Модель<select id="codex-model"><option value="">По умолчанию</option></select></label><label>Рассуждение<select id="codex-effort"><option value="">По умолчанию</option></select></label></div>
+      <div id="codex-model-notice" class="codex-model-notice" hidden><span id="codex-model-status" role="status"></span><button id="codex-model-retry" type="button">Обновить модели</button></div></details>
+      <p id="codex-voice-status" class="codex-voice-status" role="status" hidden></p>
+      <p id="codex-upload-status" class="muted" role="status" hidden></p>
+      <input id="codex-file" type="file" hidden multiple accept=".pdf,.docx,.odt,.pptx,.xlsx,.rtf,.txt,.md,.markdown,.csv,.tsv,.json,.yaml,.yml,.xml,.html,.htm,.log,.py,.js,.ts,.css,.sql">
+      </div>
+      <div id="codex-design" hidden><span id="codex-design-title"></span><span id="codex-design-state"></span><div class="codex-design-actions"><button id="codex-design-read" type="button">Прочитать</button><button id="codex-design-update" type="button">Обновить</button><button id="codex-design-remove" type="button">Убрать</button></div></div>
+      <div id="codex-attach-menu" hidden><button id="codex-attach-file" type="button">Файл с устройства</button><button id="codex-attach-design" type="button">Мои дизайн-документы</button></div>
+      <div id="codex-attachments" aria-live="polite"></div>
+      <label for="codex-message" class="sr-only">Сообщение AI</label><textarea id="codex-message" rows="3" maxlength="8000" placeholder="Опишите схему или задайте вопрос…"></textarea>
+      <div class="codex-send-row"><span class="muted">Используется ваше подключение</span><button id="codex-attach" type="button" aria-label="Прикрепить документ" title="Прикрепить документ · до 20 МиБ · PDF, DOCX, ODT, PPTX, XLSX, RTF и текстовые файлы"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m8 13 6-6a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7l9-9a7 7 0 0 1 10 10l-8 8"/></svg></button><button id="codex-voice" type="button" aria-label="Начать диктовку" aria-pressed="false" title="Голосовой ввод через браузер">🎙 Голос</button><button id="codex-send" class="primary" type="submit" aria-label="Отправить сообщение" disabled>Отправить</button></div>
+    </form>
+  </dialog>
+  <dialog id="mobile-nav-dialog" aria-label="Меню приложения"></dialog>
+  <dialog id="mobile-properties" aria-label="Настройки блока"><div class="dialog-heading"><h2>Настройки блока</h2><button id="mobile-properties-close">К схеме</button></div><p id="mobile-draft-status" role="status"></p><div id="mobile-inspector-host"></div><div class="mobile-sheet-actions"><button id="mobile-apply" class="primary">Применить и закрыть</button></div></dialog>
+  <dialog id="mobile-connection" aria-labelledby="mobile-connection-title"><form id="mobile-connection-form"><div class="dialog-heading"><h2 id="mobile-connection-title">Соединить блоки</h2><button type="button" id="mobile-connection-close">Закрыть</button></div><label>Выход выбранного блока<select id="mobile-output"></select></label><label>Совместимый вход<select id="mobile-input"></select></label><p id="mobile-connection-status" role="status"></p><div class="dialog-actions"><button class="primary" id="mobile-connection-submit">Соединить</button></div></form></dialog>
+  <dialog id="block-dialog">
+    <form id="block-form">
+      <div class="dialog-heading"><h2>Новый блок</h2><button id="close-dialog" type="button" aria-label="Закрыть">×</button></div>
+      <p class="muted">Дайте компоненту имя. Его можно будет использовать на разных схемах.</p>
+      <label>Название<input id="type-name" maxlength="100" placeholder="Название вашего компонента" required autofocus></label>
+      <label>Описание <span class="muted">· необязательно</span><textarea id="type-description" maxlength="2000" rows="3" placeholder="За что отвечает этот компонент?"></textarea></label>
+      <label>Поведение<select id="type-behavior"><option value="python_code">Python-код</option><option value="openrouter">Запрос к OpenRouter</option><option value="kaggle">Датасет Kaggle</option><option value="huggingface">Модель Hugging Face</option><option value="csv">Чтение CSV</option><option value="local_model">Локальная модель</option></select></label>
+      <label class="color-label">Цвет<input id="type-color" type="color" value="#275fe8"></label>
+      <p id="block-create-error" role="alert" class="muted" hidden></p>
+      <div class="dialog-actions"><button type="button" id="cancel-dialog">Отмена</button><button class="primary" type="submit">Создать и добавить</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="subgraph-dialog">
+    <form id="subgraph-form">
+      <div class="dialog-heading"><h2>Блок из подсхемы</h2><button type="button" id="close-subgraph" aria-label="Закрыть подсхему">×</button></div>
+      <label>Название<input id="subgraph-name" maxlength="100" required></label>
+      <label>Описание<textarea id="subgraph-description" rows="3" maxlength="2000"></textarea></label>
+      <p class="muted">Назовите внешние порты и параметры. Каждый экземпляр блока получит собственные значения настроек.</p>
+      <div id="subgraph-port-names"></div>
+      <p id="subgraph-error" role="alert"></p>
+      <div class="dialog-actions"><button type="submit" class="primary">Создать блок</button></div>
+    </form>
+  </dialog>
+  <dialog id="experiments-dialog" aria-labelledby="experiments-title">
+    <div class="dialog-heading"><div><h2 id="experiments-title">Запуски</h2><p id="experiments-scope" class="muted"></p></div><button id="close-experiments" aria-label="Закрыть эксперименты">×</button></div>
+    <div id="experiments-empty" class="empty-state" hidden><h3>Запусков пока нет</h3><p>Запустите схему, чтобы увидеть метрики, параметры и историю выполнения.</p><button id="experiments-to-schema" class="primary">Перейти к схеме</button></div>
+    <div class="experiments-tools"><div class="experiments-filters experiments-history-only">
+      <label>Поиск<input id="experiments-search" type="search" placeholder="Название, гипотеза или тег"></label>
+      <label>Состояние<select id="experiments-filter"><option value="">Все</option><option value="ready">Готово</option><option value="paused">Ожидает продолжения</option><option value="error">Ошибка</option><option value="cancelled">Остановлен</option><option value="running">Выполняется</option></select></label>
+      <label>Порядок<select id="experiments-sort"><option value="date">Сначала новые</option><option value="duration">Сначала быстрые</option></select></label>
+      </div><button id="pipeline-history">История запусков</button><button id="experiments-refresh">Обновить</button><button id="experiment-series">Серия экспериментов</button>
+    </div>
+    <p id="experiments-message" role="status"></p>
+    <div class="experiments-scroll experiments-run-list experiments-history-only"><table class="experiments-table"><thead><tr><th>Запуск</th><th>Состояние</th><th>Начало</th><th>Время</th><th>Теги</th><th>Действия</th></tr></thead><tbody id="experiments-runs"></tbody></table></div>
+  </dialog>
+  <dialog id="experiment-notes-dialog" aria-labelledby="experiment-notes-title">
+    <form id="experiment-notes" hidden>
+      <div class="dialog-heading"><h3 id="experiment-notes-title">Описание эксперимента</h3><button id="experiment-notes-close" type="button" aria-label="Закрыть заметки">×</button></div>
+      <div class="experiment-note-grid"><label>Название<input id="experiment-name" maxlength="160"></label><label>Теги через запятую<input id="experiment-tags" placeholder="baseline, новые признаки"></label><label>Гипотеза<textarea id="experiment-hypothesis" rows="3" maxlength="2000" placeholder="Что меняем и какого эффекта ожидаем?"></textarea></label><label>Вывод<textarea id="experiment-conclusion" rows="3" maxlength="4000" placeholder="Что получилось и что проверим дальше?"></textarea></label></div>
+      <div class="dialog-actions"><span id="experiment-note-status" role="status"></span><button id="experiment-note-save" class="primary" type="submit">Сохранить описание</button></div>
+    </form>
+  </dialog>
+  <dialog id="pipeline-dialog">
+    <div class="dialog-heading"><h2>История запусков</h2><button id="close-pipeline-history" aria-label="Закрыть историю">×</button></div>
+    <p id="pipeline-status" role="status" class="muted">Готов к запуску</p>
+    <button id="cancel-pipeline" hidden>Остановить</button>
+    <label>Запуск<select id="pipeline-runs"></select></label>
+    <button id="history-training" type="button">Ход обучения и продолжение</button>
+    <p id="pipeline-summary" role="status" class="muted"></p>
+    <div id="pipeline-steps" class="pipeline-steps"></div>
+    <h3>Результат и параметры шага</h3>
+    <div id="ml-step-summary" class="dataset-table" hidden></div>
+    <button type="button" id="download-python-data" hidden>Скачать результат Python JSON</button>
+    <button type="button" id="download-trained-model" hidden>Скачать модель JSON</button>
+    <pre id="pipeline-step-result">Выберите шаг, чтобы увидеть входы, результат и версии.</pre>
+    <h3>Журнал событий</h3><pre id="pipeline-events"></pre>
+  </dialog>
+  <dialog id="pipeline-start-dialog">
+    <form id="pipeline-start-form">
+      <div class="dialog-heading"><h2>Запустить пайплайн</h2><button id="close-pipeline-start" type="button" aria-label="Закрыть запуск">×</button></div>
+      <p id="pipeline-plan" class="muted" hidden></p>
+      <label>Выполнить на<select id="compute-confirm"><option value="cpu">CPU этого компьютера</option></select></label><p id="compute-confirm-status" class="muted" hidden></p>
+      <p id="pipeline-openrouter-notice" hidden>Запросы OpenRouter используют ключ подключения и могут расходовать баланс.</p>
+      <label id="pipeline-hf-field" hidden>Токен Hugging Face · необязательно<input id="pipeline-hf-token" type="password" autocomplete="off" placeholder="Или токен, настроенный на сервере"></label>
+      <p id="pipeline-start-error" role="alert"></p>
+      <div class="dialog-actions"><button id="cancel-pipeline-start" type="button">Отмена</button><button id="pipeline-start-submit" class="primary" type="submit">Запустить</button></div>
+    </form>
+  </dialog>
+  <dialog id="openrouter-dialog">
+    <form id="openrouter-form">
+      <div class="dialog-heading"><h2>Подключение OpenRouter</h2><button id="close-openrouter" type="button" aria-label="Закрыть подключение">×</button></div>
+      <p class="muted">Единый API для моделей разных провайдеров. <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener noreferrer">Создать API-ключ</a> · <a href="https://openrouter.ai/models" target="_blank" rel="noopener noreferrer">Модели и тарифы</a></p>
+      <label>API-ключ<input id="openrouter-key" type="password" maxlength="512" autocomplete="off" spellcheck="false" placeholder="Вставьте свой ключ"></label>
+      <p class="muted">Ключ остаётся в памяти этой вкладки до обновления страницы. Он не сохраняется в браузере, файлах или экспорте схемы.</p>
+      <p class="muted" id="openrouter-key-status" role="status"></p>
+      <div class="dialog-actions"><button type="button" id="forget-key">Убрать ключ вкладки</button><button type="submit" class="primary">Использовать ключ</button></div>
+    </form>
+  </dialog>
+  <div hidden><button id="openrouter-settings">OpenRouter · ключ</button></div>
+  <datalist id="model-options"></datalist>
+  <input type="file" id="import-file" accept="application/json,.json" hidden>
+  <div id="toast" role="status" hidden></div>
+  <dialog id="community-dialog" class="community-dialog" aria-labelledby="community-title">
+    <div class="dialog-heading"><h2 id="community-title">Сообщество</h2><span id="community-account" class="muted"></span><button id="community-close" aria-label="Закрыть раздел">✕</button></div>
+    <p id="community-subtitle" class="muted"></p>
+    <nav id="community-nav" aria-label="Разделы библиотеки"></nav>
+    <p id="community-error" class="form-error" role="alert"></p>
+    <div id="community-content"></div>
+  </dialog>
+
+  <dialog id="data-dialog" class="workbench-dialog">
+    <div class="dialog-heading"><h2>Данные и подготовка</h2><button type="button" id="close-data" aria-label="Закрыть данные">×</button></div>
+    <p id="data-status" role="status" class="muted"></p>
+    <div id="data-config" hidden>
+      <div class="parameter-pair"><label>Целевая колонка<select id="data-target"></select></label>
+      <label>Пропуски и некорректные числа<select id="data-missing"><option value="error">Остановить с ошибкой</option><option value="drop">Удалить такие строки</option></select></label></div>
+      <label>Полные дубли признаков и цели<select id="data-duplicates"><option value="keep">Сохранить</option><option value="drop">Удалить</option></select></label>
+    </div>
+    <h3>Колонки входных данных</h3><div id="data-columns" class="dataset-table"></div>
+    <button type="button" id="data-apply" class="primary" hidden>Применить и посмотреть результат</button>
+    <p id="data-prepared-status" role="status"></p>
+    <div class="workbench-actions"><button type="button" id="data-before">До подготовки</button><button type="button" id="data-after" disabled>После подготовки</button><button type="button" id="data-prev">←</button><span id="data-page"></span><button type="button" id="data-next">→</button></div>
+    <div id="data-rows" class="dataset-table" tabindex="0" aria-label="Строки датасета"></div>
+  </dialog>
+  <dialog id="python-dialog" class="workbench-dialog">
+    <div class="dialog-heading"><h2>Python — свой этап пайплайна</h2><button type="button" id="close-python" aria-label="Закрыть код">×</button></div>
+    <p class="muted">Определите run(inputs, params). Входы: rows, data, value (JSON), table и model — из подключённых портов. Верните словарь с rows, data и/или report. Данные data сохраняются отдельно и передаются следующему Python-блоку.</p>
+    <div class="python-editor-grid"><label>Код<textarea id="python-code" spellcheck="false" maxlength="64000" rows="20"></textarea></label>
+      <div><label>Параметры JSON<textarea id="python-params" spellcheck="false" maxlength="64000" rows="10"></textarea></label>
+      <label>Лимит времени, секунд<input id="python-timeout" type="number" min="1" max="60" value="30"></label>
+      <p class="muted">Python 3.11 · NumPy · pandas · scikit-learn. До 60 секунд и 512 МиБ. Без сети, доступа к проектам и секретам сервера. Для установки других пакетов нужен новый образ среды.</p></div></div>
+    <div class="workbench-actions"><button type="button" id="python-apply">Сохранить код</button><button type="button" id="python-test" class="primary">Пробный запуск на входных данных</button><button type="button" id="python-pack">Создать свой блок</button></div>
+    <p id="python-status" role="status"></p>
+    <div id="python-result" hidden><h3>Результат</h3><pre id="python-report"></pre><div id="python-rows" class="dataset-table"></div><button type="button" id="python-download">Скачать данные результата JSON</button><h3>Журнал</h3><pre id="python-logs"></pre></div>
+  </dialog>
+
+</body>
+</html>
+
