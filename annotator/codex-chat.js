@@ -245,11 +245,11 @@ window.CodexChat = ({api, account, project, diagram, flush, fit, applyProposal})
     login = status.login || null;
     screen.classList.toggle('codex-auth', !!login);
     $('codex-connect').hidden = false;
-    $('codex-connect').textContent = connected ? 'Настроить AI' : 'Подключить AI';
-    if(status.provider==='none' && !setupPrompted){setupPrompted=true;setup.open();}
+    $('codex-connect').textContent = connected ? 'Настроить AI' : !status.available ? 'Как подключить' : 'Подключить AI';
+    if((status.provider==='none' || !status.available) && !setupPrompted){setupPrompted=true;setup.open();}
     $('codex-disconnect').hidden = !connected && !login;
     $('codex-disconnect').textContent = login ? 'Отменить вход' : 'Отключить';
-    $('codex-connection').textContent = !status.available ? 'Codex CLI не установлен. Выберите другую модель или установите CLI.' : connected ? (status.label || 'Codex') + (status.endpoint ? ' · ' + status.endpoint : ' подключён') : login ? 'Завершите вход на странице OpenAI' : 'Подключите свою модель';
+    $('codex-connection').textContent = !status.available ? 'Для входа через ChatGPT нужно подготовить подключение.' : connected ? (status.label || 'Codex') + (status.endpoint ? ' · ' + status.endpoint : ' подключён') : login ? 'Завершите вход на странице OpenAI' : 'Подключите свою модель';
     $('codex-login').hidden = !login;
     $('codex-login-code').textContent = login?.code || '';
     if (login?.url === 'https://auth.openai.com/codex/device') $('codex-login-link').href = login.url;

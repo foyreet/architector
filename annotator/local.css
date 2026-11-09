@@ -7,3 +7,8 @@
 #ai-setup-status{color:#435675;min-height:20px}
 #community,#blocks-global-tab,#blocks-global,#iris-example,#discuss-node,#project-proposals,#publish-project,#propose-project,#community-catalog,#practice-card,#python-example,#python-load-example{display:none!important}
 .local-only-hidden{display:none!important}
+#ai-codex-guide{padding:14px;border:1px solid var(--line,#d9e1ee);border-radius:12px;background:#f6f8fc;margin:16px 0}
+#ai-codex-guide h3{font-size:16px;margin:0 0 8px}#ai-codex-guide ol{padding-left:22px;font-size:13px;line-height:1.5}
+#ai-codex-guide li{margin:10px 0}#ai-codex-guide a{display:block;margin-top:10px;font-size:13px}
+#ai-codex-command{user-select:all;word-break:break-word}#ai-codex-guide code{padding:10px;background:#fff}
+#ai-setup .project-actions{flex-wrap:wrap}#ai-setup button:disabled{opacity:.6;cursor:not-allowed}

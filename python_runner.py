@@ -1,4 +1,4 @@
-"""This file runs ONLY inside the disposable, restricted container."""
+"""Worker for an ordinary local Python subprocess, with the current user permissions."""
 import contextlib
 import io
 import json
@@ -25,7 +25,7 @@ try:
         if not callable(namespace.get('run')): raise ValueError('Определите функцию run(inputs, params).')
         result = namespace['run'](payload['inputs'], payload['params'])
         if not isinstance(result, dict): raise ValueError('run() должна вернуть словарь выходов.')
-        # Check serialization inside the sandbox; the host validates the schema again.
+        # Check serialization inside the worker; the host validates the schema again.
         json.dumps(result, allow_nan=False)
     response = {'result': result, 'logs': ''.join(log.parts)}
 except BaseException:

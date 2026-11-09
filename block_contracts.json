@@ -760,7 +760,7 @@
       "operation": {
         "id": "python.isolated",
         "available": true,
-        "description": "Выполняет run(inputs, params) в изолированной среде Python с NumPy, pandas и scikit-learn. Подходит для любого этапа обработки. Выходы: rows, data, report."
+        "description": "Выполняет run(inputs, params) в отдельном локальном процессе Python с NumPy, pandas и scikit-learn. Подходит для любого этапа обработки. Выходы: rows, data, report."
       }
     }
   ]

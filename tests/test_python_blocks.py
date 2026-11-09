@@ -102,19 +102,6 @@ class PythonBlockTests(unittest.TestCase):
         self.assertEqual(resolved[port],[{'x':1}])
 
 
-    def test_broker_always_uses_fixed_container_restrictions(self):
-        payload={'code':'def run(inputs, params): return {}','inputs':{},'params':{},'timeout':1}
-        info=SimpleNamespace(returncode=0,stdout=b'sha256:trusted')
-        with patch.object(code_sandbox.subprocess,'run',return_value=info), patch.object(code_sandbox.subprocess,'Popen',side_effect=OSError()) as start:
-            code_sandbox.run(payload)
-        command=start.call_args.args[0]
-        for option in ['--network=none','--read-only','--user=10001:10001','--cap-drop=ALL','--security-opt=no-new-privileges',
-                       '--pids-limit=64','--memory=1024m','--memory-swap=1024m','--cpus=2.0','--pull=never']:
-            self.assertIn(option,command)
-        self.assertNotIn('--privileged',command)
-        self.assertNotIn('--volume',command)
-        self.assertEqual(command[-1],'sha256:trusted')
-
     def test_sandbox_fails_closed(self):
         with patch.dict('os.environ',{'ARCHITECT_CODE_SOCKET':str(self.root/'missing.sock')}):
             with self.assertRaises(bc.ContractError) as caught:pb.execute(self.block(),self.root)

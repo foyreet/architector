@@ -11,6 +11,7 @@ from pathlib import Path
 import queue
 import shutil
 import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -395,9 +396,16 @@ def build_prompt(store, body, record, message):
 def request(root, user, body, action, hub=None):
     root = ps.ProjectStore(root).root
     if action in ('config', 'configure', 'test'):
-        if action == 'config': return ai_connection.public(ai_connection.config(root))
+        if action == 'config':
+            return {**ai_connection.public(ai_connection.config(root)), 'codex': {
+                'available': bool(shutil.which(os.environ.get('ARCHITECT_CODEX_BIN', 'codex'))),
+                'npm_available': bool(shutil.which('npm')),
+                        'platform': sys.platform}}
         if str(Path(root).resolve()) in JOBS: fail('Дождитесь ответа перед изменением подключения.', 409)
-        if action == 'configure': return ai_connection.save(root, body)
+        if action == 'configure':
+            if body.get('provider') == 'codex' and not shutil.which(os.environ.get('ARCHITECT_CODEX_BIN', 'codex')):
+                fail('Архитектор не находит Codex. Откройте инструкцию в настройках AI, затем нажмите «Проверить снова».', 409)
+            return ai_connection.save(root, body)
         settings = ai_connection.config(root)
         if settings['provider'] != 'compatible': fail('Сначала сохраните адрес своей модели.')
         result = ai_connection.Compatible(settings).http('models', timeout=15)
@@ -447,8 +455,9 @@ def request(root, user, body, action, hub=None):
                     ai_connection.save(root, {'provider': 'none'})
                     return {'available': True, 'connected': False, 'provider': 'none', 'login': None}
                 return ai_connection.Compatible(settings).status()
-            if action == 'status' and not shutil.which(os.environ.get('ARCHITECT_CODEX_BIN', 'codex')):
-                return {'available': False, 'connected': False, 'login': None}
+            if not shutil.which(os.environ.get('ARCHITECT_CODEX_BIN', 'codex')):
+                if action == 'login': fail('Сначала подготовьте подключение: откройте настройки AI и нажмите «Проверить снова».', 409)
+                return {'available': False, 'connected': False, 'provider': 'codex', 'reason': 'codex_missing', 'login': None}
             connection = client(root)
             if action == 'login': return connection.start_login()
             if action == 'logout':

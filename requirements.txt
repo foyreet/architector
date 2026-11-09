@@ -1,0 +1,6 @@
+# Local application and Python-block dependencies.
+-r requirements-ml.txt
+-r requirements-chat.txt
+numpy>=1.26,<3
+pandas>=2.2,<3
+psutil>=7,<8
