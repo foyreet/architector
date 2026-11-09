@@ -203,7 +203,6 @@ window.ProjectInsights = ({api, context, diagram, save, discussions, download, h
     }
     for (const i of [metric, direction, baseline]) i.addEventListener('input', draw);
     metricChoice.onchange = () => { dirty = true; metric.parentElement.hidden = metricChoice.value !== '__custom__'; if (metricChoice.value !== '__custom__') metric.value = metricChoice.value; draw(); }; draw();
-    button(parent, 'Заметки и обсуждения проекта', () => discussions.open(project.meta.id));
   }
   function sourcePreview(project, node_id) { const snapshot = diagram(); return preview('Исходные данные', page => api('/api/data/preview', {project_id: project.meta.id, diagram: snapshot, node_id, page})); }
   async function results(parent, project, data, current) {

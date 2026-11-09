@@ -25,6 +25,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: docker compose config --quiet
       - run: docker compose up --build -d
+      - run: docker compose exec -T runner docker version
       - run: python3 tests/docker_smoke.py
       - if: failure()
         run: docker compose logs --tail=150
