@@ -30,7 +30,7 @@ class Documents(unittest.TestCase):
     def test_private_owner_auth_and_incomplete_drafts(self):
         with self.assertRaises(ContractError) as e:docs.request(self.hub,None,{},'list')
         self.assertEqual(e.exception.status,401)
-        for action in ('get','save','export'):
+        for action in ('get','save','export','delete'):
             with self.subTest(action=action),self.assertRaises(ContractError) as e:self.call(action,self.doc,self.b)
             self.assertEqual(e.exception.status,404)
         self.assertEqual(self.call('list',user=self.b)['documents'],[])
@@ -55,6 +55,31 @@ class Documents(unittest.TestCase):
             except ContractError as e:return e.status
         with ThreadPoolExecutor(max_workers=2) as pool:results=list(pool.map(save,['Первая вкладка','Вторая вкладка']))
         self.assertEqual(results.count(409),1)
+
+    def test_create_saves_complete_payload_atomically_and_retries_once(self):
+        body={'id':str(uuid.uuid4()),'title':'Первое сохранение','sections':{k:'Текст '+k for k in docs.SECTIONS}}
+        first=self.call('create',body)['document']
+        self.assertEqual(first['title'],body['title'])
+        self.assertEqual(first['sections'],body['sections'])
+        self.assertEqual(first['revision'],1)
+        self.assertEqual(self.call('create',body)['document'],first)
+        self.assertEqual(len(self.call('list')['documents']),2)
+        bad={**body,'id':str(uuid.uuid4()),'title':''}
+        with self.assertRaises(ContractError):self.call('create',bad)
+        with self.assertRaises(ContractError) as e:self.call('get',bad)
+        self.assertEqual(e.exception.status,404)
+
+    def test_delete_checks_revision_and_does_not_resurrect_on_save(self):
+        old=dict(self.doc);self.save()
+        for revision in (old['revision'],None,True):
+            with self.assertRaises(ContractError) as e:self.call('delete',{**self.doc,'revision':revision})
+            self.assertEqual(e.exception.status,409)
+        self.assertEqual(self.call('get',self.doc)['document'],self.doc)
+        self.assertEqual(self.call('delete',self.doc),{'deleted':self.doc['id']})
+        self.assertEqual(self.call('list')['documents'],[])
+        for action in ('get','save','export','delete'):
+            with self.subTest(action=action),self.assertRaises(ContractError) as e:self.call(action,self.doc)
+            self.assertEqual(e.exception.status,404)
 
 class HttpDocuments(unittest.TestCase):
     pass

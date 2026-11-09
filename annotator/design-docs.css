@@ -2,3 +2,9 @@
 
 #editor-error{scroll-margin-top:160px}
 
+
+.document-item{display:flex;align-items:center;gap:8px;border-bottom:1px solid #d7dfec;background:white;padding-right:8px}
+.document-item .document-row{flex:1;min-width:0;border-bottom:0}
+.delete-document{flex-shrink:0;color:#a52332}
+.delete-document:hover{background:#fff0f1;border-color:#d8a2a8}
+#save-status{margin:0 0 16px}
