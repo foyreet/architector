@@ -5,13 +5,17 @@ import codecs
 from contextlib import contextmanager
 import hashlib
 import io
+import struct
 import sys
 import re
 import zipfile
 
+try:
+    csv.field_size_limit(sys.maxsize)
+except OverflowError:
+    # Older CPython CSV parsers use C long, which is 32-bit on 64-bit Windows.
+    csv.field_size_limit((1 << (struct.calcsize('l') * 8 - 1)) - 1)
 
-
-csv.field_size_limit(sys.maxsize)
 PLACEHOLDER = re.compile(r'\{\{\s*([^{}]+?)\s*\}\}')
 
 
