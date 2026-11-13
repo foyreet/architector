@@ -395,7 +395,7 @@
     <div class="python-editor-grid"><label>Код<textarea id="python-code" spellcheck="false" maxlength="64000" rows="20"></textarea></label>
       <div><label>Параметры JSON<textarea id="python-params" spellcheck="false" maxlength="64000" rows="10"></textarea></label>
       <label>Лимит времени, секунд<input id="python-timeout" type="number" min="1" max="60" value="30"></label>
-      <p class="muted">Python 3.11 · NumPy · pandas · scikit-learn. До 60 секунд и 512 МиБ. Без сети, доступа к проектам и секретам сервера. Для установки других пакетов нужен новый образ среды.</p></div></div>
+      <p class="muted">Python 3.11 · NumPy · pandas · scikit-learn. Блок запускается отдельным локальным процессом. Время выполнения задаётся в настройках блока.</p></div></div>
     <div class="workbench-actions"><button type="button" id="python-apply">Сохранить код</button><button type="button" id="python-test" class="primary">Пробный запуск на входных данных</button><button type="button" id="python-pack">Создать свой блок</button></div>
     <p id="python-status" role="status"></p>
     <div id="python-result" hidden><h3>Результат</h3><pre id="python-report"></pre><div id="python-rows" class="dataset-table"></div><button type="button" id="python-download">Скачать данные результата JSON</button><h3>Журнал</h3><pre id="python-logs"></pre></div>

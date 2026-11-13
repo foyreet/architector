@@ -11,11 +11,9 @@ import tempfile
 import threading
 
 from app_config import data_root
-from data_limits import ARTIFACT_BYTES
 
 KINDS = ('ml_prepare', 'ml_split', 'ml_train', 'gpu_train', 'ml_evaluate', 'ml_save')
 ARTIFACT_TYPES = ('table', 'trained_model', 'metrics', 'model_bundle', 'python_data')
-MAX_BYTES = ARTIFACT_BYTES
 WORKER_LOCK = threading.Lock()
 
 
@@ -40,7 +38,6 @@ def artifact_dir(root):
 def save(root, kind, content):
     from block_contracts import artifact
     raw = encode({'kind': kind, 'content': content})
-    if len(raw) > MAX_BYTES: error('Артефакт обучения больше 32 МиБ. Уменьшите число деревьев или глубину.', 413)
     digest = hashlib.sha256(raw).hexdigest()
     folder = artifact_dir(root); target = folder / (digest + '.json')
     with tempfile.NamedTemporaryFile(dir=folder, delete=False) as stream:
@@ -60,8 +57,8 @@ def load(root, ref, kind):
     validate_artifact(ref, kind)
     path = artifact_dir(root) / (ref['id'] + '.json')
     if path.is_symlink() or not path.is_file(): error('Артефакт недоступен в этом аккаунте. Запустите предыдущие блоки.', 404)
-    with path.open('rb') as source: raw = source.read(MAX_BYTES + 1)
-    if len(raw) > MAX_BYTES or hashlib.sha256(raw).hexdigest() != ref['id']: error('Артефакт повреждён: контрольная сумма не совпала.')
+    raw = path.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != ref['id']: error('Артефакт повреждён: контрольная сумма не совпала.')
     value = json.loads(raw)
     if value['kind'] != kind: error('Тип артефакта не совпадает.')
     return value['content']
@@ -83,7 +80,6 @@ def worker(task, _root=None, **kwargs):
         except subprocess.TimeoutExpired: error('Обучение превысило 120 секунд. Уменьшите число деревьев или глубину.', 408)
         except OSError: error('Не удалось запустить среду обучения. Проверьте ARCHITECT_ML_PYTHON.', 503)
         if result.returncode: error('Среда обучения завершилась с ошибкой. Проверьте зависимости и доступную память.', 503)
-        if len(result.stdout) > MAX_BYTES: error('Результат обучения больше 32 МиБ. Уменьшите размер модели.', 413)
         response = json.loads(result.stdout)
         if 'error' in response: error(response['error'])
         return response['result']

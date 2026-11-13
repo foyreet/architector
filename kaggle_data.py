@@ -17,9 +17,6 @@ from app_config import data_root
 
 ALLOW_ENVIRONMENT = True
 ROOT = data_root()
-MAX_DOWNLOAD = 512 * 1024 * 1024
-MAX_UNPACKED = 2 * 1024 * 1024 * 1024
-MAX_FILES = 10000
 PREVIEW_BYTES = 64 * 1024
 LOCK = threading.RLock()
 JOBS = {}
@@ -84,8 +81,6 @@ def download_archive(handle, token, destination, progress):
         with build_opener(KaggleRedirect()).open(Request(url, headers=headers), timeout=30) as response:
             length = response.headers.get('Content-Length', '')
             total = int(length) if length.isdigit() else 0
-            if total > MAX_DOWNLOAD:
-                raise KaggleError('Архив больше лимита 512 МиБ.', 413)
             count = 0
             with destination.open('wb') as output:
                 while True:
@@ -95,8 +90,6 @@ def download_archive(handle, token, destination, progress):
                     if not chunk:
                         break
                     count += len(chunk)
-                    if count > MAX_DOWNLOAD:
-                        raise KaggleError('Архив больше лимита 512 МиБ.', 413)
                     output.write(chunk)
                     progress(count, total)
             if total and count != total:
@@ -115,8 +108,6 @@ def download_archive(handle, token, destination, progress):
 
 def archive_members(archive):
     entries = archive.infolist()
-    if len(entries) > MAX_FILES or sum(item.file_size for item in entries) > MAX_UNPACKED:
-        raise KaggleError('Датасет превышает лимит: 10 000 записей или 2 ГиБ содержимого.', 413)
     names = set()
     files = []
     for item in entries:

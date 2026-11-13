@@ -87,8 +87,9 @@ def run(data, progress=lambda value: None):
     task = data.get('task')
     if task not in ('train', 'evaluate', 'predict'): raise ValueError('Неизвестная GPU-операция.')
     rows = data.get('table', {}).get('X')
-    if not isinstance(rows, list) or not 1 <= len(rows) <= 1000 or not isinstance(rows[0], list): raise ValueError('Нужно 1–1000 строк.')
-    width = integer(len(rows[0]), 1, 100)
+    if not isinstance(rows, list) or not rows or not isinstance(rows[0], list): raise ValueError('Нужна непустая таблица.')
+    width = len(rows[0])
+    if not width: raise ValueError('Нужен хотя бы один признак.')
     for row in rows: vector(row, width)
     X = torch.tensor(rows, dtype=torch.float32, device=device)
     if task == 'train':
@@ -169,7 +170,7 @@ def run(data, progress=lambda value: None):
 
 if __name__ == '__main__':
     try:
-        payload = json.loads(sys.stdin.buffer.readline(8 * 1024 * 1024 + 1))
+        payload = json.loads(sys.stdin.buffer.readline())
         def progress(value):
             print(json.dumps(value, allow_nan=False), file=sys.stderr, flush=True)
             if 'checkpoint' in value and sys.stdin.buffer.readline(100) != b'checkpoint-saved\n':

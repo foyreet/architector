@@ -1,5 +1,6 @@
 """Read-only inventory of reusable datasets in the current account's storage."""
 import csv
+import local_operations
 import hashlib
 import json
 import re
@@ -13,24 +14,21 @@ import project_store as ps
 
 def listing(root):
     store = ps.ProjectStore(root)
-    items, scanned, used, truncated = [], 0, 0, False
+    items, scanned, truncated = [], 0, False
     folder = store.path('workspace/ml-artifacts')
     if folder.exists():
         for path in sorted(folder.glob('*.json')):
             if path.is_symlink() or not re.fullmatch(r'[a-f0-9]{64}\.json', path.name): continue
             scanned += 1
-            size = path.stat().st_size
-            if scanned > 2000 or used + size > 64 * 1024 * 1024 or len(items) >= 200:
+            if scanned > 2000 or len(items) >= 200:
                 truncated = True; break
-            used += size
-            if size > ml.MAX_BYTES: continue
             try:
                 raw = path.read_bytes()
                 value = json.loads(raw)
                 if value.get('kind') != 'dataset' or hashlib.sha256(raw).hexdigest() != path.stem: continue
                 data = value.get('content', {})
                 if data.get('format') != 'architect.uploaded-csv' or not isinstance(data.get('csv'), str) or not isinstance(data.get('name'), str): continue
-                try: delimiter = csv.Sniffer().sniff(data['csv'][:8192], delimiters=',;\t').delimiter
+                try: delimiter = local_operations.detect_delimiter(data['csv'])
                 except csv.Error: delimiter = ','
                 items.append({'name': data['name'], 'category': 'Загруженные CSV', 'artifact': bc.artifact('dataset', 'local', path.stem),
                               'files': [data['name']], 'delimiter': delimiter, 'modified': path.stat().st_mtime})

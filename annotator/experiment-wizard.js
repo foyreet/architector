@@ -18,13 +18,13 @@ window.ExperimentWizard=({api,beforeCreate,adopt,launch})=>{
       error.textContent='';steps.replaceChildren();['1. Данные','2. Задача и признаки','3. Проверка схемы'].forEach((name,i)=>{const n=el('span',name,i===stage?'current':'');if(i===stage)n.setAttribute('aria-current','step');steps.append(n);});
       content.replaceChildren();back.hidden=stage===0||!!created;next.textContent=created?'Запустить пайплайн':stage===0?'Посмотреть данные':stage===1?'Проверить схему':'Создать проект';
       if(stage===0){
-        content.append(el('p','Загрузите CSV с заголовками: до 2 МиБ, 1000 строк и 100 колонок. Мастер соберёт классификацию — предсказание категории по числовым признакам.'));
+        content.append(el('p','Загрузите CSV с заголовками. Мастер соберёт классификацию — предсказание категории по числовым признакам.'));
         const file=field(content,'CSV-файл',el('input'));file.type='file';file.accept='.csv,text/csv';file.id='wizard-file';
         const settings=el('div','','wizard-grid');content.append(settings);
         const enc=field(settings,'Кодировка',select([['utf-8','UTF-8'],['windows-1251','Windows-1251 (старый Excel)']],encoding));enc.id='wizard-encoding';
         const sep=field(settings,'Разделитель',select([['auto','Определить автоматически'],[',','Запятая'],[';','Точка с запятой'],['\t','Табуляция']],delimiter));sep.id='wizard-delimiter';sep.onchange=()=>{delimiter=sep.value;};
         const fileStatus=el('p',filename?'Выбран файл: '+filename:'Выберите файл на компьютере.');content.append(fileStatus);
-        async function read(){const chosen=file.files[0];if(!chosen)return;csv='';filename='';fileStatus.textContent='Чтение файла…';if(chosen.size>2*1024*1024)throw new Error('Файл больше 2 МиБ. Выберите меньший CSV.');const text=new TextDecoder(encoding,{fatal:true}).decode(await chosen.arrayBuffer());csv=text;filename=chosen.name;config.name=chosen.name.replace(/\.csv$/i,'')+' · классификация';fileStatus.textContent='Выбран файл: '+filename;}
+        async function read(){const chosen=file.files[0];if(!chosen)return;csv='';filename='';fileStatus.textContent='Чтение файла…';const text=new TextDecoder(encoding,{fatal:true}).decode(await chosen.arrayBuffer());csv=text;filename=chosen.name;config.name=chosen.name.replace(/\.csv$/i,'')+' · классификация';fileStatus.textContent='Выбран файл: '+filename;}
         file.onchange=()=>guard(async()=>{csv='';filename='';try{await read();}catch(e){throw new Error(e instanceof TypeError?'Не удалось прочитать текст. Проверьте кодировку файла.':e.message);}});
         enc.onchange=()=>guard(async()=>{encoding=enc.value;if(file.files[0])await read();else if(filename){csv='';filename='';fileStatus.textContent='Выберите файл снова для чтения в новой кодировке.';}});
         content.append(el('p','Файл отправляется в ваш аккаунт для проверки. На диск он сохраняется при создании проекта, отдельно от переносимого описания схемы.'));

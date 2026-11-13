@@ -45,7 +45,7 @@ def inventory(context):
         for path in files(folder):
             if path.suffix != '.json': continue
             count += 1
-            if count > 10000 or path.stat().st_size > 32 * 1024 * 1024: raise bc.ContractError('Хранилище слишком большое для безопасной автоматической проверки ссылок.', 413)
+            if count > 10000: raise bc.ContractError('Хранилище слишком большое для безопасной автоматической проверки ссылок.', 413)
             try: value = json.loads(path.read_text(encoding='utf-8'))
             except (OSError, ValueError): raise bc.ContractError('Не удалось проверить ссылки в истории. Очистка остановлена.', 409) from None
             for identity in refs(value): reached.add(identity); sources.setdefault(identity, set()).add(category)
@@ -55,7 +55,6 @@ def inventory(context):
         if path.is_symlink(): raise bc.ContractError('Недопустимая ссылка артефакта.', 409)
         if not path.exists(): continue
         try:
-            if path.stat().st_size > ml.MAX_BYTES: raise ValueError()
             content = json.loads(path.read_text(encoding='utf-8'))
         except (OSError, ValueError): raise bc.ContractError('Повреждён артефакт, автоматическая очистка остановлена.', 409) from None
         for ref in refs(content):

@@ -1,5 +1,6 @@
 """Build a runnable classification project from a bounded, private CSV upload."""
 import csv
+import local_operations
 import hashlib
 import math
 import re
@@ -16,10 +17,10 @@ import project_store as ps
 
 def inspect(body):
     text=body.get('csv')
-    if not isinstance(text,str) or len(text.encode('utf-8'))>2*1024*1024: raise bc.ContractError('Выберите CSV до 2 МиБ.')
+    if not isinstance(text,str): raise bc.ContractError('Выберите CSV-файл.')
     delimiter=body.get('delimiter','auto')
     if delimiter=='auto':
-        try:delimiter=csv.Sniffer().sniff(text[:8192],delimiters=',;\t').delimiter
+        try:delimiter=local_operations.detect_delimiter(text)
         except csv.Error:raise bc.ContractError('Не удалось определить разделитель. Выберите запятую, точку с запятой или табуляцию.') from None
     rows=analysis.read_csv(text,delimiter)
     if any(k != k.strip() or ',' in k for k in rows[0]): raise bc.ContractError('Для мастера уберите пробелы по краям и запятые из названий колонок.')

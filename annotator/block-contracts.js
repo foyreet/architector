@@ -33,15 +33,12 @@ window.BlockContracts = async function () {
     if (['dataset', 'model', 'table', 'trained_model', 'metrics', 'model_bundle', 'python_data'].includes(spec.type)) return artifact(value, spec.type);
     let valid = false;
     if (spec.type === 'json') {
-      let count = 0;
-      const visit = (item, depth = 0) => {
-        if (++count > 100000 || depth > 20) fail('JSON слишком сложный.');
-        if (Array.isArray(item)) item.forEach(v => visit(v, depth + 1));
-        else if (object(item)) for (const [k, v] of Object.entries(item)) { if (k.length > 200) fail(); visit(v, depth + 1); }
+      const visit = (item) => {
+        if (Array.isArray(item)) item.forEach(visit);
+        else if (object(item)) Object.values(item).forEach(visit);
         else if (!(item === null || typeof item === 'string' || typeof item === 'boolean' || typeof item === 'number' && Number.isFinite(item))) fail();
       };
       visit(value);
-      if (new TextEncoder().encode(JSON.stringify(value)).length > 16 * 1024 * 1024) fail('JSON больше 16 МиБ.');
       return copy(value);
     }
     if (['text', 'string'].includes(spec.type)) valid = typeof value === 'string' && value.length <= (spec.maxLength ?? 32000) && (!spec.pattern || new RegExp(spec.pattern).test(value));
@@ -50,11 +47,10 @@ window.BlockContracts = async function () {
     if (spec.type === 'string[]') valid = Array.isArray(value) && value.length <= (spec.maxItems ?? 5000) && value.every(s => typeof s === 'string' && s.length <= (spec.maxLength ?? 500));
     if (spec.type === 'rows') {
       valid = Array.isArray(value);
-      if (valid && new TextEncoder().encode(JSON.stringify(value)).length > 16 * 1024 * 1024) fail('Табличные данные в JSON больше 16 МиБ.');
       if (valid) for (const row of value) valueCheck(row, {type: 'row'});
     }
-    if (spec.type === 'row') valid = object(value) && Object.keys(value).length <= 100 && Object.entries(value).every(([key, cell]) =>
-      key.length <= 200 && (cell === null || typeof cell === 'boolean' || (typeof cell === 'number' && Number.isFinite(cell)) || (typeof cell === 'string' && cell.length <= 32000)));
+    if (spec.type === 'row') valid = object(value) && Object.values(value).every(cell =>
+      (cell === null || typeof cell === 'boolean' || (typeof cell === 'number' && Number.isFinite(cell)) || (typeof cell === 'string')));
     if (!valid || (spec.enum && !spec.enum.includes(value))) fail(`Некорректное значение: ${spec.label}`);
     return copy(value);
   }

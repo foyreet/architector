@@ -308,9 +308,8 @@ class Handler(BaseHTTPRequestHandler):
             if self.headers.get('Transfer-Encoding'):
                 raise ApiError('Неподдерживаемый формат запроса.')
             size = int(self.headers.get('Content-Length', '0'))
-            limit = 1024 * 1024 if path.startswith('/api/design-documents/') else 32 * 1024 * 1024 if path.startswith('/api/projects/') or path == '/api/codex/upload' else 4 * 1024 * 1024 if path.startswith(('/api/pipelines/', '/api/subgraphs/', '/api/code/', '/api/data/', '/api/lab/', '/api/compute/', '/api/wizard/', '/api/blocks/personal-')) else 256 * 1024
-            if not 0 < size <= limit:
-                raise ApiError('Слишком большой или пустой запрос.', 413)
+            if size <= 0:
+                raise ApiError('Пустой запрос.', 413)
             self.connection.settimeout(100)
             body = json.loads(self.rfile.read(size))
             if not isinstance(body, dict):

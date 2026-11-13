@@ -14,17 +14,16 @@ import project_store as ps
 
 
 def read_csv(text, separator=','):
-    if not isinstance(text, str) or len(text.encode('utf-8')) > 2 * 1024 * 1024: raise bc.ContractError('CSV должен быть не больше 2 МиБ.')
+    if not isinstance(text, str): raise bc.ContractError('Выберите CSV-файл.')
     if separator not in (',', ';', '\t'): raise bc.ContractError('Выберите разделитель CSV.')
     try:
         reader = csv.DictReader(io.StringIO(text.lstrip('\ufeff')), delimiter=separator, strict=True)
         headers = reader.fieldnames
-        if not headers or not 1 <= len(headers) <= 100 or len(set(headers)) != len(headers) or any(not h.strip() or len(h) > 200 for h in headers): raise bc.ContractError('Нужны уникальные непустые заголовки, до 100 колонок.')
+        if not headers or len(set(headers)) != len(headers) or any(not h.strip() for h in headers): raise bc.ContractError('Нужны уникальные непустые заголовки.')
         rows = []
         for row in reader:
             if None in row or any(v is None for v in row.values()): raise bc.ContractError('Количество полей строки не совпадает с заголовком.')
             rows.append(row)
-            if len(rows) > 1000: raise bc.ContractError('В текущей CPU-среде доступно до 1000 строк за один запрос.')
     except csv.Error: raise bc.ContractError('Не удалось прочитать CSV. Проверьте кавычки и разделитель.') from None
     bc.validate_value(rows, {'type': 'rows'})
     if not rows: raise bc.ContractError('В CSV нет строк данных.')

@@ -990,7 +990,6 @@
     $('import-file').value = '';
     if (!file) return;
     try {
-      if (file.size > 128 * 1024 * 1024) throw new Error('Файл слишком большой. Максимум — 128 МБ.');
       const next = await prepareDiagram(JSON.parse(await file.text()));
       if ((state.nodes.length || state.types.length) && !confirm('Заменить текущую схему и каталог данными из файла? Действие можно отменить.')) return;
       commit(() => { state = next; selected = null; connection = null; });
@@ -1957,7 +1956,6 @@
     const file = $('subgraph-file').files[0]; $('subgraph-file').value = '';
     if (!file) return;
     try {
-      if (file.size > 4 * 1024 * 1024) throw new Error('Блок больше лимита 4 МиБ.');
       const value = JSON.parse(await file.text());
       await importSubgraphPackage(value, true);
     } catch (error) { toast(error.message); }

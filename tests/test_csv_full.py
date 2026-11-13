@@ -81,16 +81,9 @@ class FullCSVTests(unittest.TestCase):
         self.assertNotIn('max_rows', normalized['settings'])
         self.assertEqual(normalized['settings']['row_index'], 5000)
 
-    def test_size_failure_never_returns_a_partial_success(self):
-        with patch.object(local_operations, 'MAX_OUTPUT_BYTES', 1024):
-            with self.assertRaisesRegex(bc.ContractError, 'частичное чтение не выполняется') as error:
-                self.read(self.local)
-            self.assertEqual(error.exception.status, 413)
-        with patch.object(local_operations, 'MAX_CSV_BYTES', 1024):
-            with self.assertRaises(bc.ContractError):
-                self.read(self.remote)
-        with self.assertRaises(bc.ContractError):
-            bc.validate_value([{'value': 'x' * 32000} for _ in range(525)], {'type': 'rows'})
+    def test_large_rows_are_accepted(self):
+        rows = [{'value': 'x' * 32001} for _ in range(525)]
+        self.assertIs(bc.validate_value(rows, {'type': 'rows'}), rows)
 
     def test_preview_paginates_full_file_beyond_old_page_cap(self):
         body = {'diagram': graph(self.local, {'max_rows': 1}), 'node_id': 'csv', 'page': 104}

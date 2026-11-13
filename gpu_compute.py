@@ -17,7 +17,6 @@ from project_store import ProjectStore
 import gpu_worker
 
 FORMAT = 'architect.gpu-mlp'
-MAX_BYTES = 8 * 1024 * 1024
 ONLINE_SECONDS = 30
 JOB_SECONDS = 600
 EXECUTION = ContextVar('gpu_execution', default=None)
@@ -141,12 +140,11 @@ class Broker:
             payload['checkpointing']=True
             if training[0] is not None: payload['checkpoint']=deepcopy(training[0])
         raw=json.dumps(payload,allow_nan=False).encode()+b'\n'
-        if len(raw)>MAX_BYTES: fail('GPU-задание больше 8 МиБ.',413)
         process=subprocess.Popen([os.environ.get('ARCHITECT_GPU_PYTHON') or sys.executable,str(Path(__file__).with_name('gpu_worker.py'))],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         events=queue.Queue(maxsize=512)
         def read(stream,kind):
             while True:
-                line=stream.readline(MAX_BYTES+1)
+                line=stream.readline()
                 if not line: break
                 try: events.put((kind,line),timeout=1)
                 except queue.Full: process.kill();break
@@ -161,7 +159,6 @@ class Broker:
                 except queue.Empty:
                     if process.poll() is not None and all(not t.is_alive() for t in readers): break
                     continue
-                if len(line)>MAX_BYTES: fail('Ответ GPU слишком большой.',413)
                 try: value=json.loads(line)
                 except ValueError: continue
                 if kind=='result': answer=value

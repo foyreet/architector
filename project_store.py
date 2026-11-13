@@ -15,7 +15,6 @@ from app_config import data_root
 
 ROOT = data_root()
 LOCK = threading.RLock()
-MAX_PACKAGE = 32 * 1024 * 1024
 
 
 def now():
@@ -45,8 +44,6 @@ class ProjectStore:
     def read(self, relative):
         path = self.path(relative)
         try:
-            if path.stat().st_size > MAX_PACKAGE:
-                raise bc.ContractError('Файл проекта превышает лимит 32 МиБ.', 413)
             return json.loads(path.read_text(encoding='utf-8'))
         except FileNotFoundError:
             raise bc.ContractError('Проект или его редакция не найдены.', 404) from None
@@ -128,8 +125,6 @@ class ProjectStore:
         graph, registry = subgraphs.normalize(body.get('diagram'))
         name = subgraphs.text(body.get('name', graph['name']), 160, False)
         description = subgraphs.text(body.get('description', ''), 32000)
-        if len(json.dumps(graph, ensure_ascii=False).encode()) > 4 * 1024 * 1024:
-            raise bc.ContractError('Описание схемы превышает лимит 4 МиБ.', 413)
         project_id = str(uuid.uuid4()) if create else body.get('project_id')
         folder = self.folder(project_id)
         with self.locked():
@@ -190,7 +185,6 @@ class ProjectStore:
             package['history'] = []
             folder = self.path(self.folder(project_id) + '/runs')
             if folder.exists():
-                total = len(json.dumps(package).encode())
                 for path in sorted(folder.iterdir()):
                     if not re.fullmatch(r'[a-f0-9-]{36}', path.name):
                         continue
@@ -204,9 +198,6 @@ class ProjectStore:
                         if self.path(relative).exists():
                             steps[node_id] = self.read(relative)
                     entry = {'record': record, 'steps': steps}
-                    total += len(json.dumps(entry, ensure_ascii=False).encode())
-                    if total > MAX_PACKAGE:
-                        raise bc.ContractError('История больше 32 МиБ. Экспортируйте описание без истории или скопируйте папку проекта.', 413)
                     package['history'].append(entry)
                     if len(package['history']) > 100:
                         raise bc.ContractError('В пакете допускается до 100 запусков. Для полной истории скопируйте папку проекта.', 413)

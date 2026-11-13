@@ -17,7 +17,6 @@ import python_blocks
 import subgraphs
 import project_store
 import gpu_compute
-from data_limits import STEP_RECORD_BYTES
 from app_config import data_root
 
 ALLOW_ENVIRONMENT = True
@@ -198,9 +197,6 @@ class PipelineRunner:
     def read(self, run_id, name='run.json'):
         path = self.run_path(run_id, name)
         try:
-            maximum = STEP_RECORD_BYTES if name.startswith('steps/') else 32 * 1024 * 1024
-            if path.stat().st_size > maximum:
-                raise bc.ContractError('Запись истории превышает лимит чтения.', 413)
             return json.loads(path.read_text(encoding='utf-8'))
         except FileNotFoundError:
             raise bc.ContractError('Запуск или результат шага не найден.', 404) from None

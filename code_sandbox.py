@@ -13,11 +13,9 @@ import threading
 import time
 
 import psutil
-from data_limits import PYTHON_MESSAGE_BYTES
 
-MAX_BYTES = PYTHON_MESSAGE_BYTES
 LOCK = threading.Lock()
-MEMORY_MB = max(256, min(65536, int(os.environ.get('ARCHITECTOR_PYTHON_MEMORY_MB', '1024'))))
+MEMORY_MB = int(os.environ.get('ARCHITECTOR_PYTHON_MEMORY_MB', '0'))
 
 
 def receive(sock, length):
@@ -94,20 +92,19 @@ def run(payload):
             try:
                 while True:
                     if time.monotonic() > deadline: return {'error': 'Превышено время выполнения Python-блока.'}
-                    if memory_usage(process, descendants) > MEMORY_MB * 1024 * 1024:
+                    if MEMORY_MB > 0 and memory_usage(process, descendants) > MEMORY_MB * 1024 * 1024:
                         return {'error': f'Python-блок превысил лимит памяти {MEMORY_MB} МиБ.'}
                     try: part = parts.get(timeout=.1)
                     except queue.Empty: continue
                     if not part: break
                     chunks.extend(part)
-                    if len(chunks) > MAX_BYTES: return {'error': 'Вывод Python-блока больше 32 МиБ.'}
                 process.wait(timeout=max(.01, deadline-time.monotonic()))
                 if process.returncode: return {'error': 'Процесс Python завершился с ошибкой.', 'logs': bytes(chunks[-8000:]).decode(errors='replace')}
                 try: response = json.loads(chunks)
                 except (ValueError, UnicodeError, RecursionError): return {'error': 'Код повредил протокол вывода. Используйте print() для журнала и return для результата.'}
                 if not isinstance(response, dict): return {'error': 'Некорректный ответ Python-блока.'}
                 response['runtime'] = {'executor': 'local-process', 'python': sys.version.split()[0], 'memory_mb': MEMORY_MB,
-                    'memory_limit': 'monitored', 'network': True, 'timeout': payload['timeout']}
+                    'memory_limit': 'monitored' if MEMORY_MB > 0 else 'none', 'network': True, 'timeout': payload['timeout']}
                 return response
             finally:
                 finished.set(); stop(process, descendants)
@@ -127,11 +124,10 @@ class Handler(socketserver.BaseRequestHandler):
         self.request.settimeout(10)
         try:
             size = struct.unpack('!I', receive(self.request, 4))[0]
-            if not 0 < size <= MAX_BYTES: raise ValueError('Request too large')
+            if size <= 0: raise ValueError('Empty request')
             response = run(json.loads(receive(self.request, size)))
         except (ValueError, OSError, RecursionError): response = {'error': 'Некорректный запрос к среде Python.'}
         raw = json.dumps(response, ensure_ascii=False, allow_nan=False).encode()
-        if len(raw) > MAX_BYTES: raw = b'{"error":"Sandbox response too large"}'
         try:
             self.request.sendall(struct.pack('!I', len(raw)))
             self.request.sendall(raw)
