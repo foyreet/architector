@@ -2,10 +2,35 @@
 (() => {
   const arrow = d => { const a=Math.atan2(d.h,d.w),n=14; return [[d.x+d.w-n*Math.cos(a-.5),d.y+d.h-n*Math.sin(a-.5)],[d.x+d.w,d.y+d.h],[d.x+d.w-n*Math.cos(a+.5),d.y+d.h-n*Math.sin(a+.5)]]; };
   const measure = document.createElement('canvas').getContext('2d'); measure.font='20px sans-serif';
+  function textLines(text) {
+    const lines = [];
+    for (const paragraph of text.split('\n')) {
+      let line = '';
+      for (const word of paragraph.match(/\s+|\S+/gu) || []) {
+        if (line && measure.measureText(line + word).width > 600) {
+          lines.push(line);
+          line = '';
+        }
+        if (measure.measureText(word).width <= 600) {
+          line += word;
+          continue;
+        }
+        for (const char of word) {
+          if (line && measure.measureText(line + char).width > 600) {
+            lines.push(line);
+            line = '';
+          }
+          line += char;
+        }
+      }
+      lines.push(line);
+    }
+    return lines;
+  }
   function bounds(d) {
     let xs=[d.x],ys=[d.y];
     if(d.kind==='pen'){xs=d.points.map(p=>d.x+p[0]);ys=d.points.map(p=>d.y+p[1]);}
-    else if(d.kind==='text'){xs.push(d.x+Math.max(...d.text.split('\n').map(s=>measure.measureText(s).width),1));ys.push(d.y+d.text.split('\n').length*26);}
+    else if(d.kind==='text'){const lines=textLines(d.text);xs.push(d.x+lines.reduce((width,line)=>Math.max(width,measure.measureText(line).width),1));ys.push(d.y+lines.length*26);}
     else {xs.push(d.x+d.w);ys.push(d.y+d.h);if(d.kind==='arrow')for(const p of arrow(d)){xs.push(p[0]);ys.push(p[1]);}}
     const pad=Math.max(d.width,4);return {x:Math.min(...xs)-pad,y:Math.min(...ys)-pad,w:Math.max(...xs)-Math.min(...xs)+pad*2,h:Math.max(...ys)-Math.min(...ys)+pad*2};
   }
@@ -14,7 +39,7 @@
     if(d.kind==='rect')ctx.strokeRect(d.x,d.y,d.w,d.h);
     if(d.kind==='ellipse'){ctx.ellipse(d.x+d.w/2,d.y+d.h/2,Math.max(d.w/2,.1),Math.max(d.h/2,.1),0,0,Math.PI*2);ctx.stroke();}
     if(d.kind==='arrow'){ctx.moveTo(d.x,d.y);ctx.lineTo(d.x+d.w,d.y+d.h);ctx.stroke();ctx.beginPath();arrow(d).forEach((p,i)=>ctx[i?'lineTo':'moveTo'](...p));ctx.stroke();}
-    if(d.kind==='text'){ctx.font='20px sans-serif';ctx.textBaseline='top';d.text.split('\n').forEach((s,i)=>ctx.fillText(s,d.x,d.y+i*26));}
+    if(d.kind==='text'){ctx.font='20px sans-serif';ctx.textBaseline='top';textLines(d.text).forEach((s,i)=>ctx.fillText(s,d.x,d.y+i*26));}
   }
   async function download(items,title){
     const data=items.map(i=>i.data).filter(Boolean),bs=data.map(bounds);
@@ -36,6 +61,6 @@
     const start=length;add('xref\n0 6\n0000000000 65535 f \n');for(let i=1;i<=5;i++)add(`${String(offsets[i]).padStart(10,'0')} 00000 n \n`);add(`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${start}\n%%EOF\n`);
     const url=URL.createObjectURL(new Blob(chunks,{type:'application/pdf'})),a=document.createElement('a');a.href=url;a.download=(title.replace(/[\\/:*?"<>|]/g,'_')||'Доска')+'.pdf';a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);
   }
-  window.BoardPDF={bounds,arrow,download};
+  window.BoardPDF={bounds,arrow,download,textLines};
 })();
 

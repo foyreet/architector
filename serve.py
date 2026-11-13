@@ -65,6 +65,7 @@ ASSETS = {
     '/architecture.html': ('architecture.html', 'text/html'),
     '/architecture.css': ('architecture.css', 'text/css'),
     '/architecture.js': ('architecture.js', 'text/javascript'),
+    '/table-pages.js': ('table-pages.js', 'text/javascript'),
     '/python-workbench.js': ('python-workbench.js', 'text/javascript'),
     '/experiments.js': ('experiments.js', 'text/javascript'),
     '/project-insights.js': ('project-insights.js', 'text/javascript'),
@@ -122,7 +123,7 @@ def provider_request(path, key='', payload=None):
                       data=json.dumps(payload).encode() if payload is not None else None,
                       headers=headers)
     try:
-        with build_opener(NoRedirect()).open(request, timeout=90 if payload else 20) as response:
+        with build_opener(NoRedirect()).open(request, timeout=None if payload else 20) as response:
             data = response.read()
         value = json.loads(data)
     except HTTPError as error:
@@ -153,7 +154,7 @@ def api_key(body, required=True, allow_environment=True):
         if required:
             raise ApiError('Укажите API-ключ в подключении OpenRouter.', 401)
         return ''
-    if len(key) > 512 or not re.fullmatch(r'[!-~]+', key):
+    if not re.fullmatch(r'[!-~]+', key):
         raise ApiError('Некорректный формат API-ключа.')
     return key
 
@@ -164,7 +165,7 @@ def chat_payload(body):
     model = body.get('model')
     prompt = body.get('prompt')
     system = body.get('system', '')
-    if not isinstance(model, str) or not re.fullmatch(r'[a-zA-Z0-9~][a-zA-Z0-9_./:~@+-]{0,159}', model):
+    if not isinstance(model, str) or not re.fullmatch(r'[a-zA-Z0-9~][a-zA-Z0-9_./:~@+-]*', model):
         raise ApiError('Укажите ID модели из каталога OpenRouter.')
     if not isinstance(prompt, str) or not prompt.strip():
         raise ApiError('Промпт должен содержать текст.')
@@ -172,8 +173,8 @@ def chat_payload(body):
         raise ApiError('Системная инструкция должна быть строкой.')
     limit = body.get('max_tokens', 1024)
     temperature = body.get('temperature', 0.7)
-    if type(limit) is not int or not 1 <= limit <= 16384:
-        raise ApiError('Лимит ответа должен быть целым числом от 1 до 16384 токенов.')
+    if type(limit) is not int or limit < 1:
+        raise ApiError('Лимит ответа должен быть положительным целым числом.')
     if type(temperature) not in (int, float) or not math.isfinite(temperature) or not 0 <= temperature <= 2:
         raise ApiError('Температура должна быть числом от 0 до 2.')
     messages = ([{'role': 'system', 'content': system}] if system.strip() else [])

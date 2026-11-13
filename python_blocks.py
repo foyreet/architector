@@ -5,7 +5,6 @@ import json
 import math
 import os
 import socket
-import struct
 
 import ml_operations as ml
 
@@ -36,36 +35,27 @@ def check_settings(settings):
     return validate_json(params)
 
 
-def receive(sock, size):
-    result = bytearray()
-    while len(result) < size:
-        part = sock.recv(min(65536, size - len(result)))
-        if not part: ml.error('Python-исполнитель прервал ответ.', 503)
-        result.extend(part)
-    return result
-
-
 def sandbox(payload):
+    import code_sandbox
     path = os.environ.get('ARCHITECT_CODE_SOCKET')
     if not path:
-        import code_sandbox
         response = code_sandbox.run(payload)
     else:
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
                 connection.connect(path)
                 raw = ml.encode(payload)
-                connection.sendall(struct.pack('!I', len(raw)))
+                connection.sendall(code_sandbox.pack_size(len(raw)))
                 connection.sendall(raw)
                 del raw
-                size = struct.unpack('!I', receive(connection, 4))[0]
+                size = code_sandbox.read_size(connection)
                 if size <= 0: ml.error('Некорректный размер ответа среды.', 503)
-                response = json.loads(receive(connection, size))
+                response = json.loads(code_sandbox.receive(connection, size))
         except (OSError, ValueError, RecursionError):
             ml.error('Python-исполнитель недоступен. Перезапустите приложение через run_local.py.', 503)
     if not isinstance(response, dict): ml.error('Некорректный ответ среды Python.', 503)
     if response.get('error'):
-        ml.error(str(response['error'])[:8000] + ('\nЖурнал:\n' + str(response.get('logs', ''))[:8000] if response.get('logs') else ''), 422)
+        ml.error(str(response['error']) + ('\nЖурнал:\n' + str(response.get('logs', '')) if response.get('logs') else ''), 422)
     return response
 
 
@@ -87,5 +77,5 @@ def execute(block, root):
     return {'status': 'ready', 'outputs': outputs, 'details': {
         'code_sha256': hashlib.sha256(block['settings']['code'].encode()).hexdigest(),
         'params': params, 'input_artifacts': references, 'runtime': response.get('runtime', {}),
-        'logs': str(response.get('logs', ''))[:32000], 'row_count': len(rows), 'report': report}}
+        'logs': str(response.get('logs', '')), 'row_count': len(rows), 'report': report}}
 

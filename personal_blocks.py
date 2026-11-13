@@ -4,7 +4,6 @@ Project imports and legacy diagrams never imply authorship. The caller supplies
 the authenticated account's storage root, not an owner ID from the request.
 """
 from copy import deepcopy
-import json
 
 import block_contracts as bc
 import subgraphs
@@ -48,11 +47,7 @@ def create(root, body):
         existing = next((b for b in blocks if b['id'] == key), None)
         if existing:
             return {'block': existing}
-        if len(blocks) >= 500:
-            raise bc.ContractError('В личном каталоге допускается до 500 блоков.', 409)
         blocks.insert(0, entry)
-        if len(json.dumps(blocks, ensure_ascii=False, indent=2).encode()) > 30 * 1024 * 1024:
-            raise bc.ContractError('Личный каталог превысил лимит 30 МиБ.', 413)
         store.write(FILE, {'version': 1, 'blocks': blocks})
     return {'block': entry}
 

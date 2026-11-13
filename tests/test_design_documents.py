@@ -38,11 +38,16 @@ class Documents(unittest.TestCase):
         self.hub=community.Community(self.temp.name)
         self.assertEqual(self.call('get',self.doc)['document'],self.doc)
     def test_validation(self):
-        for changes in ({'title':''},{'title':'x'*161},{'sections':{}},{'sections':{k:0 for k in docs.SECTIONS}}, {'sections':{k:'x'*20001 for k in docs.SECTIONS}}):
+        for changes in ({'title':''},{'sections':{}},{'sections':{k:0 for k in docs.SECTIONS}}):
             with self.subTest(changes=list(changes)),self.assertRaises(ContractError):self.call('save',{**self.doc,**changes})
         for value in ('../bad',None,23,{},[]):
             with self.subTest(value=value),self.assertRaises(ContractError):self.call('create',{'id':value})
         with self.assertRaises(ContractError):self.publish()
+    def test_large_document_roundtrip(self):
+        sections = {key: 'Ж' * 40000 for key in docs.SECTIONS}
+        self.save(title='Д' * 161, sections=sections)
+        self.assertEqual(self.call('get', self.doc)['document']['sections'], sections)
+
     def test_concurrent_saves_and_retry(self):
         old=dict(self.doc);body=self.save()
         self.assertEqual(self.call('save',body)['document'],self.doc)

@@ -43,8 +43,8 @@ window.BlockContracts = async function () {
     }
     if (['text', 'string'].includes(spec.type)) valid = typeof value === 'string' && value.length <= (spec.maxLength ?? Infinity) && (!spec.pattern || new RegExp(spec.pattern).test(value));
     if (['integer', 'number'].includes(spec.type)) valid = typeof value === 'number' && Number.isFinite(value) &&
-      (spec.type !== 'integer' || Number.isInteger(value)) && value >= (spec.minimum ?? -Infinity) && value <= (spec.maximum ?? Infinity);
-    if (spec.type === 'string[]') valid = Array.isArray(value) && value.length <= (spec.maxItems ?? 5000) && value.every(s => typeof s === 'string' && s.length <= (spec.maxLength ?? 500));
+      (spec.type !== 'integer' || Number.isInteger(value)) && value >= (spec.minimum ?? -Infinity) && value <= (spec.maximum ?? Infinity) && value > (spec.exclusiveMinimum ?? -Infinity) && value < (spec.exclusiveMaximum ?? Infinity);
+    if (spec.type === 'string[]') valid = Array.isArray(value) && value.length <= (spec.maxItems ?? Infinity) && value.every(s => typeof s === 'string' && s.length <= (spec.maxLength ?? Infinity));
     if (spec.type === 'rows') {
       valid = Array.isArray(value);
       if (valid) for (const row of value) valueCheck(row, {type: 'row'});

@@ -5,14 +5,14 @@ import block_contracts as bc
 from pipeline_runner import PipelineRunner
 
 
-def text(value, limit=2000):
+def text(value, limit=None):
     # Provider credentials are already removed when runs are saved. Also mask
     # common credential assignments in user-produced Python logs before sharing.
     value = str(value or '')
     value = re.sub(r'(?i)(bearer\s+)\S+', r'\1[скрыто]', value)
     value = re.sub(r'''(?ix)((?:api[_-]?key|access[_-]?token|token|password|secret)\s*["']?\s*[:=]\s*)["']?[^\s,"'}]+''',
                    r'\1[скрыто]', value)
-    return value[:limit] + ('… [обрезано]' if len(value) > limit else '')
+    return value[:limit] + ('… [обрезано]' if limit is not None and len(value) > limit else '')
 
 
 class Diagnostics:
@@ -49,7 +49,7 @@ class Diagnostics:
                 except bc.ContractError:
                     continue
         records.sort(key=lambda record: record['created_at'], reverse=True)
-        return {'runs': records[:10], 'truncated': len(records) > 10,
+        return {'runs': records, 'truncated': False,
                 'note': 'Последние сохранённые запуски текущего проекта.' if self.project_id
                         else 'Последние сохранённые запуски без проекта в текущем аккаунте.'}
 
@@ -62,20 +62,20 @@ class Diagnostics:
                 raise bc.ContractError('Шаг не найден в этом запуске.', 404)
             events = [event for event in events if event.get('node_id') == node_id]
         result['events'] = [{key: text(event.get(key)) for key in ('time', 'node_id', 'message')}
-                            for event in events[-30:]]
-        result['events_truncated'] = len(events) > 30
+                            for event in events]
+        result['events_truncated'] = False
         nodes = record.get('nodes', {})
-        selected = [(node_id, nodes.get(node_id, {}))] if node_id is not None else list(nodes.items())[:50]
-        result['nodes'] = [{'id': text(identity), **{key: text(node.get(key), 1000)
+        selected = [(node_id, nodes.get(node_id, {}))] if node_id is not None else nodes.items()
+        result['nodes'] = [{'id': text(identity), **{key: text(node.get(key))
                             for key in ('name', 'status', 'error')}} for identity, node in selected]
-        result['nodes_truncated'] = node_id is None and len(nodes) > 50
+        result['nodes_truncated'] = False
         if node_id is not None:
             relative = self.relative + '/' + run_id + '/steps/%04d.json' % record['order'].index(node_id)
             if self.store.path(relative).exists():
                 step = self.store.read(relative)
-                result['step'] = {key: text(step.get(key), 12000 if key == 'error' else 2000)
+                result['step'] = {key: text(step.get(key))
                                   for key in ('node_id', 'status', 'started_at', 'finished_at', 'error')}
-                result['step']['logs'] = text(step.get('details', {}).get('logs'), 12000)
+                result['step']['logs'] = text(step.get('details', {}).get('logs'))
             else:
                 result['note'] = 'Результат шага ещё не сохранён. Доступны события запуска.'
         # Do not include block inputs, dataset rows, outputs or arbitrary files.

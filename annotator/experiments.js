@@ -67,7 +67,7 @@ window.Experiments = function ({api, context, history}) {
       const result = await request('experiments');
       if (current !== generation || !dialog.open) return;
       runs = result.runs;
-      renderList(); setMessage(runs.length ? `Показаны последние ${runs.length} запусков (не более 100). Для активных запусков нажмите «Обновить».` : '');
+      renderList(); setMessage(runs.length ? `Запусков в истории: ${runs.length}. Для активных запусков нажмите «Обновить».` : '');
     } catch (error) { if (current === generation) setMessage(error.message); }
     finally { if (current === generation) $('experiments-refresh').disabled = false; }
   }

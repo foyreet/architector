@@ -1,5 +1,4 @@
 """Private immutable model versions and bearer-authenticated, pinned inference APIs."""
-from collections import deque
 from copy import deepcopy
 import hashlib
 import hmac
@@ -7,7 +6,6 @@ import math
 from pathlib import Path
 import secrets
 import threading
-import time
 import uuid
 
 import analysis_tools as analysis
@@ -19,7 +17,6 @@ import project_store as ps
 from app_config import data_root
 
 LOCK = threading.RLock()
-RATE = {}
 REGISTRY = 'workspace/model-registry/index.json'
 ENDPOINTS = 'workspace/model-endpoints/index.json'
 
@@ -83,17 +80,14 @@ def register(context, body):
         if not family: raise bc.ContractError('Семейство модели не найдено.', 404)
     else:
         name = body.get('name', value.get('name','Модель'))
-        if not isinstance(name,str) or not 1 <= len(name.strip()) <= 100: raise bc.ContractError('Введите название модели, до 100 символов.')
+        if not isinstance(name,str) or not name.strip(): raise bc.ContractError('Введите название модели.')
         family = next((f for f in state['families'] if f['name'].casefold()==name.strip().casefold()),None)
         if not family:
-            if len(state['families']) >= 100: raise bc.ContractError('Доступно до 100 семейств моделей.')
             family = {'id': str(uuid.uuid4()), 'name': name.strip(), 'versions': [], 'best_version_id': None}
             state['families'].append(family)
     origin = {k: origin.get(k) for k in ('project_id','run_id','node_id','port')}
     existing = next((v for v in family['versions'] if v['origin'] == origin and v['artifact'] == ref), None)
     if existing: return {'family': family, 'version': existing}
-    if sum(len(f['versions']) for f in state['families'])>=500: raise bc.ContractError('Доступно до 500 версий моделей на аккаунт.')
-    if len(family['versions']) >= 100: raise bc.ContractError('Доступно до 100 версий одной модели.')
     metrics = {k:v for k,v in value.get('metrics', {}).items() if type(v) in (int,float) and math.isfinite(v)}
     version = {'id': str(uuid.uuid4()), 'number': len(family['versions']) + 1, 'created_at': pr.now(), 'artifact': ref,
                'origin': origin, 'project': run.get('project', {}), 'run_created_at': run['created_at'],
@@ -137,7 +131,6 @@ def manage(context, body, action):
         if action == 'endpoints': return {'endpoints':[public_endpoint(e,root) for e in entries.values() if e['scope']==account]}
         if action == 'endpoint-create':
             _, version = find_version(root,body.get('version_id')); model = bundle(root,version)['model']
-            if sum(e['scope']==account for e in entries.values()) >= 20: raise bc.ContractError('До 20 API-подключений на аккаунт.')
             compute = gpu.resolve(root, model['format']==gpu.FORMAT, body.get('compute'), require_available=False)
             identity = str(uuid.uuid4()); token = 'arch_predict_' + secrets.token_urlsafe(32)
             entry = {'id':identity,'scope':account,'version_id':version['id'],'token_hash':hashlib.sha256(token.encode()).hexdigest(),
@@ -150,7 +143,7 @@ def manage(context, body, action):
             entry['enabled']=False;save_endpoints(entries);return {'ok':True}
         if action == 'endpoint-delete':
             if entry['enabled']: raise bc.ContractError('Сначала отключите API.')
-            del entries[entry['id']];RATE.pop(entry['id'],None);save_endpoints(entries);return {'ok':True}
+            del entries[entry['id']];save_endpoints(entries);return {'ok':True}
         raise bc.ContractError('Маршрут не найден.',404)
 
 
@@ -164,11 +157,6 @@ def authorize(identity, token):
 
 
 def infer(entry, root, body):
-    with LOCK:
-        recent=RATE.setdefault(entry['id'],deque());now=time.monotonic()
-        while recent and now-recent[0]>=60:recent.popleft()
-        if len(recent)>=30: raise bc.ContractError('Лимит API: 30 запросов в минуту.',429)
-        recent.append(now)
     _,version=find_version(root,entry['version_id']);model=bundle(root,version)['model']
     rows=body.get('rows');bc.validate_value(rows,{'type':'rows'})
     if not rows:raise bc.ContractError('Передайте непустой массив rows с числовыми признаками.')

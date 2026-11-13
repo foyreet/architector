@@ -19,7 +19,7 @@ class Resolver:
 
     def inputs(self, node_id):
         if node_id not in self.nodes: ml.error('Блок не найден.')
-        if node_id in self.visiting or len(self.visiting) >= 30: ml.error('Цикл или слишком длинная цепочка просмотра.')
+        if node_id in self.visiting: ml.error('Обнаружен цикл в цепочке просмотра.')
         self.visiting.add(node_id)
         try:
             block = deepcopy(self.nodes[node_id]['block'])

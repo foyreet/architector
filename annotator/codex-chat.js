@@ -153,7 +153,7 @@ window.CodexChat = ({api, account, project, diagram, flush, fit, applyProposal})
 
   const speechAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
   const Recognition = window.isSecureContext && typeof speechAPI === 'function' ? speechAPI : null;
-  let recognition = null, listening = false, voiceTimer;
+  let recognition = null, listening = false;
   function voiceStatus(text = '') { $('codex-voice-status').textContent = text; $('codex-voice-status').hidden = !text; }
   function voiceControls() {
     const mic = $('codex-voice');
@@ -165,7 +165,7 @@ window.CodexChat = ({api, account, project, diagram, flush, fit, applyProposal})
     field.readOnly = listening;
   }
   function abortVoice() {
-    const active = recognition; recognition = null; listening = false; clearTimeout(voiceTimer);
+    const active = recognition; recognition = null; listening = false;
     if (active) { try { active.abort(); } catch {} }
     if (Recognition) voiceStatus();
     voiceControls(); controls();
@@ -205,14 +205,13 @@ window.CodexChat = ({api, account, project, diagram, flush, fit, applyProposal})
     };
     current.onend = () => {
       if (!valid()) return;
-      recognition = null; listening = false; clearTimeout(voiceTimer); voiceControls(); controls();
+      recognition = null; listening = false; voiceControls(); controls();
       voiceStatus('Диктовка завершена. Проверьте текст перед отправкой.');
       field.focus({preventScroll: true});
     };
     voiceStatus('Подключаю микрофон…'); voiceControls(); controls();
     try {
       current.start();
-      voiceTimer = setTimeout(() => { if (valid()) current.stop(); }, 120000);
     } catch { abortVoice(); voiceStatus('Не удалось включить микрофон. Проверьте разрешения браузера.'); }
   };
   document.addEventListener('visibilitychange', () => { if (document.hidden && listening) { abortVoice(); voiceStatus('Диктовка остановлена.'); } });

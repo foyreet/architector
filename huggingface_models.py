@@ -8,7 +8,6 @@ import re
 import shutil
 import tempfile
 import threading
-import time
 import unicodedata
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
@@ -18,9 +17,6 @@ from app_config import data_root
 
 ALLOW_ENVIRONMENT = True
 ROOT = data_root()
-MAX_FILES = 5000
-MAX_METADATA = 8 * 1024 * 1024
-MAX_DOWNLOAD = 32 * 1024 ** 3
 LOCK = threading.RLock()
 JOBS = {}
 
@@ -32,7 +28,7 @@ class HubError(Exception):
 
 
 def model_id(value):
-    if not isinstance(value, str) or len(value) > 500:
+    if not isinstance(value, str):
         raise HubError('Укажите ID модели или ссылку Hugging Face.')
     value = value.strip()
     if value.startswith('https://'):
@@ -56,7 +52,7 @@ def revision_id(value, pinned=False):
 
 
 def filename(value):
-    if (not isinstance(value, str) or not 0 < len(value) <= 500 or '\\' in value or ':' in value or
+    if (not isinstance(value, str) or not value or '\\' in value or ':' in value or
             any(ord(c) < 32 or ord(c) == 127 for c in value) or
             any(p in ('', '.', '..') or p.endswith((' ', '.')) for p in value.split('/'))):
         raise HubError('Репозиторий содержит неподдерживаемый путь файла.', 422)
@@ -68,7 +64,7 @@ def token_value(body):
     if not isinstance(token, str):
         raise HubError('Некорректный токен Hugging Face.')
     token = token.strip() or (os.environ.get('HF_TOKEN', '').strip() if ALLOW_ENVIRONMENT else '')
-    if token and not re.fullmatch(r'[!-~]{1,2048}', token):
+    if token and not re.fullmatch(r'[!-~]+', token):
         raise HubError('Некорректный токен Hugging Face.')
     return token
 
@@ -109,14 +105,12 @@ def hub_open(path, token):
 
 def model_info(repo, revision, token):
     with hub_open('api/models/' + quote(repo, safe='/') + '/revision/' + quote(revision, safe='') + '?blobs=true', token) as response:
-        raw = response.read(MAX_METADATA + 1)
-    if len(raw) > MAX_METADATA:
-        raise HubError('Список файлов модели слишком большой.', 413)
+        raw = response.read()
     try:
         data = json.loads(raw)
         commit = revision_id(data['sha'], pinned=True)
         siblings = data['siblings']
-        if not isinstance(siblings, list) or len(siblings) > MAX_FILES:
+        if not isinstance(siblings, list):
             raise HubError('Поддерживаются репозитории до 5 000 файлов.', 413)
         files, names = [], set()
         for item in siblings:
@@ -139,7 +133,7 @@ def model_info(repo, revision, token):
             raise HubError('Пути файлов модели конфликтуют.', 422)
         card = data.get('cardData') or {}
         license_name = card.get('license', '') if isinstance(card, dict) else ''
-        clean_text = lambda value: value[:200] if isinstance(value, str) else ''
+        clean_text = lambda value: value if isinstance(value, str) else ''
         return {'repo': repo, 'commit': commit, 'files': files,
                 'pipeline': clean_text(data.get('pipeline_tag')), 'library': clean_text(data.get('library_name')),
                 'license': clean_text(license_name), 'gated': bool(data.get('gated'))}
@@ -171,11 +165,9 @@ def read_manifest(repo, commit):
         return {'repo': repo, 'commit': commit, 'files': []}
     try:
         with path.open('rb') as source:
-            raw = source.read(MAX_METADATA + 1)
-        if len(raw) > MAX_METADATA:
-            raise ValueError()
+            raw = source.read()
         data = json.loads(raw)
-        if data['repo'] != repo or data['commit'] != commit or not isinstance(data['files'], list) or len(data['files']) > MAX_FILES:
+        if data['repo'] != repo or data['commit'] != commit or not isinstance(data['files'], list):
             raise ValueError()
         for item in data['files']:
             filename(item['name'])
@@ -202,22 +194,18 @@ def local_status(repo, commit):
 
 def download_file(repo, commit, item, token, destination, progress):
     size = item['size']
-    if size > MAX_DOWNLOAD:
-        raise HubError('Файл превышает лимит загрузки 32 ГиБ.', 413)
     digest = hashlib.sha256() if item['algorithm'] == 'sha256' else hashlib.sha1()
     if item['algorithm'] == 'git-sha1':
         digest.update(f'blob {size}\0'.encode())
-    started, count = time.monotonic(), 0
+    count = 0
     path = quote(repo, safe='/') + '/resolve/' + commit + '/' + quote(item['name'], safe='/')
     with hub_open(path, token) as response, destination.open('wb') as output:
         while True:
-            if time.monotonic() - started > 7200:
-                raise HubError('Скачивание файла превысило два часа. Повторите позже.', 504)
             chunk = response.read(1024 * 1024)
             if not chunk:
                 break
             count += len(chunk)
-            if count > size or count > MAX_DOWNLOAD:
+            if count > size:
                 raise HubError('Размер файла отличается от метаданных Hugging Face.', 502)
             digest.update(chunk)
             output.write(chunk)
@@ -237,15 +225,13 @@ def run_download(repo, commit, names, token):
             raise HubError('Выбранный файл отсутствует в этой версии модели.')
         items = [by_name[name] for name in names]
         total = sum(item['size'] for item in items)
-        if total > MAX_DOWNLOAD:
-            raise HubError('За один раз можно скачать до 32 ГиБ. Выберите меньше файлов.', 413)
         folder = model_folder(repo, commit)
         folder.mkdir(parents=True, exist_ok=True)
         manifest = read_manifest(repo, commit)
         cached = {item['name']: item for item in manifest['files']}
         needed = [item for item in items if not (item['name'] in cached and
                   cached[item['name']].get('digest') == item['digest'] and is_cached(folder, cached[item['name']]))]
-        if shutil.disk_usage(folder).free < sum(item['size'] for item in needed) + 16 * 1024 * 1024:
+        if shutil.disk_usage(folder).free < sum(item['size'] for item in needed):
             raise HubError('Недостаточно свободного места для выбранных файлов.', 507)
         done = sum(item['size'] for item in items if item not in needed)
         with LOCK:
@@ -298,18 +284,16 @@ def request(body, action):
             result = local_status(repo, commit)
             return dict(result, **job) if job else result
     names = body.get('files')
-    if not isinstance(names, list) or not 1 <= len(names) <= MAX_FILES:
+    if not isinstance(names, list) or not names:
         raise HubError('Выберите файлы модели для скачивания.')
     names = [filename(name) for name in names]
     if len(set(names)) != len(names):
         raise HubError('В списке повторяются файлы.')
     token = token_value(body)
     with LOCK:
-        if any(job['status'] == 'downloading' for job in JOBS.values()):
+        if JOBS.get(key, {}).get('status') == 'downloading':
             raise HubError('Уже скачивается модель. Дождитесь завершения.', 409)
         model_folder(repo, commit)
-        if len(JOBS) >= 64:
-            JOBS.clear()
         JOBS[key] = {'status': 'downloading', 'bytes': 0, 'total': 0, 'current_file': ''}
         threading.Thread(target=run_download, args=(repo, commit, names, token), daemon=True).start()
         return dict(JOBS[key], repo=repo, commit=commit)

@@ -56,14 +56,14 @@ def validate(diagram, external_inputs=frozenset()):
         raise bc.ContractError('Нужны блоки и список связей.')
     identifiers, index, snapshot = set(), {}, []
     def identifier(value):
-        if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,100}', value) or value in identifiers:
+        if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9_-]+', value) or value in identifiers:
             raise bc.ContractError('Некорректный или повторяющийся ID блока/связи.')
         identifiers.add(value)
         return value
     for item in nodes:
         if not isinstance(item, dict):
             raise bc.ContractError('Некорректный блок.')
-        node = {'id': identifier(item.get('id')), 'name': str(item.get('name', 'Блок'))[:100],
+        node = {'id': identifier(item.get('id')), 'name': str(item.get('name', 'Блок')),
                 'block': bc.normalize_block(item.get('block'))}
         index[node['id']] = node
         snapshot.append(node)
@@ -106,7 +106,7 @@ def validate(diagram, external_inputs=frozenset()):
             if port.get('required') and (node['id'], port['id']) not in incoming and (node['id'], port['id']) not in external_inputs and (value is None or isinstance(value, str) and not value.strip()):
                 raise bc.ContractError(name + ': не задан вход «' + port['label'] + '».')
         settings = block['settings']
-        if block['kind'] == 'openrouter' and not re.fullmatch(r'[a-zA-Z0-9~][a-zA-Z0-9_./:~@+-]{0,159}', settings['model']):
+        if block['kind'] == 'openrouter' and not re.fullmatch(r'[a-zA-Z0-9~][a-zA-Z0-9_./:~@+-]*', settings['model']):
             raise bc.ContractError(name + ': укажите ID модели OpenRouter.')
         if block['kind'] == 'ml_prepare' and not settings['target'].strip():
             raise bc.ContractError(name + ': укажите целевую колонку.')
@@ -129,7 +129,7 @@ def validate(diagram, external_inputs=frozenset()):
         raise bc.ContractError('В схеме есть цикл. Удалите циклические связи данных.')
     if not order:
         raise bc.ContractError('В схеме нет исполняемых блоков.')
-    return {'format': 'architect', 'version': 3, 'name': str(diagram.get('name', 'Схема'))[:160],
+    return {'format': 'architect', 'version': 3, 'name': str(diagram.get('name', 'Схема')),
             'nodes': snapshot, 'edges': links}, order
 
 
@@ -280,7 +280,7 @@ class PipelineRunner:
             if not isinstance(token, str):
                 raise bc.ContractError('Некорректный токен подключения.')
             token = token.strip() or (os.environ.get(env, '').strip() if ALLOW_ENVIRONMENT else '')
-            if token and (len(token) > (512 if key == 'openrouter' else 2048) or not re.fullmatch(r'[!-~]+', token)):
+            if token and not re.fullmatch(r'[!-~]+', token):
                 raise bc.ContractError('Некорректный формат токена подключения.')
             tokens[key] = token
         if any(n['id'] in execution and n['block']['kind'] == 'openrouter' for n in diagram['nodes']) and not tokens['openrouter']:

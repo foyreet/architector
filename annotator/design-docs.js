@@ -10,7 +10,7 @@
   function message(text=''){ $('message').textContent=text;$('message').hidden=!text; }
   function error(text='',target='editor-error'){const e=$(target);e.textContent=text;e.hidden=!text;if(text&&!e.closest('[hidden]')){e.tabIndex=-1;e.focus({preventScroll:true});e.scrollIntoView({block:'nearest'});}}
   async function api(action,body={},community=false){
-    let r;try{r=await fetch('/api/'+(community?'community/':'design-documents/')+action,{method:'POST',headers:{'Content-Type':'application/json','X-Architect-Request':'1',...(account?{'X-Architect-Account':account.id}:{})},body:JSON.stringify(body),signal:AbortSignal.timeout(15000)});}catch{throw Error('Не удалось связаться с сервером. Повторите попытку; введённый текст сохранён в редакторе.');}
+    let r;try{r=await fetch('/api/'+(community?'community/':'design-documents/')+action,{method:'POST',headers:{'Content-Type':'application/json','X-Architect-Request':'1',...(account?{'X-Architect-Account':account.id}:{})},body:JSON.stringify(body)});}catch{throw Error('Не удалось связаться с сервером. Повторите попытку; введённый текст сохранён в редакторе.');}
     const data=await r.json();if(!r.ok){const e=Error(data.error||'Не удалось выполнить запрос.');e.status=r.status;throw e;}return data;
   }
   function value(){return {title:$('title').value,sections:Object.fromEntries(fields.map(([k])=>[k,$('section-'+k).value]))};}
@@ -18,7 +18,7 @@
   function controls(){ $('add-chat').disabled=!!saving||conflicted||blocked;$('save').disabled=(!dirty&&!!doc?.revision)||!!saving||conflicted||blocked;$('publish').disabled=!!saving||conflicted||blocked;$('conflict').hidden=!conflicted;$('save-status').textContent=doc?(saving?'Сохранение…':dirty?'Есть несохранённые изменения':doc.revision?'Все изменения сохранены':'Новый документ · ещё не сохранён'):''; }
   function cache(){if(!doc||release)return;try{if(dirty)localStorage.setItem(draftKey(),JSON.stringify({...value(),revision:doc.revision}));else localStorage.removeItem(draftKey());}catch{error('Браузер не сохранил резервную копию. Сохраните документ на сервер перед закрытием.');}}
   function changed(){dirty=!same(value(),doc);cache();controls();}
-  function renderSections(parent,data,editable){parent.replaceChildren();fields.forEach(([k,label],i)=>{const section=node('section','','doc-section');if(editable){const l=node('label',`${i+1}. ${label}`);l.htmlFor='section-'+k;const input=document.createElement('textarea');input.id=l.htmlFor;input.maxLength=20000;input.value=data[k];input.addEventListener('input',changed);section.append(l,input);}else{section.append(node('h3',`${i+1}. ${label}`),node('p',data[k]||'Не заполнено','section-text'));}parent.append(section);});}
+  function renderSections(parent,data,editable){parent.replaceChildren();fields.forEach(([k,label],i)=>{const section=node('section','','doc-section');if(editable){const l=node('label',`${i+1}. ${label}`);l.htmlFor='section-'+k;const input=document.createElement('textarea');input.id=l.htmlFor;input.value=data[k];input.addEventListener('input',changed);section.append(l,input);}else{section.append(node('h3',`${i+1}. ${label}`),node('p',data[k]||'Не заполнено','section-text'));}parent.append(section);});}
   function updateURL(values){const url=new URL(location.href);for(const k of ['id','release','new','view'])url.searchParams.delete(k);for(const [k,v]of Object.entries(values))url.searchParams.set(k,v);history.replaceState(null,'',url);}
   async function save(){
     if(saving)return saving;if(!dirty&&doc.revision)return true;if(conflicted||blocked)return false;
@@ -64,7 +64,7 @@
         if(!confirm('Удалить документ «'+row.title+'»? Это действие нельзя отменить.'))return;
         remove.disabled=true;try{await api('delete',{id:row.id,revision:row.revision});try{localStorage.removeItem(`architect.design-document.${account.id}.${row.id}`);}catch{}await list('mine');message('Документ удалён.');$('create').focus();}finally{remove.disabled=false;}
       });item.append(remove);}$('documents').append(item);}
-    if(rows.length===200)$('documents').append(node('p','Показаны последние 200 документов.','muted'));window.scrollTo(0,0);
+    window.scrollTo(0,0);
   }
   async function openRelease(id){
     const result=await api('release',{release_id:id},true);if(result.kind!=='design_document')throw Error('Это не публикация дизайн-документа.');
@@ -92,7 +92,7 @@
   $('publish').onclick=()=>task(async()=>{const content=value();if(!content.title.trim()){error('Введите название документа.');$('title').focus();return;}const link=document.createElement('a');link.href=URL.createObjectURL(new Blob([JSON.stringify({format:'architect.design-document',version:1,...content},null,2)],{type:'application/json'}));link.download=content.title+'.json';link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);});
   const upload=document.createElement('input');upload.type='file';upload.accept='.json,application/json';upload.hidden=true;document.body.append(upload);
   const importButton=document.createElement('button');importButton.textContent='Импорт JSON';$('create').after(importButton);importButton.onclick=()=>upload.click();
-  upload.onchange=()=>task(async()=>{const file=upload.files[0];upload.value='';if(!file)return;if(file.size>300000)throw Error('Документ слишком большой.');const result=await api('import',{id:crypto.randomUUID(),package:JSON.parse(await file.text())});await open(result.document.id);});
+  upload.onchange=()=>task(async()=>{const file=upload.files[0];upload.value='';if(!file)return;const result=await api('import',{id:crypto.randomUUID(),package:JSON.parse(await file.text())});await open(result.document.id);});
   const closePreview=()=>{if(!$('publish-confirm').disabled)$('publish-dialog').close();};$('preview-close').onclick=closePreview;$('publish-cancel').onclick=closePreview;
   $('publish-dialog').addEventListener('cancel',e=>{if($('publish-confirm').disabled)e.preventDefault();});
   $('publish-confirm').onclick=async()=>{const button=$('publish-confirm');if(button.disabled)return;button.disabled=true;error('','publish-error');try{const r=await api('publish',{id:doc.id,revision:preview.revision,digest:preview.digest});$('publish-dialog').close();await openRelease(r.release_id);message('Документ опубликован в каталоге сообщества.');}catch(e){error(e.message,$('publish-dialog').open?'publish-error':'editor-error');}finally{button.disabled=false;}};

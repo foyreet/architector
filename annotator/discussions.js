@@ -32,7 +32,7 @@ window.Discussions = ({api}) => {
       nodes.value = data.nodes.some(n => n.id === selectedNode) ? selectedNode : '';
       label.append(nodes); section.append(label);
       if (attachment) section.append(el('p', 'При отправке участникам этого обсуждения будут доступны номер запуска, название проекта, метрики и ссылка на артефакт. Файлы, строки датасета и журнал не передаются.'));
-      const textLabel = el('label', 'Комментарий'), text = el('textarea'); text.rows = 3; text.maxLength = 4000; textLabel.append(text); section.append(textLabel);
+      const textLabel = el('label', 'Комментарий'), text = el('textarea'); text.rows = 3; textLabel.append(text); section.append(textLabel);
       const send = el('button', 'Отправить комментарий'); section.append(send);
       send.onclick = async () => {
         if (!text.value.trim()) { status.textContent = 'Введите комментарий.'; return; }

@@ -124,11 +124,10 @@ class HubTests(unittest.TestCase):
             with patch.object(hf, 'hub_open', return_value=io.BytesIO(payload)), self.assertRaises(hf.HubError):
                 hf.download_file('owner/model', COMMIT, item, '', destination, lambda *_: None)
 
-    def test_wrong_commit_unknown_files_and_size_limit(self):
-        cases = [(dict(metadata(), commit='b' * 40), None, hf.MAX_DOWNLOAD),
-                 (metadata(), ['unknown.bin'], hf.MAX_DOWNLOAD), (metadata(), None, 1)]
-        for info, names, limit in cases:
-            with patch.object(hf, 'model_info', return_value=info), patch.object(hf, 'MAX_DOWNLOAD', limit), patch.object(hf, 'hub_open') as upstream:
+    def test_wrong_commit_and_unknown_files(self):
+        cases = [(dict(metadata(), commit='b' * 40), None), (metadata(), ['unknown.bin'])]
+        for info, names in cases:
+            with patch.object(hf, 'model_info', return_value=info), patch.object(hf, 'hub_open') as upstream:
                 self.start(names)
                 self.assertEqual(self.wait_download()['status'], 'error')
                 upstream.assert_not_called()

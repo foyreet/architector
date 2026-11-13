@@ -34,7 +34,7 @@ window.LabTools = ({api, compute, context, prepare, contract, secrets, history, 
       const draw=()=>{const c=value.statistics[Number(select.value)];area.replaceChildren();if(c.type==='number'){
         area.append(el('p',`Минимум ${c.minimum} · максимум ${c.maximum} · среднее ${c.mean.toPrecision(5)} · медиана ${c.median}`));
         chart(area,'Распределение · '+c.name,c.histogram.map(b=>({label:b.from.toPrecision(3)+'…'+b.to.toPrecision(3),count:b.count})));
-        area.append(el('p',`Выбросы по ${c.outliers.rule}: ${c.outliers.count}. Первые строки данных: ${c.outliers.rows.join(', ')||'нет'}.`));
+        area.append(el('p',`Выбросы по ${c.outliers.rule}: ${c.outliers.count}. Номера строк: ${c.outliers.rows.join(', ')||'нет'}.`));
       }else chart(area,'Частые значения · '+c.name,c.categories);};select.onchange=draw;draw();
       if(value.correlation_columns.length){output.append(el('h3','Корреляции Пирсона'));const columns=value.correlation_columns,t=table(output,['',...columns],columns.map(a=>[a,...columns.map(b=>value.correlations.find(c=>c.a===a&&c.b===b)?.value?.toFixed(3)??'—')]));
         [...t.rows].slice(1).forEach(row=>[...row.cells].slice(1).forEach(cell=>{const v=Number(cell.textContent);if(Number.isFinite(v))cell.style.background=v>=0?`rgba(36,150,100,${Math.abs(v)*.3})`:`rgba(220,70,70,${Math.abs(v)*.3})`;}));}
@@ -42,7 +42,8 @@ window.LabTools = ({api, compute, context, prepare, contract, secrets, history, 
   }
   function predictionResult(parent,value){parent.replaceChildren(el('h3','Предсказания готовы'),el('p',`${value.rows.length} строк · столбец ${value.prediction_column}. Сохранено: ${stamp(value.created_at)}`));
     button(parent,'Скачать предсказания CSV',()=>saveText(csv(value.rows),'predictions.csv','text/csv;charset=utf-8'));button(parent,'Скачать JSON',()=>download(value,'predictions'));
-    const columns=Object.keys(value.rows[0]||{});table(parent,columns,value.rows.slice(0,50).map(r=>columns.map(k=>r[k])));if(value.rows.length>50)parent.append(el('p','Первые 50 строк. Полная таблица — в скачиваемом файле.'));
+    const columns=Object.keys(value.rows[0]||{}), preview=el('div');parent.append(preview);
+    window.tablePages(preview,value.rows,(container,rows)=>table(container,columns,rows.map(r=>columns.map(k=>r[k]))));
   }
   async function predict(artifact,origin){const d=modal('Предсказания сохранённой моделью');d.id='predict-dialog';const info=await api('/api/lab/model-info',{artifact});if(!d.open)return;
     d.append(el('p','Обязательные числовые колонки: '+info.features.join(', ')),el('p','Целевая колонка не требуется. Дополнительные колонки сохранятся в результате. Повторного обучения нет.'),el('p',info.format==='architect.gpu-mlp'?'Для этой нейросети нужен подключённый GPU компьютера.':'Используется обученный Random Forest на CPU.'));
@@ -50,10 +51,12 @@ window.LabTools = ({api, compute, context, prepare, contract, secrets, history, 
   }
   async function series(){if(!window.WorkspaceNavigation.leave())return;const snapshot=await prepare();if(!snapshot.project_id)throw new Error('Сначала нажмите «Сохранить», чтобы создать проект.');
     await compute.refresh(snapshot);snapshot.compute=compute.selection();
-    const d=modal('Серии экспериментов и очередь');d.id='series-dialog';d.append(el('p','До 20 вариантов, последовательно. GPU-блоки выполняются на выбранном компьютере. Каждый вариант получает отдельную запись запуска; исходная схема не меняется.'));
+    const d=modal('Серии экспериментов и очередь');d.id='series-dialog';d.append(el('p','Варианты выполняются последовательно. GPU-блоки выполняются на выбранном компьютере. Каждый вариант получает отдельную запись запуска; исходная схема не меняется.'));
     const choices=[];for(const n of snapshot.diagram.nodes.filter(n=>!n.block.kind.startsWith('subgraph_')))for(const s of contract(n.block.kind)?.settings||[])if(['integer','number'].includes(s.type))choices.push({node_id:n.id,setting:s.id,label:n.name+' · '+s.label,definition:s});
     const form=el('section','','insight-card');d.append(form);const axes=[];
-    for(let i=0;i<2;i++){const setting=field(form,'Параметр '+(i+1),'select');setting.append(new Option(i?'Не использовать':'Выберите параметр',''));choices.forEach((c,index)=>setting.append(new Option(c.label,index)));const values=field(form,'Значения через запятую','input',i?'5,10':'50,100,200');axes.push({setting,values});}
+    const axisFields=el('div');form.append(axisFields);
+    function addAxis(){const i=axes.length;const setting=field(axisFields,'Параметр '+(i+1),'select');setting.append(new Option(i?'Не использовать':'Выберите параметр',''));choices.forEach((c,index)=>setting.append(new Option(c.label,index)));const values=field(axisFields,'Значения через запятую','input',i?'5,10':'50,100,200');axes.push({setting,values});}
+    addAxis();addAxis();const more=el('button','Добавить параметр');more.type='button';more.onclick=addAxis;form.append(more);
     const tree=choices.findIndex(c=>c.setting==='n_estimators'),depth=choices.findIndex(c=>c.setting==='max_depth');if(tree>=0)axes[0].setting.value=tree;if(depth>=0)axes[1].setting.value=depth;
     const saved=context()?.meta.research||{},metric=field(form,'Ключ основной метрики','input',saved.metric||((snapshot.diagram.nodes.find(n=>n.block.kind==='ml_evaluate')?.id||'')+'/accuracy'));
     const metricSelect=field(form,'Основная метрика','select');

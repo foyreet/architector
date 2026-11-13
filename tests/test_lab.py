@@ -79,11 +79,18 @@ class LabTests(unittest.TestCase):
         resumed=restarted.get(self.context,batch['id'])
         self.assertEqual([i['status'] for i in resumed['items']],['error','ready','cancelled','cancelled'])
         self.assertEqual(len(self.server.project_runners[self.ref['project_id']].history()['runs']),1)
-        invalid=self.batch();invalid['axes'][0]['values']=list(range(10,20));invalid['axes'][1]['values']=list(range(1,5))
-        with self.assertRaises(bc.ContractError):eq.prepare(self.context,invalid)
+        large=self.batch();large['axes'][0]['values']=list(range(10,21));large['axes'][1]['values']=list(range(1,5))
+        self.assertEqual(len(eq.prepare(self.context,large)[0]['variants']),44)
         body=self.batch();body['revision']=0
         with self.assertRaises(bc.ContractError):eq.prepare(self.context,body)
         with self.assertRaises(bc.ContractError):eq.request(self.server,self.context,{**self.batch(),'digest':'stale','request_id':str(uuid.uuid4())},'start')
+    def test_extreme_finite_features_remain_serializable(self):
+        values = [-1e308, 0, 1e308]
+        result = at.analyze([{'x': v, 'y': v} for v in values])
+        json.dumps(result, allow_nan=False)
+        self.assertAlmostEqual(result['correlations'][0]['value'], 1)
+        self.assertEqual(result['statistics'][0]['maximum'], max(values))
+
     def test_analysis_and_csv_validation(self):
         data=at.analyze([{'x':i,'y':2*i,'class':'a' if i<5 else 'b','missing':None} for i in range(10)]+[{'x':100,'y':200,'class':'b','missing':''}],'class')
         self.assertAlmostEqual(next(c['value'] for c in data['correlations'] if c['a']=='x' and c['b']=='y'),1)

@@ -79,7 +79,7 @@ window.TrainingConsole = ({api, context, diagram, secrets, onResumed}) => {
       curves.replaceChildren(el('h3','Loss по эпохам'));
       for(const c of data.curves){curves.append(el('h4',c.name));const area=el('div');curves.append(area);plot(area,c.values);}
       if(gpu?.progress.loss_curve?.length||!data.curves.length){const area=el('div');curves.append(area);plot(area,gpu?.progress.loss_curve||[]);}
-      events.textContent=r.events.slice(-12).map(e=>new Date(e.time).toLocaleTimeString()+' · '+e.message).join('\n');stop.disabled=!active||!!r.cancel_requested;
+      events.textContent=r.events.map(e=>new Date(e.time).toLocaleTimeString()+' · '+e.message).join('\n');stop.disabled=!active||!!r.cancel_requested;
       if(active)timer=setTimeout(poll,1000);
     }catch(e){if(d.open){summary.replaceChildren(el('p',e.message,'insight-error'));timer=setTimeout(poll,3000);}}}
     d.onclose=()=>{clearTimeout(timer);d.remove();};await poll();

@@ -31,8 +31,8 @@ def identifier(value):
 
 
 def title(value):
-    if not isinstance(value, str) or not 1 <= len(value.strip()) <= 120:
-        raise ContractError('Название должно содержать от 1 до 120 символов.')
+    if not isinstance(value, str) or not value.strip():
+        raise ContractError('Введите название доски.')
     return value.strip()
 
 
@@ -40,7 +40,7 @@ def compact(value):
     return json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(',', ':'))
 
 
-def number(value, low=-100000, high=100000):
+def number(value, low=-math.inf, high=math.inf):
     if type(value) not in (int, float) or not math.isfinite(value) or not low <= value <= high:
         raise ContractError('Некорректные координаты или размер объекта.')
     return value
@@ -64,17 +64,17 @@ def drawing(value):
         raise ContractError('Некорректный цвет.')
     if kind == 'pen':
         points = value['points']
-        if not isinstance(points, list) or not 2 <= len(points) <= 2000:
-            raise ContractError('Штрих должен содержать от 2 до 2000 точек.')
+        if not isinstance(points, list) or len(points) < 2:
+            raise ContractError('Штрих должен содержать хотя бы две точки.')
         for point in points:
             if not isinstance(point, list) or len(point) != 2: raise ContractError('Некорректная точка.')
             number(point[0]); number(point[1])
     elif kind == 'text':
-        if not isinstance(value['text'], str) or not 1 <= len(value['text'].strip()) <= 1000:
-            raise ContractError('Текст должен содержать от 1 до 1000 символов.')
+        if not isinstance(value['text'], str) or not value['text'].strip():
+            raise ContractError('Введите текст.')
     else:
-        number(value['w'], 0 if kind != 'arrow' else -100000)
-        number(value['h'], 0 if kind != 'arrow' else -100000)
+        number(value['w'], 0 if kind != 'arrow' else -math.inf)
+        number(value['h'], 0 if kind != 'arrow' else -math.inf)
     return value
 
 
@@ -105,7 +105,7 @@ def request(hub, user, body, action):
         now = time.time()
         if action == 'list':
             rows = db.execute('SELECT b.id,b.title,b.updated,b.owner FROM boards b JOIN members m '
-                              'ON m.board=b.id WHERE m.account=? ORDER BY b.updated DESC LIMIT 200', (account,))
+                              'ON m.board=b.id WHERE m.account=? ORDER BY b.updated DESC', (account,))
             return {'boards': [dict(row) for row in rows]}
         if action == 'create':
             board_id = str(uuid.uuid4())
@@ -158,9 +158,6 @@ def request(hub, user, body, action):
         existing = db.execute('SELECT version,data FROM objects WHERE board=? AND id=?', (board_id, object_id)).fetchone()
         if expected != (existing['version'] if existing else 0):
             raise ContractError('Этот объект уже изменил другой участник. Выберите, какую правку оставить.', 409)
-        count, size = db.execute('SELECT COUNT(*),COALESCE(SUM(length(CAST(data AS BLOB))),0) FROM objects WHERE board=?', (board_id,)).fetchone()
-        if (not existing and count >= 2000) or size - len((existing['data'] or '').encode() if existing else b'') + len((payload or '').encode()) > 2*1024*1024:
-            raise ContractError('Доска заполнена. Создайте новую доску для продолжения.', 413)
         version = expected + 1
         db.execute('INSERT INTO objects VALUES(?,?,?,?) ON CONFLICT(board,id) DO UPDATE SET version=excluded.version,data=excluded.data', (board_id, object_id, version, payload))
         db.execute('UPDATE boards SET revision=revision+1,updated=? WHERE id=?', (now, board_id))

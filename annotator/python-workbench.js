@@ -16,7 +16,7 @@ window.PythonWorkbench = ({api, node, diagram, context, save, update, pack, down
       const line = el('tr');
       for (const name of columns) {
         const value = row[name] === null || row[name] === undefined ? '—' : String(row[name]);
-        const cell = el('td', value.slice(0, 200)); cell.title = value.slice(0, 2000); line.append(cell);
+        const cell = el('td', value); cell.title = value; line.append(cell);
       }
       grid.append(line);
     }
@@ -146,11 +146,11 @@ window.PythonWorkbench = ({api, node, diagram, context, save, update, pack, down
       const result = await api('/api/code/test', body(codeNode));
       if (request !== codeRequest || !$('python-dialog').open) return;
       $('python-report').textContent = JSON.stringify(result.outputs.report, null, 2);
-      table($('python-rows'), result.outputs.rows.slice(0, 50));
+      window.tablePages($('python-rows'), result.outputs.rows, table);
       $('python-logs').textContent = result.details.logs || 'Нет сообщений.';
       codeArtifact = result.outputs.data;
       $('python-result').hidden = false;
-      $('python-status').textContent = `Готово. Выход rows: ${result.outputs.rows.length} строк; показано до 50. Результат data сохранён как артефакт. Для передачи результата по связям запустите пайплайн.`;
+      $('python-status').textContent = `Готово. Выход rows: ${result.outputs.rows.length} строк. Результат data сохранён как артефакт. Для передачи результата по связям запустите пайплайн.`;
     } catch (error) { if (request === codeRequest) $('python-status').textContent = error.message; }
     finally { codeRunning = false; $('python-test').disabled = false; }
   };

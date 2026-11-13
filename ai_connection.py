@@ -1,7 +1,6 @@
 """User-selected AI endpoints. No default provider, shared credentials or automatic requests."""
 import json
 import os
-import time
 from pathlib import Path
 from urllib.parse import urlsplit
 from urllib.request import Request, build_opener, HTTPRedirectHandler
@@ -27,11 +26,11 @@ def save(root, body):
         if not all(isinstance(v, str) for v in (base, model, key)): raise bc.ContractError('Некорректные настройки модели.')
         base, model = base.strip().rstrip('/'), model.strip()
         u = urlsplit(base)
-        if (not u.hostname or u.username or u.password or u.query or u.fragment or len(base)>2048 or
+        if (not u.hostname or u.username or u.password or u.query or u.fragment or
             any(c.isspace() for c in base) or u.scheme not in ('http', 'https') or
             u.scheme == 'http' and u.hostname not in ('localhost', '127.0.0.1', '::1')):
             raise bc.ContractError('Укажите HTTPS-адрес API или HTTP-адрес локальной модели. Например: http://localhost:11434/v1')
-        if not model or len(model)>160 or len(key)>4096 or '\n' in key or '\r' in key: raise bc.ContractError('Проверьте название модели и ключ.')
+        if not model or '\n' in key or '\r' in key: raise bc.ContractError('Проверьте название модели и ключ.')
         old = config(root)
         if body.get('keep_key') is True and old.get('base_url') == base and not key: key=old.get('api_key','')
         value.update(base_url=base, model=model, api_key=key)
@@ -73,16 +72,13 @@ class Compatible:
         allowed={t['name'] for t in definitions}
         tool_defs=[{'type':'function','function':{'name':t['name'],'description':t['description'],'parameters':t['inputSchema']}} for t in definitions]
         messages=[{'role':'system','content':INSTRUCTIONS},{'role':'user','content':prompt}]
-        deadline=time.monotonic()+240
-        for _ in range(24):
-            remaining=deadline-time.monotonic()
-            if remaining<=0: break
-            payload={'model':self.value['model'],'messages':messages,'stream':False,'max_tokens':4096}
+        while True:
+            payload={'model':self.value['model'],'messages':messages,'stream':False}
             if tool_defs: payload['tools']=tool_defs
-            result=self.http('chat/completions',payload,timeout=min(90,remaining))
+            result=self.http('chat/completions',payload,timeout=None)
             try:
                 choice=result['choices'][0]; reply=choice['message']; calls=reply.get('tool_calls') or []
-                if not isinstance(reply,dict) or not isinstance(calls,list) or len(calls)>32: raise ValueError()
+                if not isinstance(reply,dict) or not isinstance(calls,list): raise ValueError()
                 text=reply.get('content') or ''
                 if not isinstance(text,str): raise ValueError()
                 if not calls:
@@ -102,4 +98,3 @@ class Compatible:
                         output={'error':str(e) if isinstance(e,bc.ContractError) else 'Некорректные аргументы инструмента.'}
                     messages.append({'role':'tool','tool_call_id':identity,'content':json.dumps(output,ensure_ascii=False)})
             except (KeyError,IndexError,TypeError,ValueError): raise bc.ContractError('API не вернул совместимый ответ модели.',502) from None
-        raise bc.ContractError('Достигнут лимит времени или обращений к инструментам. Запросите более короткий шаг.',504)

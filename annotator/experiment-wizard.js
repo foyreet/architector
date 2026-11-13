@@ -30,8 +30,8 @@ window.ExperimentWizard=({api,beforeCreate,adopt,launch})=>{
         content.append(el('p','Файл отправляется в ваш аккаунт для проверки. На диск он сохраняется при создании проекта, отдельно от переносимого описания схемы.'));
       }else if(stage===1){
         content.append(el('p',`${filename} · ${view.profile.rows} строк · ${view.profile.columns.length} колонок`));
-        table(content,Object.keys(view.sample[0]),view.sample.map(row=>Object.values(row).map(v=>String(v).slice(0,120))));
-        content.append(el('h3','Что предсказываем?'),el('p','Классификация: 2–30 категорий, например вид цветка или наличие дефекта. Регрессия, тексты и изображения в этот мастер пока не входят.'));
+        table(content,Object.keys(view.sample[0]),view.sample.map(row=>Object.values(row).map(String)));
+        content.append(el('h3','Что предсказываем?'),el('p','Выберите категорию, которую нужно предсказывать, например вид цветка или наличие дефекта.'));
         const target=field(content,'Целевая колонка',select([['','Выберите колонку'],...view.profile.columns.map(c=>[c.name,`${c.name} · ${c.unique} значений`])],config.target));target.id='wizard-target';
         const featureList=el('div','','wizard-features');content.append(el('h3','По каким признакам?'),el('p','Выберите только данные, доступные в момент будущего предсказания. Цель и сведения о результате нельзя использовать как признаки.'),featureList);
         function features(){featureList.replaceChildren();for(const c of view.profile.columns){if(c.name===config.target)continue;const label=el('label'),check=el('input');check.type='checkbox';check.value=c.name;check.checked=config.features.includes(c.name);check.disabled=!c.eligible;check.onchange=()=>{config.features=[...featureList.querySelectorAll('input:checked')].map(n=>n.value);};label.append(check,el('span',`${c.name} · ${c.eligible?(c.invalid_numeric?'смешанный':'число'):'нечисловой / пустой'} · пропусков ${c.missing} · нечисловых ${c.invalid_numeric}`));featureList.append(label);}}
@@ -39,10 +39,10 @@ window.ExperimentWizard=({api,beforeCreate,adopt,launch})=>{
         const settings=el('div','','wizard-grid');content.append(settings);
         const missing=field(settings,'Пропуски и некорректные значения',select([['error','Остановить и объяснить ошибку'],['drop','Удалить такие строки']],config.missing));missing.id='wizard-missing';missing.onchange=()=>config.missing=missing.value;
         const dup=field(settings,'Дубли признаков и цели',select([['drop','Удалить перед разделением'],['keep','Сохранить']],config.duplicates));dup.onchange=()=>config.duplicates=dup.value;
-        const split=field(settings,'Доля Test для проверки качества',select([['0.2','20%'],['0.25','25%'],['0.3','30%']],String(config.test_size)));split.id='wizard-test-size';split.onchange=()=>config.test_size=Number(split.value);
-        const seed=field(settings,'Seed для повторения эксперимента',el('input'));seed.type='number';seed.min=0;seed.max=2147483647;seed.value=config.seed;seed.oninput=()=>config.seed=Number(seed.value);
-        const name=field(content,'Название проекта',el('input'));name.id='wizard-name';name.maxLength=160;name.value=config.name;name.oninput=()=>config.name=name.value;
-        const hypothesis=field(content,'Гипотеза (необязательно)',el('textarea'));hypothesis.rows=2;hypothesis.maxLength=2000;hypothesis.value=config.hypothesis;hypothesis.oninput=()=>config.hypothesis=hypothesis.value;
+        const split=field(settings,'Доля Test для проверки качества',el('input'));split.type='number';split.step='any';split.min=0;split.max=1;split.value=config.test_size;split.id='wizard-test-size';split.onchange=()=>config.test_size=Number(split.value);
+        const seed=field(settings,'Seed для повторения эксперимента',el('input'));seed.type='number';seed.min=0;seed.max=4294967295;seed.value=config.seed;seed.oninput=()=>config.seed=Number(seed.value);
+        const name=field(content,'Название проекта',el('input'));name.id='wizard-name';name.value=config.name;name.oninput=()=>config.name=name.value;
+        const hypothesis=field(content,'Гипотеза (необязательно)',el('textarea'));hypothesis.rows=2;hypothesis.value=config.hypothesis;hypothesis.oninput=()=>config.hypothesis=hypothesis.value;
       }else{
         content.append(el('h3',created?'Проект создан':'Готовая схема'),el('p',preview.compute),el('p',`${preview.preparation.input_rows} строк на входе → ${preview.preparation.rows} после подготовки · Train ${preview.train_rows} · Test ${preview.test_rows}`));
         content.append(el('p','Цель: '+preview.target+' · признаки: '+preview.features.join(', ')));

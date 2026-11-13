@@ -7,7 +7,6 @@ from pathlib import Path, PurePosixPath
 import re
 import tempfile
 import threading
-import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, HTTPRedirectHandler, build_opener
@@ -17,7 +16,6 @@ from app_config import data_root
 
 ALLOW_ENVIRONMENT = True
 ROOT = data_root()
-PREVIEW_BYTES = 64 * 1024
 LOCK = threading.RLock()
 JOBS = {}
 
@@ -29,7 +27,7 @@ class KaggleError(Exception):
 
 
 def dataset_handle(value):
-    if not isinstance(value, str) or len(value) > 500:
+    if not isinstance(value, str):
         raise KaggleError('Укажите ссылку Kaggle или owner/dataset.')
     value = value.strip()
     if value.startswith('https://'):
@@ -76,7 +74,6 @@ def download_archive(handle, token, destination, progress):
     headers = {'User-Agent': 'Architect/1.0', 'Accept': 'application/zip'}
     if token:
         headers['Authorization'] = 'Bearer ' + token
-    started = time.monotonic()
     try:
         with build_opener(KaggleRedirect()).open(Request(url, headers=headers), timeout=30) as response:
             length = response.headers.get('Content-Length', '')
@@ -84,8 +81,6 @@ def download_archive(handle, token, destination, progress):
             count = 0
             with destination.open('wb') as output:
                 while True:
-                    if time.monotonic() - started > 600:
-                        raise KaggleError('Скачивание превысило 10 минут. Повторите позже.', 504)
                     chunk = response.read(256 * 1024)
                     if not chunk:
                         break
@@ -112,7 +107,7 @@ def archive_members(archive):
     files = []
     for item in entries:
         name = item.filename
-        if (len(name) > 1000 or name in names or name.startswith('/') or '\\' in name or
+        if (name in names or name.startswith('/') or '\\' in name or
                 '..' in PurePosixPath(name).parts or any(ord(c) < 32 for c in name) or
                 item.flag_bits & 1 or (item.external_attr >> 16) & 0o170000 == 0o120000):
             raise KaggleError('Архив содержит неподдерживаемые имена, ссылки или зашифрованные файлы.', 502)
@@ -178,19 +173,17 @@ def request(body, action):
         if not isinstance(token, str):
             raise KaggleError('Некорректный API-токен Kaggle.')
         token = token.strip() or (os.environ.get('KAGGLE_API_TOKEN', '').strip() if ALLOW_ENVIRONMENT else '')
-        if token and not re.fullmatch(r'[!-~]{1,2048}', token):
+        if token and not re.fullmatch(r'[!-~]+', token):
             raise KaggleError('Некорректный API-токен Kaggle.')
-        if any(job['status'] == 'downloading' for job in JOBS.values()):
+        if JOBS.get(handle, {}).get('status') == 'downloading':
             raise KaggleError('Уже скачивается другой датасет. Дождитесь завершения.', 409)
-        if len(JOBS) >= 64:
-            JOBS.clear()  # Only failed jobs remain here; completed files live on disk.
         JOBS[handle] = {'status': 'downloading', 'bytes': 0, 'total': 0}
         threading.Thread(target=run_download, args=(handle, token), daemon=True).start()
         return dict(JOBS[handle], dataset=handle)
 
 
 def preview(handle, name):
-    if not isinstance(name, str) or len(name) > 1000:
+    if not isinstance(name, str):
         raise KaggleError('Выберите файл датасета.')
     try:
         with zipfile.ZipFile(archive_path(handle)) as archive:
@@ -200,11 +193,10 @@ def preview(handle, name):
             if suffix not in ('.csv', '.tsv', '.txt', '.md', '.json', '.jsonl', '.log', '.xml', '.yaml', '.yml'):
                 return {'kind': 'unsupported', 'message': 'Для этого формата доступен только размер файла. Откройте локальный ZIP для работы с ним.'}
             with archive.open(name) as source:
-                raw = source.read(PREVIEW_BYTES + 1)
+                raw = source.read()
     except (zipfile.BadZipFile, OSError, RuntimeError, NotImplementedError):
         raise KaggleError('Не удалось прочитать файл из локального архива.', 422) from None
-    truncated = len(raw) > PREVIEW_BYTES
-    content = raw[:PREVIEW_BYTES].decode('utf-8-sig', errors='replace')
+    content = raw.decode('utf-8-sig', errors='replace')
     if suffix in ('.csv', '.tsv'):
         try:
             delimiter = '\t' if suffix == '.tsv' else ','
@@ -213,16 +205,9 @@ def preview(handle, name):
                     delimiter = csv.Sniffer().sniff(content[:8192], delimiters=',;\t|').delimiter
                 except csv.Error:
                     pass
-            rows = []
-            for row in csv.reader(io.StringIO(content), delimiter=delimiter):
-                if len(rows) == 21:
-                    truncated = True
-                    break
-                if len(row) > 30 or any(len(cell) > 500 for cell in row):
-                    truncated = True
-                rows.append([cell[:500] for cell in row[:30]])
-            return {'kind': 'table', 'rows': rows, 'truncated': truncated}
+            rows = list(csv.reader(io.StringIO(content), delimiter=delimiter))
+            return {'kind': 'table', 'rows': rows, 'truncated': False}
         except csv.Error:
             pass
-    return {'kind': 'text', 'text': content, 'truncated': truncated}
+    return {'kind': 'text', 'text': content, 'truncated': False}
 

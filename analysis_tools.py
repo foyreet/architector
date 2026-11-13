@@ -1,4 +1,5 @@
-"""Bounded tabular exploration and predictions with saved native classifier artifacts."""
+"""Tabular exploration and predictions with saved native classifier artifacts."""
+from bisect import bisect_right
 from collections import Counter
 import csv
 import hashlib
@@ -34,13 +35,14 @@ def number(value):
     if value is None or isinstance(value, bool) or isinstance(value, str) and not value.strip(): return None
     try:
         v = float(value)
-        return v if math.isfinite(v) and abs(v) <= 1e15 else None
+        return v if math.isfinite(v) else None
     except (TypeError, ValueError, OverflowError): return None
 
 
 def quantile(values, q):
     at = (len(values) - 1) * q; i = int(at)
-    return values[i] + (values[min(i + 1, len(values) - 1)] - values[i]) * (at - i)
+    fraction = at - i
+    return (1 - fraction) * values[i] + fraction * values[min(i + 1, len(values) - 1)]
 
 
 def analyze(rows, target=''):
@@ -58,30 +60,34 @@ def analyze(rows, target=''):
             numeric.append(col); q1, q3 = quantile(values, .25), quantile(values, .75); spread = q3 - q1
             low, high = q1 - 1.5 * spread, q3 + 1.5 * spread
             outliers = [i + 1 for i, v in valid if v < low or v > high]
-            width = (values[-1] - values[0]) / 10
-            bins = [0] * (10 if width else 1)
-            for v in values: bins[min(9, int((v - values[0]) / width)) if width else 0] += 1
+            edges = [(1 - i / 10) * values[0] + (i / 10) * values[-1] for i in range(11)] if values[0] != values[-1] else [values[0], values[-1]]
+            bins = [0] * (len(edges) - 1)
+            for v in values:
+                bins[min(len(bins) - 1, bisect_right(edges, v) - 1)] += 1
             entry.update(type='number', minimum=values[0], maximum=values[-1], mean=math.fsum(v / len(values) for v in values), median=quantile(values, .5), q1=q1, q3=q3,
-                         histogram=[{'from': values[0] + i * width, 'to': values[0] + (i + 1) * width, 'count': count} for i, count in enumerate(bins)],
-                         outliers={'rule': '1.5 × IQR', 'lower': low, 'upper': high, 'count': len(outliers), 'rows': outliers[:20]})
+                         histogram=[{'from': edges[i], 'to': edges[i + 1], 'count': count} for i, count in enumerate(bins)],
+                         outliers={'rule': '1.5 × IQR', 'lower': low if math.isfinite(low) else None, 'upper': high if math.isfinite(high) else None, 'count': len(outliers), 'rows': outliers})
         else:
             counts = Counter(str(r.get(col)) for r in rows if r.get(col) is not None and str(r.get(col)).strip())
-            entry.update(type='category', categories=[{'label': k, 'count': v} for k, v in counts.most_common(20)])
+            entry.update(type='category', categories=[{'label': k, 'count': v} for k, v in counts.most_common()])
         statistics.append(entry)
     correlations = []
-    for a in numeric[:12]:
-        for b in numeric[:12]:
+    for a in numeric:
+        for b in numeric:
             pairs = [(number(r.get(a)), number(r.get(b))) for r in rows]; pairs = [(x, y) for x, y in pairs if x is not None and y is not None]
             correlation = None
             if len(pairs) >= 2:
+                scale_x = max(abs(x) for x, _ in pairs) or 1
+                scale_y = max(abs(y) for _, y in pairs) or 1
+                pairs = [(x / scale_x, y / scale_y) for x, y in pairs]
                 mx = math.fsum(x / len(pairs) for x, _ in pairs); my = math.fsum(y / len(pairs) for _, y in pairs)
                 xx = math.fsum((x - mx) ** 2 for x, _ in pairs); yy = math.fsum((y - my) ** 2 for _, y in pairs)
                 if xx and yy: correlation = max(-1, min(1, math.fsum((x - mx) * (y - my) for x, y in pairs) / math.sqrt(xx * yy)))
             correlations.append({'a': a, 'b': b, 'value': correlation, 'pairs': len(pairs)})
     balance = Counter(str(r[target]) for r in rows if target and r.get(target) is not None and str(r[target]).strip())
-    return {'source_sha256': hashlib.sha256(ml.encode(rows)).hexdigest(), 'profile': profile, 'statistics': statistics, 'correlations': correlations, 'correlation_columns': numeric[:12],
-            'target': target, 'balance': [{'label': k, 'count': v} for k, v in balance.most_common(30)], 'target_classes': len(balance),
-            'notes': 'Пропуски исключены из числовых расчётов. Корреляция Пирсона — по полным парам для первых 12 числовых колонок; постоянные признаки дают null. Выбросы IQR — подсказка для проверки, а не команда удаления.'}
+    return {'source_sha256': hashlib.sha256(ml.encode(rows)).hexdigest(), 'profile': profile, 'statistics': statistics, 'correlations': correlations, 'correlation_columns': numeric,
+            'target': target, 'balance': [{'label': k, 'count': v} for k, v in balance.most_common()], 'target_classes': len(balance),
+            'notes': 'Пропуски исключены из числовых расчётов. Корреляция Пирсона — по полным парам для числовых колонок; постоянные признаки дают null. Выбросы IQR — подсказка для проверки, а не команда удаления.'}
 
 
 def infer_rows(root, model, rows):
@@ -122,5 +128,5 @@ def predict(context, body):
 def prediction_list(context):
     store = ps.ProjectStore(context.root); folder = store.path('workspace/predictions')
     result = [store.read('workspace/predictions/' + p.name) for p in folder.glob('*.json')] if folder.exists() else []
-    return {'predictions': sorted(result, key=lambda r: r['created_at'], reverse=True)[:100]}
+    return {'predictions': sorted(result, key=lambda r: r['created_at'], reverse=True)}
 

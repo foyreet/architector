@@ -14,14 +14,11 @@ import project_store as ps
 
 def listing(root):
     store = ps.ProjectStore(root)
-    items, scanned, truncated = [], 0, False
+    items = []
     folder = store.path('workspace/ml-artifacts')
     if folder.exists():
         for path in sorted(folder.glob('*.json')):
             if path.is_symlink() or not re.fullmatch(r'[a-f0-9]{64}\.json', path.name): continue
-            scanned += 1
-            if scanned > 2000 or len(items) >= 200:
-                truncated = True; break
             try:
                 raw = path.read_bytes()
                 value = json.loads(raw)
@@ -36,8 +33,6 @@ def listing(root):
     folder = store.path('workspace/datasets')
     if folder.exists():
         for path in sorted(folder.glob('*/*/*/dataset.zip')):
-            scanned += 1
-            if scanned > 2000 or len(items) >= 200: truncated = True; break
             owner, name, version, _ = path.relative_to(folder).parts
             source = owner + '/' + name + (('/versions/' + version) if version != 'latest' else '')
             try:
@@ -50,5 +45,5 @@ def listing(root):
                               'files': names, 'modified': path.stat().st_mtime})
             except (OSError, ValueError, kg.KaggleError, zipfile.BadZipFile): continue
     items.sort(key=lambda item: item['modified'], reverse=True)
-    return {'datasets': items, 'truncated': truncated}
+    return {'datasets': items, 'truncated': False}
 

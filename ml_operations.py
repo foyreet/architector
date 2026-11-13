@@ -114,14 +114,13 @@ def worker(task, _root=None, **kwargs):
     try:
         local_python = Path(__file__).parent / '.venv/bin/python'
         executable = os.environ.get('ARCHITECT_ML_PYTHON') or (str(local_python) if local_python.exists() else sys.executable)
-        env = {**os.environ, 'OMP_NUM_THREADS': '1', 'OPENBLAS_NUM_THREADS': '1', 'MKL_NUM_THREADS': '1', 'VECLIB_MAXIMUM_THREADS': '1'}
         try:
             with tempfile.TemporaryFile(mode='w+', encoding='utf-8') as source, tempfile.TemporaryFile(mode='w+', encoding='utf-8') as output:
                 json.dump({'task': task, **kwargs}, source, ensure_ascii=False, allow_nan=False)
                 source.seek(0)
                 execution = gpu_compute.EXECUTION.get()
                 with subprocess.Popen([executable, '-I', str(Path(__file__).with_name('ml_worker.py'))],
-                                      stdin=source, stdout=output, stderr=subprocess.DEVNULL, env=env) as process:
+                                      stdin=source, stdout=output, stderr=subprocess.DEVNULL) as process:
                     try:
                         while process.poll() is None:
                             if execution and execution[1].is_set(): error('Вычисление остановлено.', 409)
@@ -157,7 +156,7 @@ def prepare(rows, settings):
             label = row[target]
             if label is None or not str(label).strip(): raise ValueError()
             values = [float(row[key]) for key in features]
-            if any(not math.isfinite(v) or abs(v) > 1e15 for v in values): raise ValueError()
+            if any(not math.isfinite(v) for v in values): raise ValueError()
         except (KeyError, TypeError, ValueError, OverflowError):
             if settings['missing'] == 'error': error(f'Строка {index + 1}: пропуск, нечисловой признак или некорректная цель. Выберите числовые признаки или удаление таких строк.')
             dropped += 1; continue

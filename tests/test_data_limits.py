@@ -2,6 +2,7 @@
 from contextlib import contextmanager
 import json
 import os
+import socket
 from pathlib import Path
 import tempfile
 import threading
@@ -31,6 +32,17 @@ def socket_broker(root, execute):
 
 
 class DataLimitTests(unittest.TestCase):
+    def test_frame_length_accepts_large_payloads_without_allocating_them(self):
+        reader, writer = socket.socketpair()
+        with reader, writer:
+            for size in (1, 2**32 - 1, 2**32, 2**32 + 7):
+                writer.sendall(broker.pack_size(size))
+                self.assertEqual(broker.read_size(reader), size)
+
+    def test_full_python_log(self):
+        result = pb.sandbox({'code': "def run(inputs, params):\n    print('Ж' * 40000)\n    return {}", 'inputs': {}, 'params': {}})
+        self.assertEqual(result['logs'], 'Ж' * 40000 + '\n')
+
     def test_python_split_passes_full_dataset_to_next_block(self):
         rows = [{str(column): i for column in range(7)} for i in range(64000)]
         def block(code, inputs):

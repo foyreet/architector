@@ -25,6 +25,16 @@ def receive(sock, length):
     return chunks
 
 
+def pack_size(size):
+    # Zero was not a valid legacy frame size. Use it to introduce a 64-bit length.
+    return struct.pack('!I', size) if size <= 0xffffffff else struct.pack('!IQ', 0, size)
+
+
+def read_size(sock):
+    size = struct.unpack('!I', receive(sock, 4))[0]
+    return size or struct.unpack('!Q', receive(sock, 8))[0]
+
+
 def validate(payload):
     if not isinstance(payload, dict) or set(payload) - {'code', 'inputs', 'params', 'timeout'} or not {'code', 'inputs', 'params'} <= payload.keys(): raise ValueError('Invalid Python request')
     if not isinstance(payload['code'], str) or not payload['code'].strip(): raise ValueError('Invalid code')
@@ -66,8 +76,8 @@ def run(payload):
     reader = None
     try:
         # Do not inherit API keys or application configuration into ordinary user code.
-        env = {key: value for key, value in os.environ.items() if key in ('PATH', 'LANG', 'SYSTEMROOT', 'WINDIR')}
-        env.update(PYTHONIOENCODING='utf-8', OMP_NUM_THREADS='1', OPENBLAS_NUM_THREADS='1', MKL_NUM_THREADS='1')
+        env = {key: value for key, value in os.environ.items() if key in ('PATH', 'LANG', 'SYSTEMROOT', 'WINDIR', 'OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS', 'VECLIB_MAXIMUM_THREADS')}
+        env['PYTHONIOENCODING'] = 'utf-8'
         with tempfile.TemporaryDirectory(prefix='architector-python-') as work, tempfile.TemporaryFile(mode='w+', encoding='utf-8') as source:
             json.dump(payload, source, ensure_ascii=False, allow_nan=False, separators=(',', ':'))
             source.flush(); source.seek(0)
@@ -98,7 +108,7 @@ def run(payload):
                     if not part: break
                     chunks.extend(part)
                 process.wait()
-                if process.returncode: return {'error': 'Процесс Python завершился с ошибкой.', 'logs': bytes(chunks[-8000:]).decode(errors='replace')}
+                if process.returncode: return {'error': 'Процесс Python завершился с ошибкой.', 'logs': bytes(chunks).decode(errors='replace')}
                 try: response = json.loads(chunks)
                 except (ValueError, UnicodeError, RecursionError): return {'error': 'Код повредил протокол вывода. Используйте print() для журнала и return для результата.'}
                 if not isinstance(response, dict): return {'error': 'Некорректный ответ Python-блока.'}
@@ -121,13 +131,13 @@ class Handler(socketserver.BaseRequestHandler):
     def handle(self):
         self.request.settimeout(10)
         try:
-            size = struct.unpack('!I', receive(self.request, 4))[0]
+            size = read_size(self.request)
             if size <= 0: raise ValueError('Empty request')
             response = run(json.loads(receive(self.request, size)))
         except (ValueError, OSError, RecursionError): response = {'error': 'Некорректный запрос к среде Python.'}
         raw = json.dumps(response, ensure_ascii=False, allow_nan=False).encode()
         try:
-            self.request.sendall(struct.pack('!I', len(raw)))
+            self.request.sendall(pack_size(len(raw)))
             self.request.sendall(raw)
         except OSError: pass
 
