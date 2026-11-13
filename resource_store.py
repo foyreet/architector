@@ -39,13 +39,11 @@ def inventory(context):
     pins_path = 'workspace/artifact-pins.json'
     pins = store.read(pins_path) if store.path(pins_path).exists() else {}
     if not isinstance(pins, dict) or any(not re.fullmatch('[a-f0-9]{64}', key) for key in pins): raise bc.ContractError('Повреждён список закреплений. Очистка остановлена.', 409)
-    reached = set(pins); sources = {}; count = 0
+    reached = set(pins); sources = {}
     for category in ('projects', 'workspace/runs', 'workspace/experiment-queue', 'workspace/predictions', 'workspace/model-registry'):
         folder = store.path(category)
         for path in files(folder):
             if path.suffix != '.json': continue
-            count += 1
-            if count > 10000: raise bc.ContractError('Хранилище слишком большое для безопасной автоматической проверки ссылок.', 413)
             try: value = json.loads(path.read_text(encoding='utf-8'))
             except (OSError, ValueError): raise bc.ContractError('Не удалось проверить ссылки в истории. Очистка остановлена.', 409) from None
             for identity in refs(value): reached.add(identity); sources.setdefault(identity, set()).add(category)
@@ -119,7 +117,7 @@ def request(server, context, body, action):
         if action == 'pin':
             ref = body.get('artifact'); ml.load(store.root, ref, ref.get('kind') if isinstance(ref, dict) else None)
             value = store.read('workspace/artifact-pins.json') if store.path('workspace/artifact-pins.json').exists() else {}
-            if body.get('pinned') is True: value[ref['id']] = str(body.get('label', 'Важный артефакт'))[:160]
+            if body.get('pinned') is True: value[ref['id']] = str(body.get('label', 'Важный артефакт'))
             else: value.pop(ref['id'], None)
             store.write('workspace/artifact-pins.json', value); return {'pinned': ref['id'] in value}
         if action == 'unpin':

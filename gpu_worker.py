@@ -22,13 +22,13 @@ def device_info():
     return {'backend': backend, 'device': name, 'torch': torch.__version__}
 
 
-def integer(value, low, high):
+def integer(value, low, high=math.inf):
     if type(value) is not int or not low <= value <= high: raise ValueError('Параметр вне допустимого диапазона.')
     return value
 
 
 def vector(value, size):
-    if not isinstance(value, list) or len(value) != size or any(type(v) not in (float, int) or not math.isfinite(v) or abs(v) > 1e15 for v in value):
+    if not isinstance(value, list) or len(value) != size or any(type(v) not in (float, int) or not math.isfinite(v) for v in value):
         raise ValueError('Некорректный числовой массив.')
     return value
 
@@ -82,7 +82,7 @@ def validate_checkpoint(value, data, info=None):
 
 def run(data, progress=lambda value: None):
     import torch
-    info = device_info(); device = info['backend']; torch.set_num_threads(1)
+    info = device_info(); device = info['backend']
     versions = {'python': sys.version.split()[0], 'torch': torch.__version__, 'device': device, 'gpu': info['device']}
     task = data.get('task')
     if task not in ('train', 'evaluate', 'predict'): raise ValueError('Неизвестная GPU-операция.')
@@ -93,10 +93,10 @@ def run(data, progress=lambda value: None):
     for row in rows: vector(row, width)
     X = torch.tensor(rows, dtype=torch.float32, device=device)
     if task == 'train':
-        settings = data['settings']; epochs = integer(settings.get('epochs'), 1, 200)
-        hidden = integer(settings.get('hidden_size'), 4, 128); seed = integer(settings.get('seed'), 0, 2147483647)
+        settings = data['settings']; epochs = integer(settings.get('epochs'), 1)
+        hidden = integer(settings.get('hidden_size'), 1); seed = integer(settings.get('seed'), 0, 2**64 - 1)
         lr = settings.get('learning_rate')
-        if type(lr) not in (float, int) or not math.isfinite(lr) or not .0001 <= lr <= .1: raise ValueError('Learning rate должен быть от 0.0001 до 0.1.')
+        if type(lr) not in (float, int) or not math.isfinite(lr) or lr <= 0: raise ValueError('Скорость обучения должна быть положительной.')
         labels = data['table'].get('y')
         if not isinstance(labels, list) or len(labels) != len(rows) or any(not isinstance(v, str) for v in labels): raise ValueError('Некорректные классы.')
         classes = sorted(set(labels))
@@ -140,7 +140,7 @@ def run(data, progress=lambda value: None):
     if model.get('format') != FORMAT or model.get('version') != 1: raise ValueError('Неподдерживаемая модель GPU.')
     classes = model.get('classes')
     if not isinstance(classes, list) or not classes or len(set(classes)) != len(classes) or any(not isinstance(v, str) for v in classes): raise ValueError('Некорректные классы модели.')
-    hidden = integer(model.get('hidden_size'), 4, 128)
+    hidden = integer(model.get('hidden_size'), 1)
     mean = vector(model.get('mean'), width); scale = vector(model.get('scale'), width)
     if any(v <= 0 for v in scale): raise ValueError('Некорректный масштаб модели.')
     network = torch.nn.Sequential(torch.nn.Linear(width, hidden), torch.nn.ReLU(), torch.nn.Linear(hidden, len(classes))).to(device)

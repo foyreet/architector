@@ -32,7 +32,7 @@ def inspect(body):
         col['eligible']=col['numeric_valid']>0
         col['recommended']=col['eligible'] and not col['invalid_numeric'] and col['unique']>1 and col['name'].lower() not in ('id','index','row_id','unnamed: 0')
     name=body.get('filename','data.csv')
-    if not isinstance(name,str) or not name or len(name)>200 or any(ord(c)<32 for c in name): raise bc.ContractError('Некорректное имя CSV-файла.')
+    if not isinstance(name,str) or not name or any(ord(c)<32 for c in name): raise bc.ContractError('Некорректное имя CSV-файла.')
     name=name.replace('\\','/').split('/')[-1]
     if name in ('','.','..'):raise bc.ContractError('Некорректное имя CSV-файла.')
     return {'delimiter':delimiter,'filename':name,'profile':profile,'sample':rows[:10]},rows
@@ -47,13 +47,14 @@ def build(body):
         raise bc.ContractError('Выберите хотя бы один уникальный признак, кроме целевого столбца.')
     name=config.get('name','Первый эксперимент')
     hypothesis=config.get('hypothesis','')
-    if not isinstance(name,str) or not 1<=len(name.strip())<=160:raise bc.ContractError('Введите название проекта, до 160 символов.')
-    if not isinstance(hypothesis,str) or len(hypothesis)>2000:raise bc.ContractError('Гипотеза должна быть не длиннее 2000 символов.')
+    if not isinstance(name,str) or not name.strip():raise bc.ContractError('Введите название проекта.')
+    if not isinstance(hypothesis,str):raise bc.ContractError('Гипотеза должна быть текстом.')
     prep=bc.normalize_block({'kind':'ml_prepare','version':1,'settings':{'target':target,'features':','.join(features),'missing':config.get('missing','error'),'duplicates':config.get('duplicates','drop')}})
     split=bc.normalize_block({'kind':'ml_split','version':1,'settings':{'test_size':config.get('test_size',.2),'seed':config.get('seed',42)}})
     table,details=ml.prepare(rows,prep['settings']);count=len(table['y']);classes=len(details['classes']);test=math.ceil(count*split['settings']['test_size'])
     warnings=[]
     if count < 2: raise bc.ContractError('Для разделения нужны хотя бы две строки.')
+    if test >= count: raise bc.ContractError('Для выбранной доли Test в Train не остаётся строк.')
     if min(details['classes'].values()) < 2 or min(test, count-test) < classes:
         warnings.append('Разбиение будет случайным. Редкие классы могут отсутствовать в Train или Test.')
     if min(details['classes'].values())<5:warnings.append('В некоторых классах меньше пяти строк. Оценка качества будет нестабильной; добавьте данные.')
@@ -74,7 +75,7 @@ def build(body):
         if node['id']=='ml_prepare':node['block']=prep
         if node['id']=='ml_split':node['block']=split
         if node['id']=='ml_train':node['block']['settings'].update(n_estimators=50,max_depth=6,seed=split['settings']['seed'])
-        if node['id']=='ml_save':node['block']['settings']['name']=name.strip()[:100]
+        if node['id']=='ml_save':node['block']['settings']['name']=name.strip()
     graph['edges'].insert(0,{'id':'csv-prepare','from':'csv','fromPort':'rows','to':'ml_prepare','toPort':'rows','kind':'data'})
     # Validate connected inputs without executing providers or training.
     pr.validate(graph)

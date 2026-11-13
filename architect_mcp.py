@@ -26,19 +26,19 @@ def obj(properties=None, required=()):
 TEXT = {'type': 'string'}
 PROJECT = {'type': 'string', 'description': 'Project UUID owned by the authenticated workspace.'}
 SPEC = obj({
-    'name': {'type': 'string', 'minLength': 1, 'maxLength': 160},
-    'description': {'type': 'string', 'maxLength': 32000},
+    'name': {'type': 'string', 'minLength': 1},
+    'description': {'type': 'string'},
     'source_project_id': {**PROJECT, 'description': 'Optional own project whose pinned custom block definitions should be reused.'},
     'blocks': {'type': 'array', 'minItems': 1, 'items': obj({
-        'id': {'type': 'string', 'pattern': '^[A-Za-z0-9_-]{1,80}$'}, 'kind': TEXT,
-        'name': {'type': 'string', 'maxLength': 100}, 'description': {'type': 'string', 'maxLength': 2000},
+        'id': {'type': 'string', 'pattern': '^[A-Za-z0-9_-]+$'}, 'kind': TEXT,
+        'name': {'type': 'string'}, 'description': {'type': 'string'},
         'settings': {'type': 'object'}, 'inputs': {'type': 'object'}}, ('id', 'kind'))},
     'connections': {'type': 'array', 'items': obj({
         'from': TEXT, 'to': TEXT, 'from_port': TEXT, 'to_port': TEXT}, ('from', 'to', 'from_port', 'to_port'))}
 }, ('name', 'blocks', 'connections'))
 
 BINDINGS = {'type': 'array', 'items': obj({
-    'id': {'type': 'string', 'pattern': '^[A-Za-z0-9_-]{1,100}$'}, 'label': TEXT,
+    'id': {'type': 'string', 'pattern': '^[A-Za-z0-9_-]+$'}, 'label': TEXT,
     'target': obj({'node': TEXT, 'port': TEXT}, ('node', 'port'))}, ('id', 'target'))}
 BLOCK = obj({'pipeline': SPEC, 'inputs': BINDINGS, 'outputs': BINDINGS, 'settings': BINDINGS},
             ('pipeline', 'inputs', 'outputs', 'settings'))
@@ -77,7 +77,7 @@ def check(value, schema, label='arguments'):
         if not isinstance(value, list) or not schema.get('minItems', 0) <= len(value) <= schema.get('maxItems', float('inf')): raise bc.ContractError(label + ': некорректный список.')
         for item in value: check(item, schema['items'], label)
     elif kind == 'string':
-        if not isinstance(value, str) or not schema.get('minLength', 0) <= len(value) <= schema.get('maxLength', 32000): raise bc.ContractError(label + ': некорректная строка.')
+        if not isinstance(value, str) or not schema.get('minLength', 0) <= len(value) <= schema.get('maxLength', float('inf')): raise bc.ContractError(label + ': некорректная строка.')
         if schema.get('pattern') and not re.fullmatch(schema['pattern'], value): raise bc.ContractError(label + ': некорректный ID.')
         if schema.get('format') == 'uuid' and not pipeline_runner.PipelineRunner.valid_id(value): raise bc.ContractError(label + ': ожидается UUID v4.')
     elif kind == 'integer':
@@ -260,7 +260,7 @@ def rpc(hub, user, message, origin):
         return error(-32600, 'Invalid JSON-RPC request')
     if 'id' not in message:
         return None  # Notifications never invoke tools.
-    if type(identity) not in (str, int) or isinstance(identity, str) and len(identity) > 200:
+    if type(identity) not in (str, int):
         identity = None
         return error(-32600, 'Invalid request id')
     method = message['method']; params = message.get('params', {})

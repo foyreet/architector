@@ -11,14 +11,14 @@ def notes(value):
     if not isinstance(value, dict):
         raise ContractError('Некорректное описание эксперимента.')
     result = {}
-    for key, limit in [('title', 160), ('hypothesis', 2000), ('conclusion', 4000)]:
+    for key in ('title', 'hypothesis', 'conclusion'):
         text = value.get(key, '')
-        if not isinstance(text, str) or len(text) > limit:
-            raise ContractError(f'Поле {key}: не более {limit} символов.')
+        if not isinstance(text, str):
+            raise ContractError(f'Поле {key}: ожидается текст.')
         result[key] = text.strip()
     tags = value.get('tags', [])
-    if not isinstance(tags, list) or len(tags) > 10 or any(not isinstance(t, str) or not t.strip() or len(t) > 32 for t in tags):
-        raise ContractError('Укажите до 10 тегов, каждый до 32 символов.')
+    if not isinstance(tags, list) or any(not isinstance(t, str) or not t.strip() for t in tags):
+        raise ContractError('Каждый тег должен быть непустой строкой.')
     result['tags'] = list(dict.fromkeys(t.strip() for t in tags))
     revision = value.get('revision', 0)
     if type(revision) is not int or revision < 0:
@@ -43,17 +43,14 @@ def header(record):
             'experiment': notes(record.get('experiment', {}))}
 
 
-def flatten(value, prefix='', depth=0):
-    """Bounded projection. Arrays remain values, never thousands of table rows."""
-    if isinstance(value, dict) and depth < 5:
+def flatten(value, prefix=''):
+    """Project nested metrics onto named columns, keeping arrays as values."""
+    if isinstance(value, dict):
         result = {}
-        for key, item in list(value.items())[:100]:
-            result.update(flatten(item, prefix + (' / ' if prefix else '') + str(key), depth + 1))
-            if len(result) >= 300:
-                break
-        return dict(list(result.items())[:300])
-    text = json.dumps(value, ensure_ascii=False, sort_keys=True)
-    return {prefix: value if len(text) <= 1200 else text[:1100] + '… [SHA-256: ' + hashlib.sha256(text.encode()).hexdigest() + ']'}
+        for key, item in value.items():
+            result.update(flatten(item, prefix + (' / ' if prefix else '') + str(key)))
+        return result
+    return {prefix: value}
 
 
 def comparison(runner, run_id):
@@ -118,8 +115,8 @@ def request(runner, body, action):
         return {'runs': [header(runner.get(item['id'])) for item in runner.history()['runs']]}
     if action == 'compare':
         ids = body.get('run_ids')
-        if not isinstance(ids, list) or not 1 <= len(ids) <= 6 or any(not runner.valid_id(i) for i in ids) or len(set(ids)) != len(ids):
-            raise ContractError('Выберите от 1 до 6 разных запусков.')
+        if not isinstance(ids, list) or not ids or any(not runner.valid_id(i) for i in ids) or len(set(ids)) != len(ids):
+            raise ContractError('Выберите разные запуски.')
         return {'runs': [comparison(runner, run_id) for run_id in ids]}
     value = notes(body.get('experiment'))
     with runner.lock:

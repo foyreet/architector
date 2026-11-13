@@ -6,22 +6,12 @@ import sys
 import traceback
 
 
-class Log(io.TextIOBase):
-    def __init__(self): self.parts = []; self.size = 0
-    def write(self, text):
-        remaining = max(0, 32000 - self.size)
-        if remaining: self.parts.append(text[:remaining])
-        self.size += min(len(text), remaining)
-        return len(text)
-    def flush(self): pass
-
-
 # -I ignores PYTHONIOENCODING; explicitly use UTF-8 on Windows too.
 sys.stdin.reconfigure(encoding='utf-8')
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 payload = json.load(sys.stdin)
-log = Log()
+log = io.StringIO()
 try:
     namespace = {'__name__': '__user_block__'}
     with contextlib.redirect_stdout(log), contextlib.redirect_stderr(log):
@@ -31,8 +21,8 @@ try:
         if not isinstance(result, dict): raise ValueError('run() должна вернуть словарь выходов.')
         # Check serialization inside the worker; the host validates the schema again.
         json.dumps(result, allow_nan=False)
-    response = {'result': result, 'logs': ''.join(log.parts)}
+    response = {'result': result, 'logs': log.getvalue()}
 except BaseException:
-    response = {'error': traceback.format_exc(limit=8)[-8000:], 'logs': ''.join(log.parts)}
+    response = {'error': traceback.format_exc(), 'logs': log.getvalue()}
 print(json.dumps(response, ensure_ascii=False, allow_nan=False))
 

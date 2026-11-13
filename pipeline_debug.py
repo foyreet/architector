@@ -7,14 +7,6 @@ import block_contracts as bc
 import ml_operations as ml
 
 
-def bounded(value, depth=0):
-    if depth > 5: return '…'
-    if isinstance(value, dict): return {str(k): bounded(v, depth + 1) for k, v in list(value.items())[:30]}
-    if isinstance(value, list): return [bounded(v, depth + 1) for v in value[:10]] + (['…'] if len(value) > 10 else [])
-    if isinstance(value, str) and len(value) > 2000: return value[:2000] + '…'
-    return value
-
-
 def links(graph, identity):
     return sorted((e['from'], e['fromPort'], e['toPort']) for e in graph['edges'] if e['kind'] == 'data' and e['to'] == identity)
 
@@ -87,11 +79,11 @@ def plan(runner, diagram, order, groups, debug):
             else:
                 block['inputs'].pop(target_port, None)
                 if source not in execute: blocked.append({'node_id': source, 'source_root': next((key for key, ids in (groups or {}).items() if source in ids), source), 'name': nodes[source]['name'], 'input': target_port, 'consumer': node['name']})
-        inputs.append({'node_id': identity, 'name': node['name'], 'inputs': bounded(block['inputs']), 'settings': bounded(block['settings']), 'sources': sources})
+        inputs.append({'node_id': identity, 'name': node['name'], 'inputs': block['inputs'], 'settings': block['settings'], 'sources': sources})
     result = {'base_run_id': base['id'] if base else None, 'action': debug['action'], 'blocked': blocked,
               'execute': [{'id': i, 'name': nodes[i]['name'], 'kind': nodes[i]['block']['kind']} for i in execute],
               'reused': [{'id': i, 'name': nodes[i]['name']} for i in order if i in reuse],
-              'remaining': [i for i in order if i not in reuse and i not in execute], 'inputs': inputs[:30], 'invalidated': reasons}
+              'remaining': [i for i in order if i not in reuse and i not in execute], 'inputs': inputs, 'invalidated': reasons}
     result['digest'] = hashlib.sha256(json.dumps({'diagram': diagram, 'debug': debug, 'plan': result}, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
     return result, reuse
 

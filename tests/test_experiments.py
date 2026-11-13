@@ -70,7 +70,7 @@ class ExperimentTests(unittest.TestCase):
         with self.assertRaises(bc.ContractError) as error:
             ex.request(self.runner, body, 'experiment')
         self.assertEqual(error.exception.status, 409)
-        with self.assertRaises(bc.ContractError): ex.notes({'tags': ['x' * 33]})
+        self.assertEqual(ex.notes({'tags': ['x' * 33]})['tags'], ['x' * 33])
 
     def test_selection_and_storage_isolation(self):
         record = self.record()

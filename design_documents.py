@@ -22,15 +22,13 @@ def identity(value):
 
 def payload(body):
     title, sections = body.get('title'), body.get('sections')
-    if not isinstance(title, str) or not 1 <= len(title.strip()) <= 160:
-        raise ContractError('Название должно содержать от 1 до 160 символов.')
+    if not isinstance(title, str) or not title.strip():
+        raise ContractError('Введите название документа.')
     if not isinstance(sections, dict) or set(sections) != set(SECTIONS):
         raise ContractError('Документ должен содержать пять разделов.')
-    if any(not isinstance(v, str) or len(v) > 20000 for v in sections.values()):
-        raise ContractError('В одном разделе может быть до 20 000 символов.')
+    if any(not isinstance(v, str) for v in sections.values()):
+        raise ContractError('Каждый раздел должен содержать текст.')
     normalized = {k: sections[k] for k in SECTIONS}
-    if len(json.dumps(normalized, ensure_ascii=False).encode('utf-8')) > 256*1024:
-        raise ContractError('Документ больше 256 КиБ.', 413)
     return title.strip(), normalized
 
 
@@ -53,7 +51,7 @@ def request(hub, user, body, action):
     if user is None: raise ContractError('Войдите в аккаунт Архитектора, чтобы работать с документами.', 401)
     if action == 'list':
         with hub.db() as db:
-            rows = db.execute('SELECT id,title,updated,revision FROM design_documents WHERE owner=? ORDER BY updated DESC LIMIT 200', (user['id'],))
+            rows = db.execute('SELECT id,title,updated,revision FROM design_documents WHERE owner=? ORDER BY updated DESC', (user['id'],))
             return {'documents': [dict(row) for row in rows]}
     if action in ('create', 'import'):
         doc_id = identity(body.get('id'))

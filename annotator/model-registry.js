@@ -48,7 +48,7 @@ window.ModelRegistry = ({api,download,context}) => {
       const url=location.origin+entry.path;output.replaceChildren(el('h3','API создан'),el('p','Сохраните ключ: он показывается только сейчас.'),el('p',entry.available?'Готов к запросам':entry.reason));
       button(output,'Скачать ключ API',()=>download({url,token:entry.token,version_id:entry.version_id},'model-api-key'));
       button(output,'Скачать пример rows.json',()=>{const a=el('a');const blob=new Blob([JSON.stringify({rows:[Object.fromEntries(version.features.map(f=>[f,0]))]},null,2)],{type:'application/json'});a.href=URL.createObjectURL(blob);a.download='rows.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);});
-      output.append(el('pre',`curl '${url}' \\\n  -H 'Authorization: Bearer ${entry.token}' \\\n  -H 'Content-Type: application/json' \\\n  --data-binary @rows.json`),el('p','Пример содержит нули. Замените их значениями признаков. До 30 запросов в минуту. Доступность: GET '+url+'/status с тем же Bearer-токеном.'));});d.append(output);
+      output.append(el('pre',`curl '${url}' \\\n  -H 'Authorization: Bearer ${entry.token}' \\\n  -H 'Content-Type: application/json' \\\n  --data-binary @rows.json`),el('p','Пример содержит нули. Замените их значениями признаков. Доступность: GET '+url+'/status с тем же Bearer-токеном.'));});d.append(output);
   }
   async function open(focus=null){if(!window.WorkspaceNavigation.leave())return;const d=modal('Модели и API','models-dialog'),content=el('section');d.append(el('p','Версии хранят данные об обучении и защищают файлы модели от очистки.'));
     button(d,'Добавить версию из запуска',async()=>{d.close();await chooseRun();});d.append(content);

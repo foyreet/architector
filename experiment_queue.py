@@ -24,7 +24,7 @@ def prepare(context, body):
     from local_workspace import Community
     if project['project'].get('contract_lock'): Community.check_pins({'builtins': project['project']['contract_lock']})
     graph = project['diagram']; axes = body.get('axes')
-    if not isinstance(axes, list) or not 1 <= len(axes) <= 2: raise bc.ContractError('Выберите один или два параметра.')
+    if not isinstance(axes, list) or not axes: raise bc.ContractError('Выберите параметры.')
     seen = set()
     for axis in axes:
         if not isinstance(axis, dict) or set(axis) != {'node_id', 'setting', 'values'}: raise bc.ContractError('Некорректный параметр перебора.')
@@ -36,10 +36,9 @@ def prepare(context, body):
         if key in seen: raise bc.ContractError('Параметр повторяется.')
         seen.add(key)
         values = axis['values']
-        if not isinstance(values, list) or not 1 <= len(values) <= 10 or any(type(v) not in (int, float) for v in values): raise bc.ContractError('Введите от 1 до 10 числовых значений.')
+        if not isinstance(values, list) or not values or any(type(v) not in (int, float) for v in values): raise bc.ContractError('Введите числовые значения.')
         if len(set(values)) != len(values): raise bc.ContractError('Уберите повторяющиеся значения.')
-    combinations = list(product(*(a['values'] for a in axes)))
-    if len(combinations) > 20: raise bc.ContractError('Не более 20 запусков в одной серии.')
+    combinations = product(*(a['values'] for a in axes))
     research = project_insights.plan({**project['project'].get('research', {}), 'metric': body.get('metric', ''), 'direction': body.get('direction', 'max')})
     if not research['metric']: raise bc.ContractError('Выберите основную метрику.')
     variants = []
@@ -101,7 +100,7 @@ class Queue:
             for path in folder.glob('*.json'):
                 record = self.get(context, path.stem)
                 if record['project']['id'] == project_id: records.append(record)
-        return sorted(records, key=lambda r: r['created_at'], reverse=True)[:50]
+        return sorted(records, key=lambda r: r['created_at'], reverse=True)
 
     def submit(self, context, body):
         self.validate_secrets(body.get('secrets', {}))
@@ -119,7 +118,6 @@ class Queue:
                 existing = self.get(context, identity)
                 if existing.get('request_signature') != signature: raise bc.ContractError('ID уже использован другой серией.', 409)
                 return existing
-            if len(self.jobs) >= 10: raise bc.ContractError('Очередь сервера заполнена. Дождитесь завершения серий.', 409)
             record = {'id': identity, 'created_at': pr.now(), 'status': 'queued', 'digest': digest, 'request_signature': signature, 'project': payload['project'], 'research': payload['research'],
                       'items': [{'run_id': str(uuid.uuid4()), 'status': 'queued', **v} for v in payload['variants']]}
             if payload.get('gpu_executor'): record['gpu_executor'] = payload['gpu_executor']
@@ -130,7 +128,7 @@ class Queue:
 
     @staticmethod
     def validate_secrets(secrets):
-        if not isinstance(secrets, dict) or set(secrets) - {'openrouter', 'kaggle', 'huggingface'} or any(not isinstance(v, str) or len(v) > 2048 for v in secrets.values()): raise bc.ContractError('Некорректные ключи подключений.')
+        if not isinstance(secrets, dict) or set(secrets) - {'openrouter', 'kaggle', 'huggingface'} or any(not isinstance(v, str) for v in secrets.values()): raise bc.ContractError('Некорректные ключи подключений.')
 
     def enqueue(self, context, identity, secrets):
         self.validate_secrets(secrets)
@@ -165,7 +163,6 @@ class Queue:
         with LOCK:
             record = self.get(context, body.get('id'))
             if record['status'] != 'interrupted' or not any(i['status'] == 'queued' for i in record['items']): raise bc.ContractError('Нет ожидающих запусков для продолжения.')
-            if len(self.jobs) >= 10: raise bc.ContractError('Очередь сервера заполнена.', 409)
             self.enqueue(context, record['id'], body.get('secrets', {})); record['status'] = 'queued'; self.write(context, record); return record
 
     def work(self):

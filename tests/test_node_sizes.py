@@ -16,13 +16,13 @@ class NodeSizeTests(unittest.TestCase):
         original, _ = sg.normalize(local_graph())
         self.assertNotIn('width', original['nodes'][0])
         self.assertNotIn('height', original['nodes'][0])
-        for key, values in {'width': [179, 1601, True, None, '300', float('nan'), float('inf')],
-                            'height': [109, 4097, False, -1]}.items():
+        for key, values in {'width': [179, True, None, '300', float('nan'), float('inf')],
+                            'height': [109, False, -1]}.items():
             for value in values:
                 with self.subTest(key=key, value=value), self.assertRaises(bc.ContractError):
                     graph = deepcopy(original); graph['nodes'][0][key] = value
                     sg.normalize(graph)
-        for width, height in [(180, 110), (1600, 4096), (310.5, 220.5)]:
+        for width, height in [(180, 110), (1601, 4097), (310.5, 220.5)]:
             graph = deepcopy(original); graph['nodes'][0].update(width=width, height=height)
             normalized, _ = sg.normalize(graph)
             self.assertEqual(normalized['nodes'][0]['width'], width)

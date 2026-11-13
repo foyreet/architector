@@ -98,20 +98,19 @@ class BoardTests(unittest.TestCase):
     def test_untrusted_values_rejected(self):
         cases=[{**shape(),'x':float('nan')},{**shape(),'x':float('inf')},{**shape(),'x':True},
                {**shape(),'color':'url(https://example.com)'},{**shape(),'w':-5},{**shape(),'html':'<script>'},
-               {**shape(),'kind':'image'},{'kind':'pen','x':0,'y':0,'color':'#000000','width':2,'points':[[0,0]]*2001},
-               {'kind':'text','x':0,'y':0,'color':'#000000','width':2,'text':'x'*1001}]
+               {**shape(),'kind':'image'},{'kind':'pen','x':0,'y':0,'color':'#000000','width':2,'points':[[0,0]]},
+               {'kind':'text','x':0,'y':0,'color':'#000000','width':2,'text':' '}]
         for value in cases:
             with self.subTest(value=str(value)[:60]),self.assertRaises(ContractError):self.call('apply',self.op(data=value))
         self.assertEqual(self.call('get')['items'],[])
 
-    def test_text_is_data_and_board_capacity_fails_atomically(self):
+    def test_text_is_data_and_board_accepts_more_than_2000_objects(self):
         text={'kind':'text','x':0,'y':0,'color':'#000000','width':2,'text':'Привет <script>alert(1)</script>'}
         self.call('apply',self.op(data=text));self.assertEqual(self.call('get')['items'][0]['data'],text)
         with whiteboard.database(self.hub) as db:
             db.executemany('INSERT INTO objects VALUES(?,?,?,?)',[(self.board,str(uuid.uuid4()),1,None) for _ in range(1999)])
-        with self.assertRaises(ContractError) as e:self.call('apply',self.op())
-        self.assertEqual(e.exception.status,413)
-        self.assertEqual(self.call('get')['board']['revision'],1)
+        self.call('apply',self.op())
+        self.assertEqual(self.call('get')['board']['revision'],2)
 
 
 class BoardHTTPTests(unittest.TestCase):

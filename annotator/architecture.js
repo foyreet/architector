@@ -88,8 +88,8 @@
 
   function validate(raw) {
     const fail = () => { throw new Error('Некорректный файл схемы. Ожидается JSON, экспортированный из этого редактора.'); };
-    const text = (value, limit, required = false) => {
-      if (typeof value !== 'string' || value.length > limit || (required && !value.trim())) fail();
+    const text = (value, required = false) => {
+      if (typeof value !== 'string' || (required && !value.trim())) fail();
       return value;
     };
     const object = value => {
@@ -103,7 +103,7 @@
     }
     const ids = new Set();
     const identifier = value => {
-      if (typeof value !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(value) || ids.has(value)) fail();
+      if (typeof value !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(value) || ids.has(value)) fail();
       ids.add(value);
       return value;
     };
@@ -112,18 +112,18 @@
       if (typeof item.color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(item.color)) fail();
       const behavior = raw.version >= 3 ? Contracts.normalize(item.block).kind :
         ['note', 'openrouter', 'kaggle', 'huggingface'].includes(item.behavior) ? item.behavior : 'note';
-      return {id: identifier(item.id), name: text(item.name, 100, true), description: text(item.description, 2000), color: item.color, behavior};
+      return {id: identifier(item.id), name: text(item.name, true), description: text(item.description), color: item.color, behavior};
     });
     const typeIds = new Set(types.map(type => type.id));
     const nodes = raw.nodes.map(item => {
       object(item);
-      if (!typeIds.has(item.typeId) || !Number.isFinite(item.x) || !Number.isFinite(item.y) || Math.abs(item.x) > 100000 || Math.abs(item.y) > 100000) fail();
+      if (!typeIds.has(item.typeId) || !Number.isFinite(item.x) || !Number.isFinite(item.y)) fail();
       const size = {};
-      for (const [key, min, max] of [['width', 180, 1600], ['height', 110, 4096]]) if (key in item) {
-        if (!Number.isFinite(item[key]) || item[key] < min || item[key] > max) fail();
+      for (const [key, min] of [['width', 180], ['height', 110]]) if (key in item) {
+        if (!Number.isFinite(item[key]) || item[key] < min) fail();
         size[key] = item[key];
       }
-      return {id: identifier(item.id), typeId: item.typeId, name: text(item.name, 100, true), description: text(item.description, 2000), x: item.x, y: item.y, ...size, execution: raw.version >= 3 ? Contracts.toExecution(item.block) : parseExecution(item.execution)};
+      return {id: identifier(item.id), typeId: item.typeId, name: text(item.name, true), description: text(item.description), x: item.x, y: item.y, ...size, execution: raw.version >= 3 ? Contracts.toExecution(item.block) : parseExecution(item.execution)};
     });
     const edges = [];
     for (const item of raw.edges) {
@@ -136,7 +136,7 @@
       if (error) throw new Error('Некорректный файл схемы: ' + error);
       edges.push(edge);
     }
-    return {format: 'architect', version: raw.definitions?.length ? 4 : 3, name: text(raw.name, 160, true), types, nodes, edges, definitions: clone(raw.definitions || [])};
+    return {format: 'architect', version: raw.definitions?.length ? 4 : 3, name: text(raw.name, true), types, nodes, edges, definitions: clone(raw.definitions || [])};
   }
 
   function persist(announce = false) {
@@ -168,7 +168,6 @@
     change();
     if (JSON.stringify(before) === JSON.stringify(state)) return;
     past.push(before);
-    if (past.length > 50) past.shift();
     future = [];
     persist();
     render();
@@ -310,8 +309,8 @@
   }
   function nodeHeight(node) { return Math.max(nodeMinimumHeight(node), node.height ?? 0); }
   function resizeNode(node, width, height) {
-    const nextWidth = Math.round(Math.max(180, Math.min(1600, width)));
-    const nextHeight = Math.round(Math.max(nodeMinimumHeight(node), Math.min(4096, height)));
+    const nextWidth = Math.round(Math.max(180, width));
+    const nextHeight = Math.round(Math.max(nodeMinimumHeight(node), height));
     if (nextWidth !== nodeWidth(node) || nextHeight !== nodeHeight(node)) { node.width = nextWidth; node.height = nextHeight; }
   }
 
@@ -1015,8 +1014,8 @@
       pointer.card.style.width = `${nodeWidth(pointer.node)}px`; pointer.card.style.height = `${nodeHeight(pointer.node)}px`;
       renderEdges();
     } else {
-      pointer.node.x = Math.max(-100000, Math.min(100000, pointer.x + dx / camera.scale));
-      pointer.node.y = Math.max(-100000, Math.min(100000, pointer.y + dy / camera.scale));
+      pointer.node.x = pointer.x + dx / camera.scale;
+      pointer.node.y = pointer.y + dy / camera.scale;
       pointer.card.style.left = `${pointer.node.x}px`; pointer.card.style.top = `${pointer.node.y}px`;
       renderEdges();
     }
@@ -1027,7 +1026,7 @@
     const cancelled = pointer.kind === 'resize' && event.type === 'pointercancel';
     const resized = pointer.kind === 'resize' && (nodeWidth(pointer.node) !== pointer.width || nodeHeight(pointer.node) !== pointer.height);
     if (!cancelled && (resized || pointer.kind === 'node' && (pointer.node.x !== pointer.x || pointer.node.y !== pointer.y))) {
-      past.push(pointer.before); if (past.length > 50) past.shift(); future = []; persist();
+      past.push(pointer.before); future = []; persist();
     }
     const restore = cancelled;
     if (restore) state = pointer.before;
@@ -1101,7 +1100,9 @@
       const field = el(spec.enum ? 'select' : 'input');
       if (spec.enum) for (const value of spec.enum) { const option = el('option', '', spec.choices?.[value] || value); option.value = value; field.append(option); }
       else if (['number', 'integer'].includes(spec.type)) {
-        field.type = 'number'; field.min = spec.minimum; field.max = spec.maximum; field.step = spec.type === 'integer' ? '1' : '0.05';
+        field.type = 'number'; field.step = spec.type === 'integer' ? '1' : 'any';
+        if (spec.minimum !== undefined) field.min = spec.minimum;
+        if (spec.maximum !== undefined) field.max = spec.maximum;
       } else { field.type = 'text'; if (spec.maxLength) field.maxLength = spec.maxLength; }
       field.dataset.setting = spec.id; field.value = block.settings[spec.id];
       label.append(field); $('ml-parameters').append(label);
@@ -1202,7 +1203,7 @@
     $('run-status').className = run.error ? 'run-error' : run.data ? 'run-success' : '';
     const node = state.nodes.find(item => item.id === selected);
     const changed = node && JSON.stringify(node.execution) !== run.config;
-    $('run-status').textContent = run.pending ? 'Запрос отправлен. Ответ может занять до 90 секунд.' : run.error ||
+    $('run-status').textContent = run.pending ? 'Запрос отправлен. Ожидаем ответ модели.' : run.error ||
       (run.data.finish_reason === 'length' ? 'Ответ достиг лимита токенов и может быть неполным.' : 'Ответ получен.');
     if (changed) $('run-status').textContent += ' Настройки блока изменились после отправки.';
     $('run-output').textContent = run.data?.text || '';
@@ -1275,16 +1276,18 @@
     $('kg-text').textContent = '';
     const preview = run?.preview;
     $('kg-preview-note').textContent = run?.previewError || (run?.previewPending ? 'Читаем файл…' :
-      preview?.message || (preview?.kind === 'table' ? 'Первые 21 строка, до 30 столбцов.' : 'Текст в UTF-8, до 64 КиБ.'));
+      preview?.message || (preview?.kind === 'table' ? 'Содержимое таблицы.' : 'Текст в UTF-8.'));
     if (preview?.truncated) $('kg-preview-note').textContent += ' Показана часть содержимого.';
     if (preview?.kind === 'table') {
-      const table = el('table');
-      for (const row of preview.rows) {
-        const tr = el('tr');
-        for (const cell of row) tr.append(el('td', '', cell));
-        table.append(tr);
-      }
-      $('kg-table').append(table);
+      window.tablePages($('kg-table'), preview.rows, (container, rows) => {
+        const table = el('table');
+        for (const row of rows) {
+          const tr = el('tr');
+          for (const cell of row) tr.append(el('td', '', cell));
+          table.append(tr);
+        }
+        container.append(table);
+      });
     } else if (preview?.kind === 'text') $('kg-text').textContent = preview.text;
   }
 
@@ -1393,8 +1396,8 @@
     const chosen = (run?.info?.files || []).filter(file => run.chosen.has(file.name));
     const size = chosen.reduce((total, file) => total + file.size, 0);
     const busy = hubModels.get(selected)?.pending === true;
-    $('hf-selected-size').textContent = `Выбрано: ${chosen.length} · ${fileSize(size)}${size > 32 * 1024 ** 3 ? ' — превышен лимит 32 ГиБ' : ''}`;
-    $('hf-download').disabled = busy || !chosen.length || size > 32 * 1024 ** 3;
+    $('hf-selected-size').textContent = `Выбрано: ${chosen.length} · ${fileSize(size)}`;
+    $('hf-download').disabled = busy || !chosen.length;
     $('hf-select-all').disabled = $('hf-select-none').disabled = busy;
   }
 
@@ -1898,7 +1901,7 @@
           if (edges.length && edges.every(e => chosen.has(e.to))) continue;
         }
         const label = el('label', '', `${{inputs: 'Вход', outputs: 'Выход', settings: 'Настройка'}[section]} · ${spec.type}`);
-        const input = el('input'); input.maxLength = 200; input.required = true;
+        const input = el('input'); input.required = true;
         input.dataset.binding = `${section}:${node.id}:${spec.id}`; input.value = node.name + ' · ' + spec.label;
         label.append(input); $('subgraph-port-names').append(label);
       }
@@ -2342,12 +2345,12 @@
       if (runView) return;
       const origin = before.nodes.find(node => node.id === id), node = state.nodes.find(node => node.id === id);
       if (!origin || !node) return;
-      node.x = Math.max(-100000, Math.min(100000, origin.x + dx)); node.y = Math.max(-100000, Math.min(100000, origin.y + dy));
+      node.x = origin.x + dx; node.y = origin.y + dy;
       const card = [...$('nodes').children].find(card => card.dataset.id === id);
       if (card) { card.style.left = node.x + 'px'; card.style.top = node.y + 'px'; } renderEdges();
     },
     cancelMove: before => { state = before; renderNodes(); renderEdges(); },
-    finishMove: before => { if (JSON.stringify(before) !== JSON.stringify(state)) { past.push(before); if (past.length > 50) past.shift(); future = []; persist(); render(); } },
+    finishMove: before => { if (JSON.stringify(before) !== JSON.stringify(state)) { past.push(before); future = []; persist(); render(); } },
     cache: () => { if (activeProject?.dirty) cacheProjectDraft(); },
     outputs: node => Contracts.ports(node, 'output', state.edges),
     connections: fromPort => {

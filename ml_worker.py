@@ -25,7 +25,7 @@ def run(data):
     if task == 'train':
         model = RandomForestClassifier(
             n_estimators=data['settings']['n_estimators'], max_depth=data['settings']['max_depth'],
-            random_state=data['settings']['seed'], n_jobs=1)
+            random_state=data['settings']['seed'], n_jobs=-1)
         model.fit(table['X'], table['y'])
         trees = []
         for estimator in model.estimators_:

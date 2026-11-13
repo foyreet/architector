@@ -65,7 +65,7 @@ window.ProjectInsights = ({api, context, diagram, save, discussions, download, h
     if (rows.length) resultTable(parent, 'Показатели по классам и средние значения', ['Класс / Среднее', 'Precision', 'Recall', 'F1', 'Строк (support)'], rows);
   }
   function plot(run) {
-    const entries = Object.entries(run.metrics).slice(0, 30);
+    const entries = Object.entries(run.metrics);
     const modal = el('dialog', '', 'insight-dialog'); const heading = el('div', '', 'dialog-heading'); heading.append(el('h2', 'Метрики запуска'));
     button(heading, 'Закрыть', () => modal.close()); modal.append(heading, el('p', run.id));
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -79,7 +79,6 @@ window.ProjectInsights = ({api, context, diagram, save, discussions, download, h
       shape('text', {x: 20, y, fill: '#334155', 'font-size': 14}, m.label.slice(0, 65));
       shape('text', {x: 780, y: y + 22, fill: '#334155', 'font-size': 16, 'text-anchor': 'end'}, number(m.value));
     });
-    if (Object.keys(run.metrics).length > entries.length) modal.append(el('p', 'Показаны первые 30 метрик. Остальные доступны в результатах блоков.'));
     button(modal, 'Скачать сводку SVG', () => {
       const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(svg)], {type: 'image/svg+xml'}));
       const a = el('a'); a.href = url; a.download = 'metrics-' + run.id + '.svg'; modal.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -162,8 +161,8 @@ window.ProjectInsights = ({api, context, diagram, save, discussions, download, h
     }
     parent.append(state);
     const form = el('section', '', 'insight-card'); form.append(el('h3', 'Постановка эксперимента')); parent.append(form);
-    const description = field(form, 'Описание проекта', 'textarea', project.description); description.maxLength = 32000;
-    const hypothesis = field(form, 'Гипотеза', 'textarea', plan.hypothesis || ''); hypothesis.dataset.hypothesis = 'true'; hypothesis.maxLength = 2000;
+    const description = field(form, 'Описание проекта', 'textarea', project.description);
+    const hypothesis = field(form, 'Гипотеза', 'textarea', plan.hypothesis || ''); hypothesis.dataset.hypothesis = 'true';
     const options = new Map();
     for (const node of diagram().nodes) if (node.block?.kind === 'ml_evaluate') for (const key of ['accuracy', 'macro_f1']) options.set(node.id + '/' + key, node.name + ' · ' + key);
     for (const run of data.runs) for (const [key, value] of Object.entries(run.metrics)) options.set(key, value.label);
@@ -171,7 +170,7 @@ window.ProjectInsights = ({api, context, diagram, save, discussions, download, h
     for (const [id, label] of options) metricChoice.append(new Option(label, id));
     metricChoice.append(new Option('Свой ключ метрики (Python)', '__custom__'));
     metricChoice.value = plan.metric ? (options.has(plan.metric) ? plan.metric : '__custom__') : '';
-    const metric = field(form, 'Ключ: ID блока/путь числа в report', 'input', plan.metric || ''); metric.maxLength = 500; metric.placeholder = 'python_node/accuracy'; metric.parentElement.hidden = metricChoice.value !== '__custom__';
+    const metric = field(form, 'Ключ: ID блока/путь числа в report', 'input', plan.metric || ''); metric.placeholder = 'python_node/accuracy'; metric.parentElement.hidden = metricChoice.value !== '__custom__';
     const choices = el('datalist'); choices.id = 'insight-metrics'; for (const [id, label] of options) { const o = el('option', label); o.value = id; choices.append(o); } metric.setAttribute('list', choices.id); form.append(choices);
     form.append(el('p', 'Для Python используйте ID блока и путь числа в report, например python_node/accuracy. Ключи появятся в списке после запуска.', 'muted'));
     const direction = field(form, 'Лучшее значение', 'select'); direction.append(new Option('Больше', 'max'), new Option('Меньше', 'min')); direction.value = plan.direction || 'max';
@@ -187,7 +186,7 @@ window.ProjectInsights = ({api, context, diagram, save, discussions, download, h
     });
     const chart = el('section', '', 'insight-card'); parent.append(chart);
     function draw() {
-      chart.replaceChildren(el('h3', 'Основная метрика по запускам'), el('p', 'Сравниваются успешные запуски среди последних 20. Сопоставимость данных и условий проверяйте во вкладке «Эксперименты».'));
+      chart.replaceChildren(el('h3', 'Основная метрика по запускам'), el('p', 'Сравниваются успешные запуски. Сопоставимость данных и условий проверяйте во вкладке «Эксперименты».'));
       const runs = data.runs.filter(r => r.status === 'ready' && Number.isFinite(r.metrics[metric.value]?.value));
       if (!runs.length) { chart.append(el('p', 'Для выбранного ключа ещё нет результатов.')); return; }
       const best = [...runs].sort((a, b) => (a.metrics[metric.value].value - b.metrics[metric.value].value) * (direction.value === 'min' ? 1 : -1))[0];

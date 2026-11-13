@@ -33,7 +33,7 @@ class DiagnosticsTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
-    def test_read_only_bounded_diagnostics_without_inputs_outputs_or_credentials(self):
+    def test_read_only_full_diagnostics_without_inputs_outputs_or_credentials(self):
         before = deepcopy(self.draft.graph)
         listing = self.draft.call('diagram_runs', {})
         self.assertEqual(listing['runs'][0]['id'], self.run_id)
@@ -42,7 +42,7 @@ class DiagnosticsTests(unittest.TestCase):
         self.assertIn('Нет train.csv', serialized)
         for forbidden in ('private-token', 'private-bearer', 'not-for-diagnostics'):
             self.assertNotIn(forbidden, serialized)
-        self.assertLess(len(result['step']['logs']), 12100)
+        self.assertTrue(result['step']['logs'].endswith('x' * 20000))
         self.assertEqual(self.draft.graph, before)
         self.assertEqual(self.store.read(self.base + '/run.json'), self.record)
 
@@ -69,8 +69,8 @@ class DiagnosticsTests(unittest.TestCase):
         self.record['events'] *= 40
         self.store.write(self.base + '/run.json', self.record)
         result = self.draft.call('diagram_run_logs', {'run_id': self.run_id, 'node_id': 'csv'})
-        self.assertEqual(len(result['events']), 30)
-        self.assertTrue(result['events_truncated'])
+        self.assertEqual(len(result['events']), 40)
+        self.assertFalse(result['events_truncated'])
         self.assertIn('ещё не сохранён', result['note'])
 
 

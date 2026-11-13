@@ -100,7 +100,7 @@ class ProjectStore:
         prefix = folder + '/revisions/' + snapshot
         diagram = self.read(prefix + '/graph.json')
         kinds = diagram.pop('definition_files', [])
-        if not isinstance(kinds, list) or len(kinds) > 100 or any(not isinstance(k, str) or not re.fullmatch(r'subgraph_[a-f0-9]{64}', k) for k in kinds):
+        if not isinstance(kinds, list) or any(not isinstance(k, str) or not re.fullmatch(r'subgraph_[a-f0-9]{64}', k) for k in kinds):
             raise bc.ContractError('Некорректный каталог блоков проекта.', 422)
         diagram['definitions'] = [self.read(folder + '/blocks/' + kind + '.json') for kind in kinds]
         diagram, registry = subgraphs.normalize(diagram)
@@ -126,8 +126,8 @@ class ProjectStore:
 
     def save(self, body, create=False, history=None, contract_lock=None, operation_id=None):
         graph, registry = subgraphs.normalize(body.get('diagram'))
-        name = subgraphs.text(body.get('name', graph['name']), 160, False)
-        description = subgraphs.text(body.get('description', ''), 32000)
+        name = subgraphs.text(body.get('name', graph['name']), False)
+        description = subgraphs.text(body.get('description', ''))
         project_id = str(uuid.uuid4()) if create else body.get('project_id')
         folder = self.folder(project_id)
         with self.locked():
@@ -224,8 +224,8 @@ class ProjectStore:
                 raise bc.ContractError('Некорректные ID шагов истории.')
             if record.get('status') not in ('ready', 'error', 'cancelled', 'paused'):
                 raise bc.ContractError('Можно импортировать только завершённую историю.')
-            subgraphs.text(record.get('created_at'), 100, False)
-            subgraphs.text(record.get('name', ''), 160)
+            subgraphs.text(record.get('created_at'), False)
+            subgraphs.text(record.get('name', ''))
             if any(not isinstance(step, dict) or step.get('status') not in ('waiting', 'running', 'ready', 'error', 'cancelled', 'skipped', 'pending') for step in nodes.values()):
                 raise bc.ContractError('Некорректные состояния истории.')
             if not isinstance(record.get('events'), list) or any(not isinstance(e, dict) or not isinstance(e.get('message'), str) or not isinstance(e.get('time'), str) for e in record['events']):
@@ -254,7 +254,7 @@ class ProjectStore:
             record.setdefault('origin_run_id', entry['record'].get('id'))
             for key in ('error', 'started_at', 'finished_at'):
                 if key in entry['record']:
-                    record[key] = subgraphs.text(entry['record'][key], 4000)
+                    record[key] = subgraphs.text(entry['record'][key])
             if entry['record'].get('source_diagram'):
                 source, registry = subgraphs.normalize(entry['record']['source_diagram'])
                 expanded, groups = subgraphs.expand(source, registry)

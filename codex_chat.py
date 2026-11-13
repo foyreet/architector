@@ -28,7 +28,6 @@ LOCK = threading.RLock()
 CLIENTS = {}
 JOBS = {}
 ACCOUNT_LOCKS = {}
-MAX_CLIENTS = 8
 ERROR = 'Codex недоступен. Проверьте подключение аккаунта и лимиты Codex. Автоматический повтор не выполнялся.'
 INSTRUCTIONS = '''Ты — Codex, помощник в русскоязычном приложении «Архитектор».
 Объясняй схемы ML, помогай с данными, Python и планированием экспериментов.
@@ -234,17 +233,17 @@ inherit = "none"
         if cached and time.monotonic() - cached[0] < 60:
             return deepcopy(cached[1])
         models, seen, cursors, cursor = [], set(), set(), None
-        for _ in range(20):
+        while True:
             response = self.rpc('model/list', {'limit': 100, 'includeHidden': False, **({'cursor': cursor} if cursor else {})})
             for item in response.get('data', []):
                 identity = item.get('model')
-                if item.get('hidden') or not isinstance(identity, str) or not 1 <= len(identity) <= 160 or identity in seen:
+                if item.get('hidden') or not isinstance(identity, str) or not identity or identity in seen:
                     continue
                 if item.get('inputModalities') is not None and 'text' not in item['inputModalities']:
                     continue
                 efforts = list(dict.fromkeys(value['reasoningEffort'] for value in item.get('supportedReasoningEfforts', [])
-                    if isinstance(value, dict) and isinstance(value.get('reasoningEffort'), str) and 0 < len(value['reasoningEffort']) <= 32))
-                models.append({'id': identity, 'name': str(item.get('displayName') or identity)[:160],
+                    if isinstance(value, dict) and isinstance(value.get('reasoningEffort'), str) and value['reasoningEffort']))
+                models.append({'id': identity, 'name': str(item.get('displayName') or identity),
                     'efforts': efforts, 'default_effort': item.get('defaultReasoningEffort') if item.get('defaultReasoningEffort') in efforts else None,
                     'default': item.get('isDefault') is True})
                 seen.add(identity)
@@ -252,8 +251,6 @@ inherit = "none"
             if not cursor: break
             if cursor in cursors: fail('Codex вернул некорректный список моделей.', 502)
             cursors.add(cursor)
-        else:
-            fail('Не удалось полностью загрузить список моделей Codex.', 502)
         self._model_cache = (time.monotonic(), models)
         return deepcopy(models)
 
@@ -288,9 +285,8 @@ inherit = "none"
             self.tool_thread = thread if draft or documents else None
             self.rpc('turn/start', {'threadId': thread, 'input': [{'type': 'text', 'text': prompt}],
                 **({'model': model} if model else {}), **({'effort': effort} if effort else {})})
-            deadline = time.monotonic() + 240
             text = ''
-            while time.monotonic() < deadline:
+            while True:
                 try: event = self.events.get(timeout=1)
                 except queue.Empty:
                     if self.process.poll() is not None: fail(ERROR, 503)
@@ -319,7 +315,6 @@ inherit = "none"
                     if params.get('turn', {}).get('status') != 'completed' or not text.strip():
                         fail(ERROR, 502)
                     return text
-            fail('Ответ Codex занял слишком много времени. Запрос мог быть обработан; автоматического повтора нет.', 504)
         finally:
             self.tool_thread = None
             # Unload ephemeral context; credentials stay available for the next turn.
@@ -346,8 +341,6 @@ def codex_client(root):
             if other not in JOBS and (value.process.poll() is not None or time.monotonic() - value.last_used > 900):
                 value.close(); del CLIENTS[other]
         if key not in CLIENTS:
-            if len(CLIENTS) >= MAX_CLIENTS:
-                fail('Все подключения чата заняты. Повторите позже.', 429)
             CLIENTS[key] = Client(root)
         return CLIENTS[key]
 
@@ -386,7 +379,7 @@ def build_prompt(store, body, record, message):
         if body.get('diagram') is not None:
             diagram, _ = subgraphs.normalize(body['diagram'])
             context = {**(context or {}), 'diagram': diagram}
-    value = {'context': context, 'history': [{'role': m['role'], 'text': m['text']} for m in record['messages'][-12:]], 'message': message}
+    value = {'context': context, 'history': [{'role': m['role'], 'text': m['text']} for m in record['messages']], 'message': message}
     prompt = json.dumps(value, ensure_ascii=False)
     return prompt
 
@@ -478,8 +471,8 @@ def request(root, user, body, action, hub=None):
         if not connection.status()['connected']:
             fail('Сначала подключите личный аккаунт Codex.', 401)
         model, effort = body.get('model'), body.get('effort')
-        if model is not None and (not isinstance(model, str) or not 1 <= len(model) <= 160): fail('Некорректная модель.')
-        if effort is not None and (not isinstance(effort, str) or not 1 <= len(effort) <= 32): fail('Некорректный уровень рассуждения.')
+        if model is not None and (not isinstance(model, str) or not model): fail('Некорректная модель.')
+        if effort is not None and (not isinstance(effort, str) or not effort): fail('Некорректный уровень рассуждения.')
         if model or effort:
             models = connection.models()
             selected = next((item for item in models if item['id'] == model), None) if model else next((item for item in models if item['default']), None)
@@ -488,8 +481,6 @@ def request(root, user, body, action, hub=None):
             model = selected['id']
         options = {**({'model': model} if model else {}), **({'effort': effort} if effort else {})}
         record = history(store, path)
-        if len(record['messages']) >= 100:
-            fail('В разговоре уже 100 сообщений. Очистите историю, чтобы начать заново.')
         identities = body.get('attachments', [])
         if not isinstance(identities, list) or any(not isinstance(i, str) for i in identities) or len(set(identities)) != len(identities):
             fail('Некорректный список документов.')

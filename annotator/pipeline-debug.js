@@ -63,7 +63,7 @@ window.PipelineDebug = ({api, prepare, selected, currentRun, confirmRun}) => {
       }
       if (Object.keys(response.invalidated).length) details(content, 'Почему некоторые результаты нельзя использовать', response.invalidated).open = true;
       content.append(el('h3', 'Входные данные и настройки'));
-      content.append(el('p', 'Предпросмотр сокращён: до 10 строк, 30 полей и 2000 символов текста. Артефакты передаются ссылками. Для подсхемы показаны её внутренние операции (до 30).'));
+      content.append(el('p', 'Артефакты передаются ссылками. Для подсхемы показаны её внутренние операции.'));
       for (const input of response.inputs) {
         const section = el('section'); section.className = 'insight-card'; section.append(el('h4', input.name));
         for (const s of input.sources) {
@@ -76,12 +76,11 @@ window.PipelineDebug = ({api, prepare, selected, currentRun, confirmRun}) => {
       if (base.value) {
         const record = await api('/api/pipelines/run', {project_id: snapshot.project_id ?? null, run_id: base.value}); if (token !== request || !dialog.open) return;
         results.append(el('h3', 'Сохранённый результат выбранного блока'), el('p', 'Запуск ' + record.id + '. Это результат прежних настроек; новое выполнение создаст отдельную запись.'));
-        for (const id of (record.groups?.[node.value] || [node.value]).slice(0, 30)) {
+        for (const id of (record.groups?.[node.value] || [node.value])) {
           if (record.nodes[id]?.status !== 'ready') { results.append(el('p', (record.nodes[id]?.name || node.value) + ': готового результата нет.')); continue; }
           const step = await api('/api/pipelines/step', {project_id: snapshot.project_id ?? null, run_id: record.id, node_id: id}); if (token !== request || !dialog.open) return;
           const json = JSON.stringify(step.outputs, null, 2);
-          const d = el('details'); d.open = true; d.append(el('summary', record.nodes[id].name), el('pre', json.slice(0, 20000))); results.append(d);
-          if (json.length > 20000) results.append(el('p', 'Результат сокращён. Полный вывод доступен в истории и разделе «Данные и результаты».'));
+          const d = el('details'); d.open = true; d.append(el('summary', record.nodes[id].name), el('pre', json)); results.append(d);
           if (step.reused_from) results.append(el('p', 'Результат повторно использован из запуска ' + step.reused_from.run_id));
           for (const port of Object.keys(step.outputs)) inspect(results, 'Открыть данные выхода «' + port + '»', {project_id: snapshot.project_id ?? null, run_id: record.id, node_id: id, port});
         }

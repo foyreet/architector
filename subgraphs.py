@@ -8,7 +8,6 @@ import uuid
 
 import block_contracts as bc
 
-MAX_DEFINITIONS = 100
 
 
 def digest(value):
@@ -21,22 +20,22 @@ def digest(value):
     return hashlib.sha256(json.dumps(canonical(value), sort_keys=True, ensure_ascii=False, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
 
 
-def text(value, limit, empty=True):
-    if not isinstance(value, str) or len(value) > limit or (not empty and not value.strip()):
+def text(value, empty=True):
+    if not isinstance(value, str) or (not empty and not value.strip()):
         raise bc.ContractError('Некорректный текст в описании проекта или блока.')
     return value
 
 
 def identifier(value):
-    if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,100}', value):
+    if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9_-]+', value):
         raise bc.ContractError('Некорректный идентификатор схемы.')
     return value
 
 
 class Registry:
     def __init__(self, definitions):
-        if not isinstance(definitions, list) or len(definitions) > MAX_DEFINITIONS:
-            raise bc.ContractError('В проекте допускается до 100 определений подсхем.')
+        if not isinstance(definitions, list):
+            raise bc.ContractError('Ожидается список подсхем.')
         self.raw, self.definitions, self.contracts, self.stack = {}, {}, {}, []
         for item in definitions:
             if not isinstance(item, dict) or not re.fullmatch(r'subgraph_[a-f0-9]{64}', str(item.get('kind', ''))):
@@ -56,8 +55,8 @@ class Registry:
             return self.contracts[kind]
         if kind not in self.raw:
             raise bc.ContractError('В проекте отсутствует определение блока: ' + kind[:100])
-        if kind in self.stack or len(self.stack) >= 8:
-            raise bc.ContractError('Рекурсивные подсхемы запрещены; глубина вложенности — до 8.')
+        if kind in self.stack:
+            raise bc.ContractError('Рекурсивные ссылки между подсхемами запрещены.')
         self.stack.append(kind)
         try:
             definition, contract = self.definition(self.raw[kind])
@@ -111,8 +110,8 @@ class Registry:
             color = item.get('color')
             if not isinstance(color, str) or not re.fullmatch(r'#[a-fA-F0-9]{6}', color):
                 raise bc.ContractError('Некорректный цвет блока.')
-            types.append({'id': unique(item.get('id')), 'name': text(item.get('name'), 100, False),
-                          'description': text(item.get('description', ''), 2000), 'color': color,
+            types.append({'id': unique(item.get('id')), 'name': text(item.get('name'), False),
+                          'description': text(item.get('description', '')), 'color': color,
                           'block': {'kind': block['kind'], 'version': block['version']}})
         type_ids = {item['id'] for item in types}
         nodes = []
@@ -121,17 +120,17 @@ class Registry:
                 raise bc.ContractError('У блока нет определения в каталоге проекта.')
             for coord in ('x', 'y'):
                 value = item.get(coord)
-                if type(value) not in (int, float) or not math.isfinite(value) or abs(value) > 100000:
+                if type(value) not in (int, float) or not math.isfinite(value):
                     raise bc.ContractError('Некорректные координаты блока.')
             size = {}
-            for dimension, minimum, maximum in (('width', 180, 1600), ('height', 110, 4096)):
+            for dimension, minimum in (('width', 180), ('height', 110)):
                 if dimension in item:
                     value = item[dimension]
-                    if type(value) not in (int, float) or not math.isfinite(value) or not minimum <= value <= maximum:
+                    if type(value) not in (int, float) or not math.isfinite(value) or value < minimum:
                         raise bc.ContractError('Некорректный размер блока: ' + dimension + '.')
                     size[dimension] = value
-            nodes.append({'id': unique(item.get('id')), 'typeId': item['typeId'], 'name': text(item.get('name'), 100, False),
-                          'description': text(item.get('description', ''), 2000), 'x': item['x'], 'y': item['y'],
+            nodes.append({'id': unique(item.get('id')), 'typeId': item['typeId'], 'name': text(item.get('name'), False),
+                          'description': text(item.get('description', '')), 'x': item['x'], 'y': item['y'],
                           'block': self.block(item.get('block')), **size})
         index, occupied, edges, connections = {n['id']: n for n in nodes}, set(), [], set()
         for item in items('edges'):
@@ -153,7 +152,7 @@ class Registry:
             if key in occupied:
                 raise bc.ContractError('У входа может быть только один источник.')
             occupied.add(key); edges.append(edge)
-        return {'format': 'architect', 'version': 4 if self.raw else 3, 'name': text(raw.get('name', 'Схема'), 160, False),
+        return {'format': 'architect', 'version': 4 if self.raw else 3, 'name': text(raw.get('name', 'Схема'), False),
                 'types': types, 'nodes': nodes, 'edges': edges}
 
     def port(self, block, section, port):
@@ -171,14 +170,14 @@ class Registry:
         index = {n['id']: n for n in graph['nodes']}
         if not index:
             raise bc.ContractError('Подсхема не может быть пустой.')
-        definition = {'version': 1, 'name': text(raw.get('name'), 100, False),
-                      'description': text(raw.get('description', ''), 2000), 'graph': graph}
+        definition = {'version': 1, 'name': text(raw.get('name'), False),
+                      'description': text(raw.get('description', '')), 'graph': graph}
         contract = {'version': 1, 'label': definition['name'], 'operation': {'id': 'subgraph', 'available': True,
                     'description': 'Подсхема. Внутренние шаги доступны в истории запуска.'}}
         for section in ('inputs', 'outputs', 'settings'):
             values = raw.get(section, [])
-            if not isinstance(values, list) or len(values) > 100:
-                raise bc.ContractError('Допускается до 100 портов или настроек подсхемы.')
+            if not isinstance(values, list):
+                raise bc.ContractError('Ожидается список портов или настроек.')
             bindings, specs, ids, targets = [], [], set(), set()
             for item in values:
                 if not isinstance(item, dict) or not isinstance(item.get('target'), dict):
@@ -194,7 +193,7 @@ class Registry:
                 spec = deepcopy(self.port(index[node_id]['block'], section, port))
                 if section == 'inputs' and any(e['kind'] == 'data' and e['to'] == node_id and e['toPort'] == port for e in graph['edges']):
                     raise bc.ContractError('Внешний вход уже имеет внутренний источник.')
-                label = text(item.get('label', port_id), 200, False)
+                label = text(item.get('label', port_id), False)
                 bindings.append({'id': port_id, 'label': label, 'target': {'node': node_id, 'port': port}})
                 spec.pop('field', None)
                 spec.update(id=port_id, label=label)
@@ -220,15 +219,13 @@ def expand(graph, registry):
     """Return a plain graph plus root-to-leaf mapping; no providers or disk writes."""
     leaves, links, groups = [], [], {}
     def visit(current, path=(), names=(), root=None):
-        if len(path) > 8:
-            raise bc.ContractError('Глубина вложенности подсхем — до 8.')
         inputs, outputs, representatives = {}, {}, {}
         for node in current['nodes']:
             block = node['block']; kind = block['kind']
             top = root or node['id']
             if kind in bc.CONTRACTS:
                 node_id = node['id'] if not path else 'n_' + digest([*path, node['id']])[:32]
-                leaves.append({'id': node_id, 'name': ' / '.join((*names, node['name']))[:100], 'block': deepcopy(block)})
+                leaves.append({'id': node_id, 'name': ' / '.join((*names, node['name'])), 'block': deepcopy(block)})
                 groups.setdefault(top, []).append(node_id)
                 representatives[node['id']] = node_id
                 for section, dest in [('inputs', inputs), ('outputs', outputs)]:
@@ -272,7 +269,7 @@ def pack(body):
     inner_nodes = [n for n in graph['nodes'] if n['id'] in chosen]
     inner_edges = [e for e in graph['edges'] if e['from'] in chosen and e['to'] in chosen]
     inner_types = [t for t in graph['types'] if t['id'] in {n['typeId'] for n in inner_nodes}]
-    raw = {'version': 1, 'name': text(body.get('name'), 100, False), 'description': text(body.get('description', ''), 2000),
+    raw = {'version': 1, 'name': text(body.get('name'), False), 'description': text(body.get('description', '')),
            'graph': {'format': 'architect', 'version': 3, 'name': body['name'], 'nodes': inner_nodes, 'edges': inner_edges, 'types': inner_types},
            'inputs': [], 'outputs': [], 'settings': []}
     maps = {'inputs': {}, 'outputs': {}}
@@ -350,8 +347,8 @@ def unpack(body):
     min_x, min_y = min(n['x'] for n in inner['nodes']), min(n['y'] for n in inner['nodes'])
     for item in inner['nodes']:
         item.update(id=node_ids[item['id']], typeId=type_ids[item['typeId']],
-                    x=max(-100000, min(100000, node['x'] + item['x'] - min_x)),
-                    y=max(-100000, min(100000, node['y'] + item['y'] - min_y)))
+                    x=node['x'] + item['x'] - min_x,
+                    y=node['y'] + item['y'] - min_y)
     for item in inner['types']:
         item['id'] = type_ids[item['id']]
     for edge in inner['edges']:

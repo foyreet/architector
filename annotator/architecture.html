@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="/android.css">
   <script defer src="/mobile-workspace.js"></script>
   <script defer src="/learning.js"></script>
+  <script defer src="/table-pages.js"></script>
   <script defer src="/python-workbench.js"></script>
   <script defer src="/experiments.js"></script>
   <script defer src="/discussions.js"></script>
@@ -55,7 +56,7 @@
   <div class="workspace-main">
     <header class="project-header">
       <button id="mobile-menu" class="mobile-only" aria-label="Меню приложения">☰</button>
-      <div class="project-heading"><p id="project-status" hidden>Новая схема</p><div class="project-name-row"><input id="diagram-name" aria-label="Название схемы" maxlength="160" value="Новая схема">
+      <div class="project-heading"><p id="project-status" hidden>Новая схема</p><div class="project-name-row"><input id="diagram-name" aria-label="Название схемы" value="Новая схема">
         <details id="project-menu" class="project-menu" hidden><summary aria-label="Меню схемы" title="Меню схемы">···</summary><div class="project-menu-items">
           <button id="overview-tab">План эксперимента</button>
           <span class="menu-group-label">Совместная работа</span>
@@ -85,7 +86,7 @@
       <label class="sr-only" for="picker-mode">Раздел каталога</label>
       <select id="picker-mode"><option value="blocks">Блоки</option><option value="data">Данные и датасеты</option><option value="projects">Каталог проектов</option></select>
       <label class="sr-only" for="block-search">Поиск блоков и категорий</label>
-      <input id="block-search" type="search" placeholder="Найти блок или категорию" autocomplete="off" maxlength="160">
+      <input id="block-search" type="search" placeholder="Найти блок или категорию" autocomplete="off">
       <div class="block-picker-tabs" role="tablist" aria-label="Источник блоков">
         <button id="blocks-local-tab" role="tab" aria-selected="true" aria-controls="blocks-local">Мои блоки</button>
         <button id="blocks-community-tab" role="tab" aria-selected="false" aria-controls="blocks-community" tabindex="-1">Библиотека</button>
@@ -152,8 +153,8 @@
       <div class="section-heading inspector-heading"><h2>Настройка блока</h2><button id="inspector-back" type="button">К схеме ↑</button></div>
       <div id="inspector-empty"><div class="inspector-symbol" aria-hidden="true">↖</div><strong>Ничего не выбрано</strong><p class="muted">Выберите блок на схеме, чтобы изменить его название и описание.</p></div>
       <form id="inspector-form" hidden>
-        <label>Название<input id="node-name" maxlength="100" required></label>
-        <label>Описание<textarea id="node-description" maxlength="2000" rows="2"></textarea></label>
+        <label>Название<input id="node-name" required></label>
+        <label>Описание<textarea id="node-description" rows="2"></textarea></label>
         <label>Поведение<select id="node-behavior"><option value="python_code">Python-код</option><option value="openrouter">Запрос к OpenRouter</option><option value="kaggle">Датасет Kaggle</option><option value="huggingface">Модель Hugging Face</option><option value="csv">Чтение CSV</option><option value="local_model">Локальная модель</option></select></label>
         <details class="block-contract" id="block-contract"><summary>Входы и выходы</summary><ul id="contract-ports"></ul></details>
         <section id="ml-fields" hidden><div id="ml-parameters"></div>
@@ -168,7 +169,7 @@
         <button type="button" id="discuss-node">Обсудить блок</button>
         <button type="button" id="debug-node-open">Входы и выполнение блока</button>
         <div id="csv-fields" hidden>
-          <label>Имя файла в датасете<input id="csv-file" maxlength="1000" placeholder="Автоматически, если CSV один"></label>
+          <label>Имя файла в датасете<input id="csv-file" placeholder="Автоматически, если CSV один"></label>
 
           <label>Кодировка<select id="csv-encoding"><option value="auto">Авто (UTF-8 / BOM)</option><option value="utf-8">UTF-8</option><option value="cp1251">Windows-1251 (кириллица)</option><option value="cp1252">Windows-1252 (латиница)</option><option value="latin-1">Latin-1 (ISO-8859-1)</option><option value="utf-16">UTF-16 (с BOM)</option><option value="utf-16-le">UTF-16 LE</option><option value="utf-16-be">UTF-16 BE</option><option value="koi8-r">KOI8-R</option></select></label>
 
@@ -186,13 +187,13 @@
         </div>
         <div id="local-model-fields" hidden>
           <label>Промпт<textarea id="local-prompt" rows="3"></textarea></label>
-          <label>Лимит ответа<input id="local-max-tokens" type="number" min="1" max="16384" value="256"></label>
+          <label>Лимит ответа<input id="local-max-tokens" type="number" min="1" value="256"></label>
 
         </div>
         <div id="hf-fields" hidden>
-          <label>Модель Hugging Face<input id="hf-repo" maxlength="500" placeholder="owner/model или https://huggingface.co/owner/model" autocomplete="off" spellcheck="false"></label>
-          <label>Ветка, тег или commit SHA<input id="hf-revision" maxlength="160" value="main" placeholder="main" autocomplete="off" spellcheck="false"></label>
-          <label>Токен · для приватных моделей<input id="hf-token" type="password" maxlength="2048" placeholder="hf_…" autocomplete="off" spellcheck="false"></label>
+          <label>Модель Hugging Face<input id="hf-repo" placeholder="owner/model или https://huggingface.co/owner/model" autocomplete="off" spellcheck="false"></label>
+          <label>Ветка, тег или commit SHA<input id="hf-revision" value="main" placeholder="main" autocomplete="off" spellcheck="false"></label>
+          <label>Токен · для приватных моделей<input id="hf-token" type="password" placeholder="hf_…" autocomplete="off" spellcheck="false"></label>
           <p class="muted" id="hf-token-status" hidden></p>
 
           <button type="button" id="hf-forget-token">Убрать токен вкладки</button>
@@ -212,8 +213,8 @@
           <ul id="hf-local-files" class="model-local-files" aria-label="Скачанные файлы модели"></ul>
         </div>
         <div id="kaggle-fields" hidden>
-          <label>Ссылка на датасет<input id="kg-dataset" maxlength="500" placeholder="https://www.kaggle.com/datasets/owner/dataset" autocomplete="off" spellcheck="false"></label>
-          <label>API-токен · если нужен доступ<input id="kg-token" type="password" maxlength="2048" autocomplete="off" spellcheck="false" placeholder="Необязательно для публичных датасетов"></label>
+          <label>Ссылка на датасет<input id="kg-dataset" placeholder="https://www.kaggle.com/datasets/owner/dataset" autocomplete="off" spellcheck="false"></label>
+          <label>API-токен · если нужен доступ<input id="kg-token" type="password" autocomplete="off" spellcheck="false" placeholder="Необязательно для публичных датасетов"></label>
 
           <button type="button" class="primary" id="kg-download">Скачать датасет</button>
           <button type="button" id="kg-files">Показать скачанные файлы</button>
@@ -231,12 +232,12 @@
           </section>
         </div>
         <div id="openrouter-fields" hidden>
-          <label>Модель<input id="or-model" maxlength="160" list="model-options" placeholder="ID модели из OpenRouter" autocomplete="off"></label>
+          <label>Модель<input id="or-model" list="model-options" placeholder="ID модели из OpenRouter" autocomplete="off"></label>
           <button type="button" id="load-models">Загрузить каталог моделей</button>
           <p class="muted" id="models-status" role="status"></p>
           <label>Системная инструкция<textarea id="or-system" rows="3" placeholder="Роль и правила для модели"></textarea></label>
           <label>Промпт<textarea id="or-prompt" rows="5" placeholder="Что должна сделать модель?"></textarea></label>
-          <div class="parameter-pair"><label>Лимит токенов<input id="or-max-tokens" type="number" min="1" max="16384" step="1" value="1024"></label><label>Температура<input id="or-temperature" type="number" min="0" max="2" step="0.1" value="0.7"></label></div>
+          <div class="parameter-pair"><label>Лимит токенов<input id="or-max-tokens" type="number" min="1" step="1" value="1024"></label><label>Температура<input id="or-temperature" type="number" min="0" max="2" step="0.1" value="0.7"></label></div>
 
           <button type="button" class="primary" id="run-block">Запустить блок</button>
 
@@ -288,8 +289,8 @@
     <form id="block-form">
       <div class="dialog-heading"><h2>Новый блок</h2><button id="close-dialog" type="button" aria-label="Закрыть">×</button></div>
       <p class="muted">Дайте компоненту имя. Его можно будет использовать на разных схемах.</p>
-      <label>Название<input id="type-name" maxlength="100" placeholder="Название вашего компонента" required autofocus></label>
-      <label>Описание <span class="muted">· необязательно</span><textarea id="type-description" maxlength="2000" rows="3" placeholder="За что отвечает этот компонент?"></textarea></label>
+      <label>Название<input id="type-name" placeholder="Название вашего компонента" required autofocus></label>
+      <label>Описание <span class="muted">· необязательно</span><textarea id="type-description" rows="3" placeholder="За что отвечает этот компонент?"></textarea></label>
       <label>Поведение<select id="type-behavior"><option value="python_code">Python-код</option><option value="openrouter">Запрос к OpenRouter</option><option value="kaggle">Датасет Kaggle</option><option value="huggingface">Модель Hugging Face</option><option value="csv">Чтение CSV</option><option value="local_model">Локальная модель</option></select></label>
       <label class="color-label">Цвет<input id="type-color" type="color" value="#275fe8"></label>
       <p id="block-create-error" role="alert" class="muted" hidden></p>
@@ -300,8 +301,8 @@
   <dialog id="subgraph-dialog">
     <form id="subgraph-form">
       <div class="dialog-heading"><h2>Блок из подсхемы</h2><button type="button" id="close-subgraph" aria-label="Закрыть подсхему">×</button></div>
-      <label>Название<input id="subgraph-name" maxlength="100" required></label>
-      <label>Описание<textarea id="subgraph-description" rows="3" maxlength="2000"></textarea></label>
+      <label>Название<input id="subgraph-name" required></label>
+      <label>Описание<textarea id="subgraph-description" rows="3"></textarea></label>
       <p class="muted">Назовите внешние порты и параметры. Каждый экземпляр блока получит собственные значения настроек.</p>
       <div id="subgraph-port-names"></div>
       <p id="subgraph-error" role="alert"></p>
@@ -323,7 +324,7 @@
   <dialog id="experiment-notes-dialog" aria-labelledby="experiment-notes-title">
     <form id="experiment-notes" hidden>
       <div class="dialog-heading"><h3 id="experiment-notes-title">Описание эксперимента</h3><button id="experiment-notes-close" type="button" aria-label="Закрыть заметки">×</button></div>
-      <div class="experiment-note-grid"><label>Название<input id="experiment-name" maxlength="160"></label><label>Теги через запятую<input id="experiment-tags" placeholder="baseline, новые признаки"></label><label>Гипотеза<textarea id="experiment-hypothesis" rows="3" maxlength="2000" placeholder="Что меняем и какого эффекта ожидаем?"></textarea></label><label>Вывод<textarea id="experiment-conclusion" rows="3" maxlength="4000" placeholder="Что получилось и что проверим дальше?"></textarea></label></div>
+      <div class="experiment-note-grid"><label>Название<input id="experiment-name"></label><label>Теги через запятую<input id="experiment-tags" placeholder="baseline, новые признаки"></label><label>Гипотеза<textarea id="experiment-hypothesis" rows="3" placeholder="Что меняем и какого эффекта ожидаем?"></textarea></label><label>Вывод<textarea id="experiment-conclusion" rows="3" placeholder="Что получилось и что проверим дальше?"></textarea></label></div>
       <div class="dialog-actions"><span id="experiment-note-status" role="status"></span><button id="experiment-note-save" class="primary" type="submit">Сохранить описание</button></div>
     </form>
   </dialog>
@@ -357,7 +358,7 @@
     <form id="openrouter-form">
       <div class="dialog-heading"><h2>Подключение OpenRouter</h2><button id="close-openrouter" type="button" aria-label="Закрыть подключение">×</button></div>
       <p class="muted">Единый API для моделей разных провайдеров. <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener noreferrer">Создать API-ключ</a> · <a href="https://openrouter.ai/models" target="_blank" rel="noopener noreferrer">Модели и тарифы</a></p>
-      <label>API-ключ<input id="openrouter-key" type="password" maxlength="512" autocomplete="off" spellcheck="false" placeholder="Вставьте свой ключ"></label>
+      <label>API-ключ<input id="openrouter-key" type="password" autocomplete="off" spellcheck="false" placeholder="Вставьте свой ключ"></label>
       <p class="muted">Ключ остаётся в памяти этой вкладки до обновления страницы. Он не сохраняется в браузере, файлах или экспорте схемы.</p>
       <p class="muted" id="openrouter-key-status" role="status"></p>
       <div class="dialog-actions"><button type="button" id="forget-key">Убрать ключ вкладки</button><button type="submit" class="primary">Использовать ключ</button></div>

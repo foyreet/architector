@@ -58,8 +58,9 @@ def validate_value(value, spec):
     elif kind in ('integer', 'number'):
         valid = (type(value) is int if kind == 'integer' else type(value) in (int, float))
         valid = valid and math.isfinite(value) and spec.get('minimum', -math.inf) <= value <= spec.get('maximum', math.inf)
+        valid = valid and spec.get('exclusiveMinimum', -math.inf) < value < spec.get('exclusiveMaximum', math.inf)
     elif kind == 'string[]':
-        valid = isinstance(value, list) and len(value) <= spec.get('maxItems', 5000) and all(isinstance(s, str) and len(s) <= spec.get('maxLength', 500) for s in value)
+        valid = isinstance(value, list) and len(value) <= spec.get('maxItems', math.inf) and all(isinstance(s, str) and len(s) <= spec.get('maxLength', math.inf) for s in value)
     elif kind == 'rows':
         valid = isinstance(value, list)
         if valid:

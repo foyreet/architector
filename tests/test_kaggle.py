@@ -35,10 +35,10 @@ class KaggleTests(unittest.TestCase):
                 archive.writestr(name, content)
         return path
 
-    def wait_download(self):
+    def wait_download(self, dataset='owner/dataset'):
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
-            result = kg.request({'dataset': 'owner/dataset'}, 'files')
+            result = kg.request({'dataset': dataset}, 'files')
             if result['status'] != 'downloading':
                 return result
             time.sleep(.01)
@@ -52,7 +52,7 @@ class KaggleTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(kg.KaggleError):
                 kg.dataset_handle(value)
 
-    def test_local_files_and_bounded_preview(self):
+    def test_local_files_and_full_preview(self):
         self.archive()
         data = kg.request({'dataset': 'owner/dataset'}, 'files')
         self.assertEqual(data['status'], 'ready')
@@ -64,11 +64,11 @@ class KaggleTests(unittest.TestCase):
         self.assertEqual(kg.preview('owner/dataset', 'image.png')['kind'], 'unsupported')
         with self.assertRaises(kg.KaggleError):
             kg.preview('owner/dataset', '../../serve.py')
-        self.archive(files={'large.csv': 'a,b\n' * 100, 'large.txt': 'x' * (kg.PREVIEW_BYTES + 50)})
-        self.assertEqual(len(kg.preview('owner/dataset', 'large.csv')['rows']), 21)
-        self.assertTrue(kg.preview('owner/dataset', 'large.csv')['truncated'])
-        self.assertEqual(len(kg.preview('owner/dataset', 'large.txt')['text']), kg.PREVIEW_BYTES)
-        self.assertTrue(kg.preview('owner/dataset', 'large.txt')['truncated'])
+        self.archive(files={'large.csv': 'a,b\n' * 100, 'large.txt': 'x' * (65536 + 50)})
+        self.assertEqual(len(kg.preview('owner/dataset', 'large.csv')['rows']), 100)
+        self.assertFalse(kg.preview('owner/dataset', 'large.csv')['truncated'])
+        self.assertEqual(len(kg.preview('owner/dataset', 'large.txt')['text']), 65536 + 50)
+        self.assertFalse(kg.preview('owner/dataset', 'large.txt')['truncated'])
 
     def test_async_download_deduplicates_and_recovers_from_reload(self):
         entered, release = threading.Event(), threading.Event()
@@ -85,17 +85,17 @@ class KaggleTests(unittest.TestCase):
                 self.assertEqual(result['status'], 'downloading')
                 self.assertTrue(entered.wait(2))
                 self.assertEqual(kg.request({'dataset': 'owner/dataset'}, 'download')['status'], 'downloading')
-                with self.assertRaises(kg.KaggleError) as caught:
-                    kg.request({'dataset': 'owner/another'}, 'download')
-                self.assertEqual(caught.exception.status, 409)
+                second = kg.request({'dataset': 'owner/another', 'token': 'private-test-token'}, 'download')
+                self.assertEqual(second['status'], 'downloading')
                 self.assertNotIn('private-test-token', json.dumps(kg.JOBS))
             finally:
                 release.set()
                 ready = self.wait_download()
+                self.assertEqual(self.wait_download('owner/another')['status'], 'ready')
             self.assertEqual(ready['status'], 'ready')
             kg.JOBS.clear()  # Simulates a new server process.
             self.assertEqual(kg.request({'dataset': 'owner/dataset'}, 'download')['status'], 'ready')
-            upstream.assert_called_once()
+            self.assertEqual(upstream.call_count, 2)
             self.assertFalse(list(kg.ROOT.rglob('.download-*')))
 
     def test_failed_download_is_clean_and_retryable(self):

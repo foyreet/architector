@@ -3,7 +3,7 @@
 <body>
 <header><a id="back-schema" href="/architecture.html">← К схеме</a><span class="brand">Архитектор · Доска</span><span id="account"></span></header>
 <p id="message" role="status" aria-live="polite" hidden></p>
-<section id="auth" class="panel" hidden><h1>Войти в Архитектор</h1><p>Войдите в свой аккаунт, чтобы открыть совместную доску.</p><form id="login-form"><label>Логин<input id="username" autocomplete="username" required minlength="3" maxlength="40"></label><label>Пароль<input id="password" type="password" autocomplete="current-password" required minlength="10" maxlength="256"></label><button class="primary" type="submit">Войти</button><button id="register" type="button">Создать аккаунт</button></form></section>
+<section id="auth" class="panel" hidden><h1>Войти в Архитектор</h1><p>Войдите в свой аккаунт, чтобы открыть совместную доску.</p><form id="login-form"><label>Логин<input id="username" autocomplete="username" required minlength="3"></label><label>Пароль<input id="password" type="password" autocomplete="current-password" required minlength="10"></label><button class="primary" type="submit">Войти</button><button id="register" type="button">Создать аккаунт</button></form></section>
 <main id="list" class="panel" hidden><div class="heading"><h1>Доски</h1><button id="create" class="primary">+ Создать доску</button></div><div id="boards"></div></main>
 <main id="editor" hidden>
 <div class="board-heading"><button id="back-list">← Доски</button><button id="rename" title="Переименовать доску">Новая доска</button><div class="actions"><button id="share">Поделиться</button><button id="pdf">Скачать PDF</button></div></div>
@@ -15,7 +15,7 @@
 <div id="conflict" role="alert" hidden><span id="conflict-text"></span><button id="discard">Отменить мою правку</button><button id="overwrite">Применить мою правку</button></div>
 <div id="surface"><svg id="canvas" xmlns="http://www.w3.org/2000/svg" tabindex="0" role="img" aria-label="Совместная доска для рисования"></svg><div class="zoom"><button id="zoom-out" aria-label="Уменьшить">−</button><button id="fit">Вся доска</button><button id="zoom-in" aria-label="Увеличить">+</button></div></div>
 </main>
-<dialog id="text-dialog"><form id="text-form"><p id="text-error" role="alert" hidden></p><h2 id="text-heading">Текст на доске</h2><label id="text-label" for="text-input">Текст</label><textarea id="text-input" maxlength="1000" rows="5" required></textarea><div class="actions"><button type="button" id="text-cancel">Отмена</button><button class="primary" type="submit">Применить</button></div></form></dialog>
+<dialog id="text-dialog"><form id="text-form"><p id="text-error" role="alert" hidden></p><h2 id="text-heading">Текст на доске</h2><label id="text-label" for="text-input">Текст</label><textarea id="text-input" rows="5" required></textarea><div class="actions"><button type="button" id="text-cancel">Отмена</button><button class="primary" type="submit">Применить</button></div></form></dialog>
 <dialog id="share-dialog"><h2>Совместная доска</h2><p id="share-error" role="alert" hidden></p><p>По этой ссылке участники смогут рисовать после входа в аккаунт Архитектора.</p><label>Ссылка<input id="invite-link" readonly></label><div class="actions"><button id="copy" class="primary">Копировать ссылку</button><button id="share-close">Закрыть</button></div><hr><button id="revoke">Закрыть доступ всем приглашённым</button></dialog>
 <script src="/board-pdf.js"></script><script src="/board.js"></script>
 </body></html>
