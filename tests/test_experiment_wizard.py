@@ -43,7 +43,7 @@ class ExperimentWizardTests(unittest.TestCase):
         preview=wizard.request(self.root,self.body,'preview');self.assertEqual((preview['train_rows'],preview['test_rows']),(32,8))
         self.assertEqual(len(preview['steps']),6);self.assertEqual(list(self.root.iterdir()),[])
         small={**self.body,'csv':'x,label\n1,a\n2,a\n3,b\n4,b\n','config':{**self.body['config'],'features':['x']}}
-        with self.assertRaisesRegex(bc.ContractError,'слишком мало'):wizard.request(self.root,small,'preview')
+        self.assertTrue(wizard.request(self.root,small,'preview')['warnings'])
         small['config']['test_size']=.5;self.assertEqual(wizard.request(self.root,small,'preview')['test_rows'],2)
     def test_uploaded_dataset_runs_on_cpu_and_is_not_in_portable_graph(self):
         project,body=self.create();diagram=project['diagram'];self.assertEqual(len(diagram['nodes']),6)
@@ -78,9 +78,16 @@ class ExperimentWizardTests(unittest.TestCase):
         with self.assertRaises(bc.ContractError):wizard.request(self.root,{**body,'digest':'old','request_id':str(uuid.uuid4())},'create')
         for config in [{'task':'regression'},{'target':['bad']},{'features':['label']},{'features':[]},{'test_size':True}]:
             with self.assertRaises(bc.ContractError):wizard.request(self.root,{**self.body,'config':{**self.body['config'],**config}},'preview')
+    def test_auto_delimiter_with_wide_rows(self):
+        header = ','.join(f'feature{i}' for i in range(101))
+        row = ','.join(['1234567890'] * 101)
+        view = wizard.inspect({'csv': header + '\n' + (row + '\n') * 30})[0]
+        self.assertEqual(view['delimiter'], ',')
+        self.assertEqual(len(view['profile']['columns']), 101)
+
     def test_csv_limits_quoted_semicolon_unicode_and_bad_headers(self):
         view=wizard.request(self.root,{**self.body,'csv':'\ufeffчисло;класс\n1;"a;b"\n2;c\n'},'inspect');self.assertEqual(view['delimiter'],';');self.assertEqual(view['sample'][0]['класс'],'a;b')
-        for text in ['x,x\n1,2\n',' x,y\n1,a\n','x,y\n1,2,3\n','x,y\n'+('1,a\n'*1001)]:
+        for text in ['x,x\n1,2\n',' x,y\n1,a\n','x,y\n1,2,3\n']:
             with self.assertRaises(bc.ContractError):wizard.request(self.root,{**self.body,'csv':text,'delimiter':','},'inspect')
 
 

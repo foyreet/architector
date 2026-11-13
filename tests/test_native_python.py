@@ -28,21 +28,17 @@ def run(inputs, params):
         self.assertIn('локальный Python', result['logs'])
         self.assertEqual(result['runtime']['executor'], 'local-process')
 
-    def test_timeout_and_recovery(self):
-        result = execute('import time\ndef run(inputs, params):\n    time.sleep(20)', 1)
-        self.assertIn('время', result['error'])
-        self.assertEqual(execute('def run(inputs, params): return {}')['result'], {})
+    def test_legacy_timeout_is_ignored(self):
+        result = execute('import time\ndef run(inputs, params):\n    time.sleep(1.2)\n    return {}', 1)
+        self.assertEqual(result['result'], {})
 
     def test_memory_monitor_stops_process_without_large_allocation(self):
-        with patch.object(runner, 'memory_usage', return_value=10**12):
+        with patch.object(runner, 'MEMORY_MB', 256), patch.object(runner, 'memory_usage', return_value=10**12):
             result = execute('import time\ndef run(inputs, params): time.sleep(20)')
         self.assertIn('памяти', result['error'])
         self.assertEqual(execute('def run(inputs, params): return {}')['result'], {})
 
-    def test_output_bound_and_invalid_protocol(self):
-        with patch.object(runner, 'MAX_BYTES', 128):
-            result = execute('def run(inputs, params): return {"data": "x" * 1000}')
-        self.assertIn('Вывод', result['error'])
+    def test_invalid_protocol(self):
         result = execute('import os\nos.write(1, b"invalid")\ndef run(inputs, params): return {}')
         self.assertIn('протокол', result['error'])
 

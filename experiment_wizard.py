@@ -1,5 +1,6 @@
 """Build a runnable classification project from a bounded, private CSV upload."""
 import csv
+import local_operations
 import hashlib
 import math
 import re
@@ -16,10 +17,10 @@ import project_store as ps
 
 def inspect(body):
     text=body.get('csv')
-    if not isinstance(text,str) or len(text.encode('utf-8'))>2*1024*1024: raise bc.ContractError('Выберите CSV до 2 МиБ.')
+    if not isinstance(text,str): raise bc.ContractError('Выберите CSV-файл.')
     delimiter=body.get('delimiter','auto')
     if delimiter=='auto':
-        try:delimiter=csv.Sniffer().sniff(text[:8192],delimiters=',;\t').delimiter
+        try:delimiter=local_operations.detect_delimiter(text)
         except csv.Error:raise bc.ContractError('Не удалось определить разделитель. Выберите запятую, точку с запятой или табуляцию.') from None
     rows=analysis.read_csv(text,delimiter)
     if any(k != k.strip() or ',' in k for k in rows[0]): raise bc.ContractError('Для мастера уберите пробелы по краям и запятые из названий колонок.')
@@ -51,8 +52,10 @@ def build(body):
     prep=bc.normalize_block({'kind':'ml_prepare','version':1,'settings':{'target':target,'features':','.join(features),'missing':config.get('missing','error'),'duplicates':config.get('duplicates','drop')}})
     split=bc.normalize_block({'kind':'ml_split','version':1,'settings':{'test_size':config.get('test_size',.2),'seed':config.get('seed',42)}})
     table,details=ml.prepare(rows,prep['settings']);count=len(table['y']);classes=len(details['classes']);test=math.ceil(count*split['settings']['test_size'])
-    if test<classes or count-test<classes:raise bc.ContractError('Для этого разделения слишком мало строк: в Train и Test должно быть не меньше строк, чем классов. Измените долю Test или добавьте данные.')
     warnings=[]
+    if count < 2: raise bc.ContractError('Для разделения нужны хотя бы две строки.')
+    if min(details['classes'].values()) < 2 or min(test, count-test) < classes:
+        warnings.append('Разбиение будет случайным. Редкие классы могут отсутствовать в Train или Test.')
     if min(details['classes'].values())<5:warnings.append('В некоторых классах меньше пяти строк. Оценка качества будет нестабильной; добавьте данные.')
     if details['dropped_rows']:warnings.append(f"Будут удалены строки с пропусками или некорректными значениями: {details['dropped_rows']}.")
     if details['duplicates_removed']:warnings.append(f"Будут удалены дубли выбранных признаков и цели: {details['duplicates_removed']}.")

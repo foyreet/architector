@@ -149,7 +149,17 @@
           "type": "string",
           "field": "csv_encoding",
           "default": "auto",
-          "enum": ["auto", "utf-8", "cp1251", "cp1252", "latin-1", "utf-16", "utf-16-le", "utf-16-be", "koi8-r"],
+          "enum": [
+            "auto",
+            "utf-8",
+            "cp1251",
+            "cp1252",
+            "latin-1",
+            "utf-16",
+            "utf-16-le",
+            "utf-16-be",
+            "koi8-r"
+          ],
           "description": "Авто читает UTF-8 и UTF-16/32 с BOM. Другие кодировки выбирайте по данным источника и проверяйте в предпросмотре. cp1251 — Windows-1251, cp1252 — Windows-1252. Не угадывайте кодировку по языку интерфейса. Загруженный через мастер датасет уже преобразован в Unicode."
         },
         {
@@ -193,8 +203,7 @@
           "label": "Шаблон",
           "type": "string",
           "field": "prompt_template",
-          "default": "",
-          "maxLength": 32000
+          "default": ""
         }
       ],
       "operation": {
@@ -214,8 +223,7 @@
           "type": "text",
           "required": true,
           "field": "prompt",
-          "default": "",
-          "maxLength": 32000
+          "default": ""
         }
       ],
       "outputs": [
@@ -239,8 +247,7 @@
           "label": "Системная инструкция",
           "type": "string",
           "field": "system",
-          "default": "",
-          "maxLength": 16000
+          "default": ""
         },
         {
           "id": "max_tokens",
@@ -339,8 +346,7 @@
           "type": "text",
           "required": true,
           "field": "local_prompt",
-          "default": "",
-          "maxLength": 32000
+          "default": ""
         }
       ],
       "outputs": [
@@ -392,22 +398,19 @@
           "id": "target",
           "label": "Целевая колонка",
           "type": "string",
-          "default": "",
-          "maxLength": 200
+          "default": ""
         },
         {
           "id": "features",
           "label": "Числовые признаки через запятую (пусто — все, кроме цели и исключённых)",
           "type": "string",
-          "default": "",
-          "maxLength": 4000
+          "default": ""
         },
         {
           "id": "drop",
           "label": "Исключить колонки через запятую",
           "type": "string",
-          "default": "Id",
-          "maxLength": 4000
+          "default": "Id"
         },
         {
           "id": "missing",
@@ -542,7 +545,7 @@
       "operation": {
         "id": "ml_train.execute",
         "available": true,
-        "description": "Обучает классификатор Random Forest на CPU, только на выходе Train. До 1000 строк, 100 признаков и 30 классов."
+        "description": "Обучает классификатор Random Forest на CPU, только на выходе Train."
       }
     },
     {
@@ -601,7 +604,7 @@
       "operation": {
         "id": "gpu_train.execute",
         "available": true,
-        "description": "Обучает нейросеть классификации на GPU подключённого компьютера (Apple MPS / NVIDIA CUDA). Один скрытый слой, до 1000 строк, 100 числовых признаков и 30 классов. Подключение: Ресурсы → GPU компьютера. Нормализация обучается только на Train."
+        "description": "Обучает нейросеть классификации на GPU подключённого компьютера (Apple MPS / NVIDIA CUDA). Один скрытый слой. Подключение: Ресурсы → GPU компьютера. Нормализация обучается только на Train."
       }
     },
     {
@@ -738,23 +741,13 @@
           "id": "code",
           "label": "Python-код",
           "type": "string",
-          "default": "def run(inputs, params):\n    # rows: строки из CSV или другого Python-блока.\n    # data: произвольные данные предыдущего Python-блока.\n    # table/model: содержимое артефактов встроенных ML-блоков.\n    rows = inputs.get(\"rows\", [])\n    print(\"Получено строк:\", len(rows))\n    return {\"rows\": rows, \"data\": inputs.get(\"data\", {}),\n            \"report\": {\"rows\": len(rows)}}\n",
-          "maxLength": 64000
+          "default": "def run(inputs, params):\n    # rows: строки из CSV или другого Python-блока.\n    # data: произвольные данные предыдущего Python-блока.\n    # table/model: содержимое артефактов встроенных ML-блоков.\n    rows = inputs.get(\"rows\", [])\n    print(\"Получено строк:\", len(rows))\n    return {\"rows\": rows, \"data\": inputs.get(\"data\", {}),\n            \"report\": {\"rows\": len(rows)}}\n"
         },
         {
           "id": "params",
           "label": "Параметры JSON",
           "type": "string",
-          "default": "{}",
-          "maxLength": 64000
-        },
-        {
-          "id": "timeout",
-          "label": "Лимит времени (сек.)",
-          "type": "integer",
-          "default": 30,
-          "minimum": 1,
-          "maximum": 60
+          "default": "{}"
         }
       ],
       "operation": {
@@ -765,4 +758,3 @@
     }
   ]
 }
-

@@ -98,8 +98,8 @@ class DocumentTests(unittest.TestCase):
             for body in (payload('../secret.txt', b'abc'), payload('x.exe', b'abc'), payload('x.md', b''), payload('x.txt', b'\x00binary'), {'name': 'a.md', 'data': '?'}):
                 with self.subTest(body=body):
                     with self.assertRaises(bc.ContractError): docs.upload(store, 'a', body)
-            with patch.object(docs, 'MAX_FILE', 2):
-                with self.assertRaises(bc.ContractError): docs.upload(store, 'a', payload('x.md', b'123'))
+            text = b'x' * (21 * 1024 * 1024)
+            self.assertEqual(docs.upload(store, 'a', payload('large.txt', text))['characters'], len(text))
             with self.assertRaises(bc.ContractError): docs.parse(b'broken PDF', '.pdf')
 
 

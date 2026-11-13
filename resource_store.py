@@ -45,7 +45,7 @@ def inventory(context):
         for path in files(folder):
             if path.suffix != '.json': continue
             count += 1
-            if count > 10000 or path.stat().st_size > 32 * 1024 * 1024: raise bc.ContractError('Хранилище слишком большое для безопасной автоматической проверки ссылок.', 413)
+            if count > 10000: raise bc.ContractError('Хранилище слишком большое для безопасной автоматической проверки ссылок.', 413)
             try: value = json.loads(path.read_text(encoding='utf-8'))
             except (OSError, ValueError): raise bc.ContractError('Не удалось проверить ссылки в истории. Очистка остановлена.', 409) from None
             for identity in refs(value): reached.add(identity); sources.setdefault(identity, set()).add(category)
@@ -55,7 +55,6 @@ def inventory(context):
         if path.is_symlink(): raise bc.ContractError('Недопустимая ссылка артефакта.', 409)
         if not path.exists(): continue
         try:
-            if path.stat().st_size > ml.MAX_BYTES: raise ValueError()
             content = json.loads(path.read_text(encoding='utf-8'))
         except (OSError, ValueError): raise bc.ContractError('Повреждён артефакт, автоматическая очистка остановлена.', 409) from None
         for ref in refs(content):
@@ -137,10 +136,10 @@ def request(server, context, body, action):
             digest = hashlib.sha256(ml.encode(values)).hexdigest()
             if action == 'cleanup-preview': return {'digest': digest, 'count': len(values), 'bytes': sum(a['bytes'] for a in values)}
             if body.get('digest') != digest: raise bc.ContractError('Список изменился. Проверьте очистку заново.', 409)
-            if not ml.WORKER_LOCK.acquire(blocking=False): raise bc.ContractError('Вычисления ещё выполняются.', 409)
+            if not ml.WORKER_LOCK.begin_cleanup(): raise bc.ContractError('Вычисления ещё выполняются.', 409)
             try:
                 for a in values: (ml.artifact_dir(store.root)/(a['id']+'.json')).unlink()
-            finally: ml.WORKER_LOCK.release()
+            finally: ml.WORKER_LOCK.end_cleanup()
             return {'removed': len(values)}
         if action == 'delete-run':
             project = store.get(body.get('project_id')); identity = body.get('run_id')

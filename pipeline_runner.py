@@ -1,6 +1,6 @@
 """Sequential, persistent DAG execution. Provider calls are never retried automatically."""
 
-from collections import deque
+from collections import Counter, deque
 from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
@@ -17,7 +17,6 @@ import python_blocks
 import subgraphs
 import project_store
 import gpu_compute
-from data_limits import STEP_RECORD_BYTES
 from app_config import data_root
 
 ALLOW_ENVIRONMENT = True
@@ -53,8 +52,8 @@ def validate(diagram, external_inputs=frozenset()):
     if not isinstance(diagram, dict) or diagram.get('format') != 'architect' or diagram.get('version') != 3:
         raise bc.ContractError('Для запуска нужна схема формата architect версии 3.')
     nodes, edges = diagram.get('nodes'), diagram.get('edges')
-    if not isinstance(nodes, list) or not 1 <= len(nodes) <= 500 or not isinstance(edges, list) or len(edges) > 1000:
-        raise bc.ContractError('Добавьте от 1 до 500 блоков; допускается до 1000 связей.')
+    if not isinstance(nodes, list) or not nodes or not isinstance(edges, list):
+        raise bc.ContractError('Нужны блоки и список связей.')
     identifiers, index, snapshot = set(), {}, []
     def identifier(value):
         if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,100}', value) or value in identifiers:
@@ -140,6 +139,7 @@ class PipelineRunner:
         self.completion, self.kaggle, self.huggingface = completion, kaggle, huggingface
         self.lock = threading.RLock()
         self.current = None
+        self.active_runs = {}
         self.cancel_event = threading.Event()
         self.thread = None
         self.runs_relative = runs_relative
@@ -198,9 +198,6 @@ class PipelineRunner:
     def read(self, run_id, name='run.json'):
         path = self.run_path(run_id, name)
         try:
-            maximum = STEP_RECORD_BYTES if name.startswith('steps/') else 32 * 1024 * 1024
-            if path.stat().st_size > maximum:
-                raise bc.ContractError('Запись истории превышает лимит чтения.', 413)
             return json.loads(path.read_text(encoding='utf-8'))
         except FileNotFoundError:
             raise bc.ContractError('Запуск или результат шага не найден.', 404) from None
@@ -226,7 +223,7 @@ class PipelineRunner:
                     result.append({key: record.get(key) for key in ('id', 'name', 'status', 'created_at', 'finished_at', 'error', 'queue_position', 'queue_ahead', 'cancel_requested')})
                 except bc.ContractError:
                     continue
-        return {'runs': sorted(result, key=lambda item: item['created_at'], reverse=True)[:100]}
+        return {'runs': sorted(result, key=lambda item: item['created_at'], reverse=True)}
 
     def step(self, run_id, node_id):
         record = self.get(run_id)
@@ -308,8 +305,6 @@ class PipelineRunner:
                 if existing['diagram'] != diagram or existing.get('project') != body.get('_project') or existing.get('debug_request') != body.get('debug') or existing.get('compute_request') != body.get('compute') or existing.get('training_resume') != resume_request:
                     raise bc.ContractError('Этот ID уже использован для другой схемы.', 409)
                 return existing
-            if self.current and self.current['status'] in ACTIVE:
-                raise bc.ContractError('Уже выполняется пайплайн. Откройте историю запусков.', 409)
             record = {'id': run_id, 'name': diagram['name'], 'engine_version': 1, 'created_at': now(),
                       'status': 'waiting', 'diagram': diagram, 'order': order, 'events': [],
                       'contracts': [deepcopy(bc.CONTRACTS[k]) for k in sorted({n['block']['kind'] for n in diagram['nodes']})],
@@ -349,9 +344,11 @@ class PipelineRunner:
                 self.save(record)  # Durable intent before any external action.
                 self.current = record
                 self.cancel_event = threading.Event()
-                self.thread = threading.Thread(target=self.run, args=(record, tokens), daemon=True)
+                self.active_runs[run_id] = (record, self.cancel_event)
+                self.thread = threading.Thread(target=self.run, args=(record, tokens, self.cancel_event), daemon=True)
                 self.thread.start()
             except BaseException:
+                self.active_runs.pop(run_id, None)
                 gpu_compute.release(self.root, run_id)
                 record.update(status='error', finished_at=now(), error='Не удалось поставить запуск в очередь. Повторите запуск.')
                 tokens.clear()
@@ -363,12 +360,14 @@ class PipelineRunner:
     def cancel(self, run_id):
         with self.lock:
             record = self.get(run_id)
-            if self.current and self.current['id'] == run_id and self.current['status'] in ACTIVE:
-                self.cancel_event.set()
-                self.current['cancel_requested'] = True
-                self.event(self.current, 'Запрошена отмена ожидающего запуска.' if self.current['status'] == 'waiting' else 'Остановка запрошена. Текущий запрос может завершиться.')
-                self.save(self.current)
-                record = deepcopy(self.current)
+            active = self.active_runs.get(run_id)
+            if active and active[0]['status'] in ACTIVE:
+                record, cancelled = active
+                cancelled.set()
+                record['cancel_requested'] = True
+                self.event(record, 'Запрошена остановка запуска.')
+                self.save(record)
+                record = deepcopy(record)
             return record
 
     def provenance(self, block, result):
@@ -392,12 +391,10 @@ class PipelineRunner:
                     'immutable_revision': None, 'version_note': 'API не сообщает неизменяемую версию весов модели.'}
         return details
 
-    def run(self, record, tokens):
+    def run(self, record, tokens, cancel_event):
         acquired = False
         try:
-            # Keep CPU preparation sequential on a small VPS, including GPU runs
-            # from different accounts. Waiting remains visible and cancellable.
-            acquired = gpu_compute.enter_slot(self.root, record['id'], self.cancel_event)
+            acquired = gpu_compute.enter_slot(self.root, record['id'], cancel_event)
             if not acquired:
                 with self.lock:
                     record.update(status='cancelled', finished_at=now())
@@ -411,15 +408,17 @@ class PipelineRunner:
                 node = next((key for key in record['order'] if record['nodes'][key]['status'] == 'running'), None)
                 if node and value.get('loss_curve'):
                     self.write(self.run_path(record['id'], 'progress.json'), {'node_id': node, 'name': record['nodes'][node]['name'], 'values': value['loss_curve'], 'epoch': value.get('epoch'), 'epochs': value.get('epochs')})
-            with gpu_compute.execution(record.get('gpu_executor'), self.cancel_event, record['id'], progress):
-                self.run_steps(record, tokens)
+            with gpu_compute.execution(record.get('gpu_executor'), cancel_event, record['id'], progress):
+                self.run_steps(record, tokens, cancel_event)
         finally:
-            if acquired: gpu_compute.leave_slot()
+            with self.lock:
+                self.active_runs.pop(record['id'], None)
             gpu_compute.release(self.root, record['id'])
             tokens.clear()
 
-    def run_steps(self, record, tokens):
+    def run_steps(self, record, tokens, cancel_event):
         outputs, node_id, step_data = {}, None, None
+        consumers = Counter(edge['from'] for edge in record['diagram']['edges'] if edge['kind'] == 'data')
         def clean(value):
             if isinstance(value, str):
                 for token in tokens.values():
@@ -432,13 +431,13 @@ class PipelineRunner:
                 return [clean(item) for item in value]
             return value
         def save_step():
-            self.write(self.run_path(record['id'], 'steps/%04d.json' % record['order'].index(node_id)), clean(step_data))
+            self.write(self.run_path(record['id'], 'steps/%04d.json' % record['order'].index(node_id)), clean(step_data) if any(tokens.values()) else step_data)
         try:
             with self.lock:
                 record.update(status='running', started_at=now())
                 self.save(record)
             for node_id in record['order']:
-                if self.cancel_event.is_set():
+                if cancel_event.is_set():
                     break
                 if record.get('debug_plan'):
                     if record['nodes'][node_id].get('reused_from'):
@@ -454,7 +453,10 @@ class PipelineRunner:
                     self.save(record)
                 for edge in record['diagram']['edges']:
                     if edge['kind'] == 'data' and edge['to'] == node_id:
-                        block['inputs'][edge['toPort']] = deepcopy(outputs[edge['from']][edge['fromPort']])
+                        source = edge['from']
+                        block['inputs'][edge['toPort']] = outputs[source][edge['fromPort']]
+                        consumers[source] -= 1
+                        if not consumers[source]: del outputs[source]
                 block = bc.normalize_block(block, required=True)
                 step_data['block'] = block
                 save_step()
@@ -477,16 +479,16 @@ class PipelineRunner:
                 else:
                     result = bc.execute({'block': block, 'secrets': secrets}, self.completion, self.kaggle, self.huggingface)
                 while result['status'] == 'downloading':
-                    if self.cancel_event.wait(1):
+                    if cancel_event.wait(1):
                         break
                     result = bc.execute({'block': block}, self.completion, self.kaggle, self.huggingface, poll=True)
                 if result['status'] != 'ready':
-                    if self.cancel_event.is_set():
+                    if cancel_event.is_set():
                         step_data.update(status='cancelled', finished_at=now(), details=result['details'])
                         save_step()
                         break
                     raise bc.ContractError(result['details'].get('error', 'Операция не вернула результат.'))
-                outputs[node_id] = result['outputs']
+                if consumers[node_id]: outputs[node_id] = result['outputs']
                 step_data.update(status='ready', outputs=result['outputs'], details=result['details'], finished_at=now())
                 save_step()  # Retain the result even if provenance inspection fails.
                 step_data['versions'] = self.provenance(block, result)
@@ -496,15 +498,15 @@ class PipelineRunner:
                     self.event(record, 'Блок завершён: ' + node['name'], node_id)
                     self.save(record)
             with self.lock:
-                record['status'] = 'cancelled' if self.cancel_event.is_set() else 'paused' if record.get('debug_plan', {}).get('remaining') else 'ready'
-                self.event(record, 'Запуск остановлен.' if self.cancel_event.is_set() else 'Шаг завершён. Можно выполнить следующий блок или продолжить пайплайн.' if record['status'] == 'paused' else 'Пайплайн завершён.')
+                record['status'] = 'cancelled' if cancel_event.is_set() else 'paused' if record.get('debug_plan', {}).get('remaining') else 'ready'
+                self.event(record, 'Запуск остановлен.' if cancel_event.is_set() else 'Шаг завершён. Можно выполнить следующий блок или продолжить пайплайн.' if record['status'] == 'paused' else 'Пайплайн завершён.')
         except Exception as error:
             # Known provider exceptions contain safe user-facing messages, never raw HTTP bodies.
             known = (bc.ContractError, self.kaggle.KaggleError, self.huggingface.HubError)
             safe = isinstance(error, known) or type(error).__name__ == 'ApiError'
             message = clean(str(error)) if safe else 'Ошибка выполнения или сохранения результата. Автоматический повтор не выполнялся.'
             with self.lock:
-                record.update(status='cancelled' if self.cancel_event.is_set() else 'error', error=message)
+                record.update(status='cancelled' if cancel_event.is_set() else 'error', error=message)
                 if node_id is not None:
                     record['nodes'][node_id].update(status=record['status'], error=message, finished_at=now())
                 self.event(record, message, node_id)

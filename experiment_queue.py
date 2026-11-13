@@ -66,7 +66,7 @@ def prepare(context, body):
 def active(server):
     if getattr(server, 'lab_inference', False): return True
     contexts = [server] + [c.server for c in getattr(server, 'account_contexts', {}).values()]
-    return any(r.current and r.current['status'] in pr.ACTIVE for s in contexts for r in
+    return any(getattr(r, 'active_runs', None) or r.current and r.current['status'] in pr.ACTIVE for s in contexts for r in
                list(getattr(s, 'project_runners', {}).values()) + ([s.pipeline_runner] if hasattr(s, 'pipeline_runner') else []))
 
 

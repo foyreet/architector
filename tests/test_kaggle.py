@@ -118,11 +118,6 @@ class KaggleTests(unittest.TestCase):
             self.archive(files={name: 'bad'})
             with self.subTest(name=name), self.assertRaises(kg.KaggleError):
                 kg.local_files('owner/dataset')
-        self.archive()
-        with patch.object(kg, 'MAX_UNPACKED', 1), self.assertRaises(kg.KaggleError):
-            kg.local_files('owner/dataset')
-        with patch.object(kg, 'MAX_FILES', 1), self.assertRaises(kg.KaggleError):
-            kg.local_files('owner/dataset')
 
     def test_symlinks_cannot_leave_storage(self):
         (kg.ROOT / 'workspace').symlink_to(kg.ROOT.parent, target_is_directory=True)
@@ -148,13 +143,12 @@ class KaggleTests(unittest.TestCase):
                     kg.download_archive('owner/dataset', 'secret', destination, lambda *_: None)
                 self.assertNotIn('secret', str(caught.exception))
                 self.assertEqual(caught.exception.status, code if code != 500 else 502)
-        with patch.object(kg, 'build_opener') as builder, patch.object(kg, 'MAX_DOWNLOAD', 3):
+        with patch.object(kg, 'build_opener') as builder:
             response = builder.return_value.open.return_value.__enter__.return_value
             response.headers = {}
             response.read.side_effect = [b'1234', b'']
-            with self.assertRaises(kg.KaggleError) as caught:
-                kg.download_archive('owner/dataset/versions/2', 'secret', destination, lambda *_: None)
-            self.assertEqual(caught.exception.status, 413)
+            kg.download_archive('owner/dataset/versions/2', 'secret', destination, lambda *_: None)
+            self.assertEqual(destination.read_bytes(), b'1234')
             request = builder.return_value.open.call_args.args[0]
             self.assertEqual(request.full_url, 'https://www.kaggle.com/api/v1/datasets/download/owner/dataset?datasetVersionNumber=2')
             self.assertEqual(request.get_header('Authorization'), 'Bearer secret')

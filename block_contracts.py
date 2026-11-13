@@ -7,7 +7,6 @@ import re
 import local_operations
 import ml_operations
 import python_blocks
-from data_limits import JSON_DATA_BYTES
 
 CATALOG = json.loads((Path(__file__).parent / 'block_contracts.json').read_text(encoding='utf-8'))
 CONTRACTS = {item['kind']: item for item in CATALOG['blocks']}
@@ -53,7 +52,7 @@ def validate_value(value, spec):
     if kind == 'json':
         return python_blocks.validate_json(value)
     if kind in ('string', 'text'):
-        valid = isinstance(value, str) and len(value) <= spec.get('maxLength', 32000)
+        valid = isinstance(value, str) and len(value) <= spec.get('maxLength', math.inf)
         if valid and 'pattern' in spec:
             valid = re.fullmatch(spec['pattern'], value) is not None
     elif kind in ('integer', 'number'):
@@ -65,13 +64,10 @@ def validate_value(value, spec):
         valid = isinstance(value, list)
         if valid:
             for row in value: validate_value(row, {'type': 'row'})
-            if len(json.dumps(value, ensure_ascii=False, separators=(',', ':')).encode('utf-8')) > JSON_DATA_BYTES:
-                raise ContractError('Табличные данные в JSON больше 16 МиБ.', 413)
     elif kind == 'row':
-        valid = isinstance(value, dict) and len(value) <= 100 and all(
-            isinstance(k, str) and len(k) <= 200 and
+        valid = isinstance(value, dict) and all(
+            isinstance(k, str) and
             (v is None or type(v) in (str, int, float, bool)) and
-            (not isinstance(v, str) or len(v) <= 32000) and
             (type(v) not in (float, int) or math.isfinite(v)) for k, v in value.items())
     else:
         valid = False

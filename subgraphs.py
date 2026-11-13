@@ -100,13 +100,13 @@ class Registry:
                 raise bc.ContractError('Повторяющийся ID в схеме.')
             used.add(value)
             return value
-        def items(key, maximum):
+        def items(key):
             value = raw.get(key)
-            if not isinstance(value, list) or len(value) > maximum or any(not isinstance(item, dict) for item in value):
+            if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
                 raise bc.ContractError('Некорректный список: ' + key)
             return value
         types = []
-        for item in items('types', 200):
+        for item in items('types'):
             block = self.block(item.get('block'))
             color = item.get('color')
             if not isinstance(color, str) or not re.fullmatch(r'#[a-fA-F0-9]{6}', color):
@@ -116,7 +116,7 @@ class Registry:
                           'block': {'kind': block['kind'], 'version': block['version']}})
         type_ids = {item['id'] for item in types}
         nodes = []
-        for item in items('nodes', 500):
+        for item in items('nodes'):
             if item.get('typeId') not in type_ids:
                 raise bc.ContractError('У блока нет определения в каталоге проекта.')
             for coord in ('x', 'y'):
@@ -134,7 +134,7 @@ class Registry:
                           'description': text(item.get('description', ''), 2000), 'x': item['x'], 'y': item['y'],
                           'block': self.block(item.get('block')), **size})
         index, occupied, edges, connections = {n['id']: n for n in nodes}, set(), [], set()
-        for item in items('edges', 1000):
+        for item in items('edges'):
             edge = {key: item.get(key) for key in ('id', 'from', 'to', 'fromPort', 'toPort', 'kind')}
             unique(edge['id'])
             if any(not isinstance(v, str) for v in edge.values()) or edge['from'] not in index or edge['to'] not in index or edge['from'] == edge['to']:
@@ -249,8 +249,6 @@ def expand(graph, registry):
                     for binding in definition[section]:
                         target = binding['target']
                         dest[(node['id'], binding['id'])] = inner_ports[(target['node'], target['port'])]
-            if len(leaves) > 500:
-                raise bc.ContractError('После раскрытия подсхем допускается до 500 блоков.')
         for edge in current['edges']:
             if edge['kind'] == 'annotation':
                 source, target = (representatives[edge['from']], 'annotation'), (representatives[edge['to']], 'annotation')
@@ -258,8 +256,6 @@ def expand(graph, registry):
                 source, target = outputs[(edge['from'], edge['fromPort'])], inputs[(edge['to'], edge['toPort'])]
             links.append({'id': 'e_' + digest([*path, edge['id']])[:32], 'from': source[0], 'fromPort': source[1],
                           'to': target[0], 'toPort': target[1], 'kind': edge['kind']})
-            if len(links) > 1000:
-                raise bc.ContractError('После раскрытия допускается до 1000 связей.')
         return inputs, outputs, representatives
     visit(graph)
     return {'format': 'architect', 'version': 3, 'name': graph['name'], 'nodes': leaves, 'edges': links}, groups
