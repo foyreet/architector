@@ -116,6 +116,18 @@ class ProjectTests(unittest.TestCase):
         self.assertNotIn('history', self.store.export(ref['project_id']))
         self.completion.assert_not_called()
 
+    def test_history_roundtrip_beyond_100_runs(self):
+        created = self.create()
+        project_id = created['project']['id']
+        run = self.request('start', {'project_id': project_id, 'revision': 1})
+        self.server.project_runners[project_id].thread.join(5)
+        package = self.store.export(project_id, True)
+        self.assertEqual(package['history'][0]['record']['id'], run['id'])
+        package['history'] *= 101
+        imported = self.store.import_package({'package': package})['project']['id']
+        self.assertEqual(len(self.store.export(imported, True)['history']), 101)
+        self.assertEqual(len(self.request('runs', {'project_id': imported})['runs']), 101)
+
     def test_paths_and_symbolic_links_are_rejected(self):
         with self.assertRaises(bc.ContractError): self.store.get('../other')
         created = self.create(); meta = created['project']

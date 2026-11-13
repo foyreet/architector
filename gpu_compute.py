@@ -1,4 +1,4 @@
-"""Local GPU subprocess and bounded FIFO pipeline scheduling."""
+"""Local GPU subprocesses and active pipeline tracking."""
 from contextlib import contextmanager
 from contextvars import ContextVar
 from copy import deepcopy
@@ -18,62 +18,36 @@ import gpu_worker
 
 FORMAT = 'architect.gpu-mlp'
 ONLINE_SECONDS = 30
-JOB_SECONDS = 600
 EXECUTION = ContextVar('gpu_execution', default=None)
 TRAINING = ContextVar('gpu_training', default=None)
-PIPELINE_SLOT = threading.Lock()
 PIPELINE_ADMISSION = threading.Lock()
 PIPELINE_PENDING = {}
 SLOT_CONDITION = threading.Condition()
-SLOT_WAITERS = []
-SLOT_ACTIVE = None
+SLOT_ACTIVE = set()
 
 
 def enter_slot(root, run_id, cancelled):
-    global SLOT_ACTIVE
-    key = (str(Path(root).resolve()), run_id)
     with SLOT_CONDITION:
-        if key not in SLOT_WAITERS:
-            SLOT_WAITERS.append(key)
-        try:
-            while not cancelled.is_set():
-                if SLOT_ACTIVE is None and SLOT_WAITERS[0] == key:
-                    SLOT_WAITERS.pop(0); SLOT_ACTIVE = key
-                    return True
-                SLOT_CONDITION.wait(.2)
+        if cancelled.is_set():
             return False
-        finally:
-            if key in SLOT_WAITERS: SLOT_WAITERS.remove(key)
-            SLOT_CONDITION.notify_all()
-
-
-def leave_slot():
-    global SLOT_ACTIVE
-    with SLOT_CONDITION:
-        SLOT_ACTIVE = None; SLOT_CONDITION.notify_all()
+        SLOT_ACTIVE.add((str(Path(root).resolve()), run_id))
+        return True
 
 
 def slot_status(root, run_id):
-    key = (str(Path(root).resolve()), run_id)
     with SLOT_CONDITION:
-        position = SLOT_WAITERS.index(key) + 1 if key in SLOT_WAITERS else None
-        return {'queue_position': position,
-                'queue_ahead': position - 1 + int(SLOT_ACTIVE is not None) if position is not None else None,
-                'running': SLOT_ACTIVE == key}
+        return {'queue_position': None, 'queue_ahead': None,
+                'running': (str(Path(root).resolve()), run_id) in SLOT_ACTIVE}
 
 
 def admit(root, run_id):
-    # Reserve FIFO order before starting the worker thread. All account-specific
-    # pipeline modules share this process-wide scheduler.
+    # Reserve the run ID before saving the initial state.
     scope = str(Path(root).resolve())
     key = (scope, run_id)
     with PIPELINE_ADMISSION, SLOT_CONDITION:
         if key in PIPELINE_PENDING:
             fail('Этот ID запуска уже используется в другом проекте.', 409)
-        if len(PIPELINE_PENDING) >= 20 or sum(v == scope for v in PIPELINE_PENDING.values()) >= 2:
-            fail('Очередь заполнена: не более двух запусков на этом компьютере, включая выполняющийся. Дождитесь завершения одного из запусков.', 429)
         PIPELINE_PENDING[key] = scope
-        SLOT_WAITERS.append(key)
         SLOT_CONDITION.notify_all()
 
 
@@ -82,8 +56,7 @@ def release(root, run_id):
     with PIPELINE_ADMISSION, SLOT_CONDITION:
         PIPELINE_PENDING.pop(key, None)
         # Also remove a reservation if saving the run or starting its thread failed.
-        if key in SLOT_WAITERS:
-            SLOT_WAITERS.remove(key)
+        SLOT_ACTIVE.discard(key)
         SLOT_CONDITION.notify_all()
 
 
@@ -118,7 +91,7 @@ class Broker:
     def manage(self, root, body, action):
         if action != 'list': fail('Доступен только GPU этого компьютера.',404)
         info=self.info()
-        devices=[] if not info else [dict(id='local-gpu',name=info['device'],shared=False,online=True,allowed=True,busy=SLOT_ACTIVE is not None,queue_count=len(SLOT_WAITERS),remaining_seconds=600,reason='',backend=info['backend'])]
+        devices=[] if not info else [dict(id='local-gpu',name=info['device'],shared=False,online=True,allowed=True,busy=bool(SLOT_ACTIVE),queue_count=0,remaining_seconds=None,reason='',backend=info['backend'])]
         return {'devices':devices,'selected':'local-gpu' if devices else None}
 
     def selected(self, root, identity=None, require_available=True):
@@ -150,10 +123,10 @@ class Broker:
                 except queue.Full: process.kill();break
         readers=[threading.Thread(target=read,args=(stream,kind),daemon=True) for stream,kind in ((process.stdout,'result'),(process.stderr,'progress'))]
         for reader in readers: reader.start()
-        deadline=time.monotonic()+JOB_SECONDS; answer=None
+        answer=None
         try:
             process.stdin.write(raw);process.stdin.flush()
-            while time.monotonic()<deadline:
+            while True:
                 if cancelled and cancelled.is_set(): fail('GPU-задание отменено.',409)
                 try: kind,line=events.get(timeout=.1)
                 except queue.Empty:
@@ -167,7 +140,7 @@ class Broker:
                         training[1](value['checkpoint'])
                         process.stdin.write(b'checkpoint-saved\n');process.stdin.flush()
                     if observer: observer({k:v for k,v in value.items() if k!='checkpoint'})
-            if not answer: fail('GPU не завершил задачу за отведённое время.',504)
+            if not answer: fail('GPU завершил процесс без результата.',504)
             if 'error' in answer: fail(answer['error'],503)
             result=answer['result'];result.setdefault('versions',{})['executor']=device
             return result

@@ -43,7 +43,7 @@ class ExperimentWizardTests(unittest.TestCase):
         preview=wizard.request(self.root,self.body,'preview');self.assertEqual((preview['train_rows'],preview['test_rows']),(32,8))
         self.assertEqual(len(preview['steps']),6);self.assertEqual(list(self.root.iterdir()),[])
         small={**self.body,'csv':'x,label\n1,a\n2,a\n3,b\n4,b\n','config':{**self.body['config'],'features':['x']}}
-        with self.assertRaisesRegex(bc.ContractError,'слишком мало'):wizard.request(self.root,small,'preview')
+        self.assertTrue(wizard.request(self.root,small,'preview')['warnings'])
         small['config']['test_size']=.5;self.assertEqual(wizard.request(self.root,small,'preview')['test_rows'],2)
     def test_uploaded_dataset_runs_on_cpu_and_is_not_in_portable_graph(self):
         project,body=self.create();diagram=project['diagram'];self.assertEqual(len(diagram['nodes']),6)

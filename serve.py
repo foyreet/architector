@@ -123,9 +123,7 @@ def provider_request(path, key='', payload=None):
                       headers=headers)
     try:
         with build_opener(NoRedirect()).open(request, timeout=90 if payload else 20) as response:
-            data = response.read(8 * 1024 * 1024 + 1)
-        if len(data) > 8 * 1024 * 1024:
-            raise ApiError('Ответ OpenRouter слишком большой.', 502)
+            data = response.read()
         value = json.loads(data)
     except HTTPError as error:
         code = error.code
@@ -168,10 +166,10 @@ def chat_payload(body):
     system = body.get('system', '')
     if not isinstance(model, str) or not re.fullmatch(r'[a-zA-Z0-9~][a-zA-Z0-9_./:~@+-]{0,159}', model):
         raise ApiError('Укажите ID модели из каталога OpenRouter.')
-    if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 32000:
-        raise ApiError('Промпт должен содержать от 1 до 32000 символов.')
-    if not isinstance(system, str) or len(system) > 16000:
-        raise ApiError('Системная инструкция должна быть не длиннее 16000 символов.')
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise ApiError('Промпт должен содержать текст.')
+    if not isinstance(system, str):
+        raise ApiError('Системная инструкция должна быть строкой.')
     limit = body.get('max_tokens', 1024)
     temperature = body.get('temperature', 0.7)
     if type(limit) is not int or not 1 <= limit <= 16384:
@@ -453,7 +451,7 @@ class Handler(BaseHTTPRequestHandler):
             if 'application/json' not in accept or 'text/event-stream' not in accept:
                 raise ApiError('Accept должен включать application/json и text/event-stream.', 406)
             length = int(self.headers.get('Content-Length', '0'))
-            if not 0 < length <= 4 * 1024 * 1024: raise ApiError('Лимит MCP-запроса — 4 МиБ.', 413)
+            if length <= 0: raise ApiError('Пустой MCP-запрос.')
             self.connection.settimeout(30)
             try:
                 message = json.loads(self.rfile.read(length))

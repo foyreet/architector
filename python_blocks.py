@@ -53,7 +53,7 @@ def sandbox(payload):
     else:
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
-                connection.settimeout(payload['timeout'] + 30); connection.connect(path)
+                connection.connect(path)
                 raw = ml.encode(payload)
                 connection.sendall(struct.pack('!I', len(raw)))
                 connection.sendall(raw)
@@ -77,7 +77,7 @@ def execute(block, root):
         if key in inputs:
             references[key] = inputs[key]
             inputs[key] = ml.load(root, inputs[key], kind)
-    response = sandbox({'code': block['settings']['code'], 'params': params, 'inputs': inputs, 'timeout': block['settings']['timeout']})
+    response = sandbox({'code': block['settings']['code'], 'params': params, 'inputs': inputs})
     result = response.get('result')
     if not isinstance(result, dict) or set(result) - {'rows', 'data', 'report'}:
         ml.error('Верните словарь с выходами rows, data и/или report.')

@@ -74,8 +74,7 @@ window.CodexChat = ({api, account, project, diagram, flush, fit, applyProposal})
   $('codex-file').onchange = async () => {
     const files = Array.from($('codex-file').files || []); $('codex-file').value = '';
     if (!files.length) return;
-    if (files.length + attachments().length > 3) { error('К сообщению можно прикрепить до трёх документов.'); return; }
-    if (files.some(file => !file.size || file.size > 20 * 1024 * 1024)) { error('Прикрепите непустой документ до 20 МиБ.'); return; }
+    if (files.some(file => !file.size)) { error('Прикрепите непустой документ.'); return; }
     const identity = scope, selected = body(), token = generation;
     uploading = true; error(); controls(); renderAttachments();
     $('codex-upload-status').hidden = false; $('codex-upload-status').textContent = 'Подготовка документа…';
@@ -196,9 +195,8 @@ window.CodexChat = ({api, account, project, diagram, flush, fit, applyProposal})
         else interim += result[0].transcript + ' ';
       }
       const value = [prefix, final.trim()].filter(Boolean).join(' ');
-      field.value = value.slice(0, field.maxLength); drafts.set(identity, field.value);
+      field.value = value; drafts.set(identity, field.value);
       voiceStatus(interim.trim() || 'Слушаю… Нажмите «Стоп», когда закончите.');
-      if (value.length >= field.maxLength) { voiceStatus('Достигнут лимит сообщения. Диктовка остановлена.'); current.stop(); }
     };
     current.onerror = event => {
       if (!valid()) return;
@@ -225,7 +223,7 @@ window.CodexChat = ({api, account, project, diagram, flush, fit, applyProposal})
     $('codex-connect').disabled = opening || !!login;
     $('codex-attachments').querySelectorAll('button').forEach(button => button.disabled = pending || sending || uploading);
     $('codex-attach').disabled = !account.user || pending || sending || uploading || designBusy;
-    $('codex-attach-file').disabled = !connected || attachments().length >= 3;
+    $('codex-attach-file').disabled = !connected;
     for(const id of ['codex-design-update','codex-design-remove'])$(id).disabled=pending||sending||uploading||designBusy;
     $('codex-attach-design').disabled = pending||sending||uploading||designBusy;
     $('codex-clear').disabled = pending || sending || uploading;

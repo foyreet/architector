@@ -98,8 +98,8 @@ def run(data, progress=lambda value: None):
         lr = settings.get('learning_rate')
         if type(lr) not in (float, int) or not math.isfinite(lr) or not .0001 <= lr <= .1: raise ValueError('Learning rate должен быть от 0.0001 до 0.1.')
         labels = data['table'].get('y')
-        if not isinstance(labels, list) or len(labels) != len(rows) or any(not isinstance(v, str) or len(v) > 200 for v in labels): raise ValueError('Некорректные классы.')
-        classes = sorted(set(labels)); integer(len(classes), 2, 30)
+        if not isinstance(labels, list) or len(labels) != len(rows) or any(not isinstance(v, str) for v in labels): raise ValueError('Некорректные классы.')
+        classes = sorted(set(labels))
         torch.manual_seed(seed)
         checkpoint = data.get('checkpoint')
         if checkpoint is not None: validate_checkpoint(checkpoint, data, info)
@@ -139,7 +139,7 @@ def run(data, progress=lambda value: None):
     model = data.get('model', {})
     if model.get('format') != FORMAT or model.get('version') != 1: raise ValueError('Неподдерживаемая модель GPU.')
     classes = model.get('classes')
-    if not isinstance(classes, list) or not 2 <= len(classes) <= 30 or len(set(classes)) != len(classes) or any(not isinstance(v, str) or len(v) > 200 for v in classes): raise ValueError('Некорректные классы модели.')
+    if not isinstance(classes, list) or not classes or len(set(classes)) != len(classes) or any(not isinstance(v, str) for v in classes): raise ValueError('Некорректные классы модели.')
     hidden = integer(model.get('hidden_size'), 4, 128)
     mean = vector(model.get('mean'), width); scale = vector(model.get('scale'), width)
     if any(v <= 0 for v in scale): raise ValueError('Некорректный масштаб модели.')
@@ -160,7 +160,7 @@ def run(data, progress=lambda value: None):
     from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, classification_report
     import sklearn
     actual = data['table'].get('y')
-    if not isinstance(actual, list) or len(actual) != len(rows) or any(not isinstance(v, str) or len(v) > 200 for v in actual): raise ValueError('Некорректные целевые классы.')
+    if not isinstance(actual, list) or len(actual) != len(rows) or any(not isinstance(v, str) for v in actual): raise ValueError('Некорректные целевые классы.')
     labels = sorted(set(actual) | set(classes)); versions['scikit-learn'] = sklearn.__version__
     return {'accuracy': accuracy_score(actual, predictions), 'macro_f1': f1_score(actual, predictions, labels=labels, average='macro', zero_division=0),
             'classes': labels, 'confusion_matrix': confusion_matrix(actual, predictions, labels=labels).tolist(),

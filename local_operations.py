@@ -2,6 +2,7 @@
 
 import csv
 import codecs
+from contextlib import contextmanager
 import hashlib
 import io
 import sys
@@ -35,8 +36,6 @@ def render_template(block):
         value = row[match.group(1).strip()]
         return '' if value is None else str(value)
     text = PLACEHOLDER.sub(replace, template)
-    if len(text) > 32000:
-        raise ContractError('Промпт после подстановки длиннее 32 000 символов.', 413)
     return {'status': 'ready', 'outputs': {'text': text}, 'details': {'fields': list(dict.fromkeys(fields))}}
 
 
@@ -56,14 +55,19 @@ def csv_filename(requested, names):
     raise ContractError(message + available + ' Укажите точное имя с учётом папок и регистра.', 404 if requested.strip() else 400)
 
 
-def decode_csv(raw, encoding):
-    from block_contracts import ContractError
+def csv_codec(prefix, encoding):
     codec = encoding
     if encoding == 'auto':
-        codec = ('utf-32' if raw.startswith((codecs.BOM_UTF32_LE, codecs.BOM_UTF32_BE)) else
-                 'utf-16' if raw.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)) else 'utf-8-sig')
+        codec = ('utf-32' if prefix.startswith((codecs.BOM_UTF32_LE, codecs.BOM_UTF32_BE)) else
+                 'utf-16' if prefix.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)) else 'utf-8-sig')
     elif encoding == 'utf-8':
         codec = 'utf-8-sig'
+    return codec
+
+
+def decode_csv(raw, encoding):
+    from block_contracts import ContractError
+    codec = csv_codec(raw, encoding)
     try:
         text = raw.decode(codec)
     except UnicodeError:
@@ -130,29 +134,69 @@ def csv_source(block, kaggle):
         raise ContractError('Не удалось прочитать CSV из локального датасета.', 422) from None
 
 
+@contextmanager
+def csv_lines(block, kaggle):
+    from block_contracts import ContractError
+    ref = block['inputs']['dataset']
+    if ref['provider'] == 'local':
+        import ml_operations as ml
+        dataset = ml.load(kaggle.ROOT, ref, 'dataset')
+        if dataset.get('format') != 'architect.uploaded-csv':
+            raise ContractError('CSV-файл не найден в загруженном датасете.', 404)
+        requested = block['inputs']['file']
+        name = csv_filename(requested, [dataset['name']]) if requested.strip() else dataset['name']
+        text = dataset['csv']
+        digest = hashlib.sha256()
+        for start in range(0, len(text), 65536):
+            digest.update(text[start:start + 65536].encode('utf-8'))
+        with io.StringIO(text, newline='') as source:
+            yield source, name, 'utf-8-sig', digest
+        return
+
+    try:
+        with zipfile.ZipFile(kaggle.archive_path(kaggle.dataset_handle(ref['id']))) as archive:
+            names = [entry['name'] for entry in kaggle.archive_members(archive)]
+            name = csv_filename(block['inputs']['file'], names)
+            with archive.open(name) as raw:
+                digest = hashlib.file_digest(raw, 'sha256')
+                raw.seek(0)
+                codec = csv_codec(raw.peek(4), block['settings'].get('encoding', 'auto'))
+                with io.TextIOWrapper(raw, encoding=codec, newline='') as source:
+                    yield source, name, codec, digest
+    except UnicodeError:
+        raise ContractError('Не удалось прочитать CSV. Выберите кодировку файла в настройках блока «Чтение CSV».', 422) from None
+    except FileNotFoundError:
+        raise ContractError('Сначала скачайте датасет в блоке Kaggle.', 404) from None
+    except (OSError, zipfile.BadZipFile, RuntimeError, NotImplementedError):
+        raise ContractError('Не удалось прочитать CSV из локального датасета.', 422) from None
+
+
 def read_csv(block, kaggle):
     from block_contracts import ContractError
     settings = block['settings']
-    raw, name = csv_source(block, kaggle)
     try:
-        # Uploaded datasets already contain Unicode normalized by the upload wizard.
-        text, encoding = decode_csv(raw, 'utf-8' if block['inputs']['dataset']['provider'] == 'local' else settings.get('encoding', 'auto'))
-        reader = csv.reader(io.StringIO(text), delimiter=settings['delimiter'], strict=True)
-        headers, generated = csv_headers(next(reader, None))
-        rows = []
-        for values in reader:
-            if not values:  # Ignore empty physical rows, like common CSV readers.
-                continue
-            if len(values) != len(headers):
-                raise ContractError('Некорректная строка CSV: проверьте разделитель, число столбцов.')
-            row = dict(zip(headers, values))
-            rows.append(row)
-        if settings['row_index'] >= len(rows):
-            raise ContractError('Выбранной строки нет в CSV. Уменьшите её номер.')
-        return {'status': 'ready', 'outputs': {'rows': rows, 'row': rows[settings['row_index']]},
-                'details': {'file': name, 'row_count': len(rows), 'row_index': settings['row_index'],
-                            'truncated': False, 'sha256': hashlib.sha256(raw).hexdigest(), 'encoding': encoding,
-                            'generated_headers': generated}}
+        with csv_lines(block, kaggle) as (source, name, encoding, digest):
+            def lines():
+                for index, line in enumerate(source):
+                    if '\x00' in line:
+                        raise ContractError('В CSV обнаружены нулевые символы. Проверьте кодировку файла.', 422)
+                    yield line.removeprefix('\ufeff') if index == 0 else line
+            reader = csv.reader(lines(), delimiter=settings['delimiter'], strict=True)
+            headers, generated = csv_headers(next(reader, None))
+            rows = []
+            for values in reader:
+                if not values:  # Ignore empty physical rows, like common CSV readers.
+                    continue
+                if len(values) != len(headers):
+                    raise ContractError('Некорректная строка CSV: проверьте разделитель, число столбцов.')
+                row = dict(zip(headers, values))
+                rows.append(row)
+            if settings['row_index'] >= len(rows):
+                raise ContractError('Выбранной строки нет в CSV. Уменьшите её номер.')
+            return {'status': 'ready', 'outputs': {'rows': rows, 'row': rows[settings['row_index']]},
+                    'details': {'file': name, 'row_count': len(rows), 'row_index': settings['row_index'],
+                                'truncated': False, 'sha256': digest.hexdigest(), 'encoding': encoding,
+                                'generated_headers': generated}}
     except csv.Error:
         raise ContractError('Не удалось разобрать структуру CSV. Проверьте разделитель и кавычки в файле.', 422) from None
 

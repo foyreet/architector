@@ -55,11 +55,9 @@ class Compatible:
         raw=None
         if payload is not None:
             raw=json.dumps(payload,ensure_ascii=False).encode(); headers['Content-Type']='application/json'
-        if raw and len(raw)>4*1024*1024: raise bc.ContractError('Контекст слишком большой для одного запроса. Начните новый чат или отключите контекст схемы.',413)
         try:
             with build_opener(NoRedirect()).open(Request(self.value['base_url']+'/'+route,data=raw,headers=headers),timeout=timeout) as r:
-                data=r.read(4*1024*1024+1)
-                if len(data)>4*1024*1024: raise bc.ContractError('Ответ модели слишком большой.',502)
+                data=r.read()
                 result=json.loads(data)
                 if not isinstance(result,dict): raise ValueError()
                 return result
@@ -89,7 +87,7 @@ class Compatible:
                 if not isinstance(text,str): raise ValueError()
                 if not calls:
                     if choice.get('finish_reason')=='length': raise bc.ContractError('Модель достигла лимита ответа. Сократите запрос; автоматического повтора нет.',502)
-                    if text.strip(): return text[:32000]
+                    if text.strip(): return text
                     raise ValueError()
                 messages.append({'role':'assistant','content':text or None,'tool_calls':calls})
                 for call in calls:

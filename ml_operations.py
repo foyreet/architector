@@ -14,7 +14,39 @@ from app_config import data_root
 
 KINDS = ('ml_prepare', 'ml_split', 'ml_train', 'gpu_train', 'ml_evaluate', 'ml_save')
 ARTIFACT_TYPES = ('table', 'trained_model', 'metrics', 'model_bundle', 'python_data')
-WORKER_LOCK = threading.Lock()
+class WorkerActivity:
+    def __init__(self):
+        self.condition = threading.Condition()
+        self.workers = 0
+        self.exclusive = False
+
+    def start(self):
+        with self.condition:
+            self.condition.wait_for(lambda: not self.exclusive)
+            self.workers += 1
+
+    def finish(self):
+        with self.condition:
+            self.workers -= 1
+
+    def locked(self):
+        with self.condition:
+            return self.exclusive or self.workers > 0
+
+    def begin_cleanup(self):
+        with self.condition:
+            if self.workers or self.exclusive:
+                return False
+            self.exclusive = True
+            return True
+
+    def end_cleanup(self):
+        with self.condition:
+            self.exclusive = False
+            self.condition.notify_all()
+
+
+WORKER_LOCK = WorkerActivity()
 
 
 def error(message, status=400):
@@ -35,20 +67,30 @@ def artifact_dir(root):
     return folder
 
 
+def file_digest(path):
+    with path.open('rb') as source:
+        return hashlib.file_digest(source, 'sha256').hexdigest()
+
+
 def save(root, kind, content):
     from block_contracts import artifact
-    raw = encode({'kind': kind, 'content': content})
-    digest = hashlib.sha256(raw).hexdigest()
-    folder = artifact_dir(root); target = folder / (digest + '.json')
-    with tempfile.NamedTemporaryFile(dir=folder, delete=False) as stream:
-        name = stream.name
+    folder = artifact_dir(root)
+    with tempfile.NamedTemporaryFile(dir=folder, delete=False, mode='w', encoding='utf-8', newline='') as stream:
+        path = Path(stream.name)
         try:
-            stream.write(raw); stream.flush(); os.fsync(stream.fileno())
+            json.dump({'kind': kind, 'content': content}, stream, ensure_ascii=False, allow_nan=False,
+                      sort_keys=True, separators=(',', ':'))
+            stream.flush()
+            os.fsync(stream.fileno())
         except BaseException:
-            Path(name).unlink(missing_ok=True)
+            stream.close()
+            path.unlink(missing_ok=True)
             raise
-    try: os.replace(name, target)
-    finally: Path(name).unlink(missing_ok=True)
+    try:
+        digest = file_digest(path)
+        os.replace(path, folder / (digest + '.json'))
+    finally:
+        path.unlink(missing_ok=True)
     return artifact(kind, 'local', digest)
 
 
@@ -57,9 +99,9 @@ def load(root, ref, kind):
     validate_artifact(ref, kind)
     path = artifact_dir(root) / (ref['id'] + '.json')
     if path.is_symlink() or not path.is_file(): error('Артефакт недоступен в этом аккаунте. Запустите предыдущие блоки.', 404)
-    raw = path.read_bytes()
-    if hashlib.sha256(raw).hexdigest() != ref['id']: error('Артефакт повреждён: контрольная сумма не совпала.')
-    value = json.loads(raw)
+    if file_digest(path) != ref['id']: error('Артефакт повреждён: контрольная сумма не совпала.')
+    with path.open(encoding='utf-8') as source:
+        value = json.load(source)
     if value['kind'] != kind: error('Тип артефакта не совпадает.')
     return value['content']
 
@@ -68,23 +110,33 @@ def worker(task, _root=None, **kwargs):
     import gpu_compute
     if task == 'gpu_train' or kwargs.get('model', {}).get('format') == gpu_compute.FORMAT:
         return gpu_compute.broker().execute(_root or data_root(), 'train' if task == 'gpu_train' else task, kwargs)
-    if not WORKER_LOCK.acquire(blocking=False): error('Обучение или оценка уже выполняется. Повторите запуск после завершения.', 409)
+    WORKER_LOCK.start()
     try:
         local_python = Path(__file__).parent / '.venv/bin/python'
         executable = os.environ.get('ARCHITECT_ML_PYTHON') or (str(local_python) if local_python.exists() else sys.executable)
         env = {**os.environ, 'OMP_NUM_THREADS': '1', 'OPENBLAS_NUM_THREADS': '1', 'MKL_NUM_THREADS': '1', 'VECLIB_MAXIMUM_THREADS': '1'}
         try:
-            result = subprocess.run([executable, '-I', str(Path(__file__).with_name('ml_worker.py'))],
-                                    input=encode({'task': task, **kwargs}), stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE, timeout=120, env=env)
-        except subprocess.TimeoutExpired: error('Обучение превысило 120 секунд. Уменьшите число деревьев или глубину.', 408)
+            with tempfile.TemporaryFile(mode='w+', encoding='utf-8') as source, tempfile.TemporaryFile(mode='w+', encoding='utf-8') as output:
+                json.dump({'task': task, **kwargs}, source, ensure_ascii=False, allow_nan=False)
+                source.seek(0)
+                execution = gpu_compute.EXECUTION.get()
+                with subprocess.Popen([executable, '-I', str(Path(__file__).with_name('ml_worker.py'))],
+                                      stdin=source, stdout=output, stderr=subprocess.DEVNULL, env=env) as process:
+                    try:
+                        while process.poll() is None:
+                            if execution and execution[1].is_set(): error('Вычисление остановлено.', 409)
+                            try: process.wait(timeout=.25)
+                            except subprocess.TimeoutExpired: pass
+                    finally:
+                        if process.poll() is None: process.kill()
+                if process.returncode: error('Среда обучения завершилась с ошибкой. Проверьте зависимости и доступную память.', 503)
+                output.seek(0)
+                response = json.load(output)
         except OSError: error('Не удалось запустить среду обучения. Проверьте ARCHITECT_ML_PYTHON.', 503)
-        if result.returncode: error('Среда обучения завершилась с ошибкой. Проверьте зависимости и доступную память.', 503)
-        response = json.loads(result.stdout)
         if 'error' in response: error(response['error'])
         return response['result']
     finally:
-        WORKER_LOCK.release()
+        WORKER_LOCK.finish()
 
 
 def columns(value):
@@ -103,7 +155,7 @@ def prepare(rows, settings):
     for index, row in enumerate(rows):
         try:
             label = row[target]
-            if label is None or not str(label).strip() or len(str(label)) > 200: raise ValueError()
+            if label is None or not str(label).strip(): raise ValueError()
             values = [float(row[key]) for key in features]
             if any(not math.isfinite(v) or abs(v) > 1e15 for v in values): raise ValueError()
         except (KeyError, TypeError, ValueError, OverflowError):
@@ -113,8 +165,7 @@ def prepare(rows, settings):
         if signature in seen and settings['duplicates'] == 'drop': duplicates += 1; continue
         seen.add(signature); X.append(values); y.append(label); row_ids.append(index)
     counts = Counter(y)
-    if not 2 <= len(counts) <= 30: error('Для классификации нужно от 2 до 30 классов. Для непрерывной цели пока нет блока регрессии.')
-    if min(counts.values()) < 2: error('Каждый класс должен содержать хотя бы 2 строки для разделения train/test.')
+    if not counts: error('После подготовки не осталось строк для обучения.')
     return {'X': X, 'y': y, 'row_ids': row_ids, 'features': features, 'target': target, 'role': 'prepared',
             'source_sha256': hashlib.sha256(encode(rows)).hexdigest(), 'settings': settings}, {
                 'input_rows': len(rows), 'rows': len(y), 'dropped_rows': dropped, 'duplicates_removed': duplicates,

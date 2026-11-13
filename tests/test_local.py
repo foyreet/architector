@@ -53,6 +53,7 @@ class LocalTests(unittest.TestCase):
         def rpc(method,params=None,**headers):
             return self.post('/mcp',{'jsonrpc':'2.0','id':1,'method':method,'params':params or {}},{'Accept':'application/json, text/event-stream',**headers})
         code,value=rpc('initialize',{'protocolVersion':'2025-06-18','capabilities':{},'clientInfo':{'name':'test','version':'1'}});self.assertEqual(code,200);self.assertIn('result',value)
+        self.assertIn('result', rpc('tools/list', {'_meta': {'padding': 'x' * (5 * 1024 * 1024)}})[1])
         tools=rpc('tools/list')[1]['result']['tools'];names={t['name'] for t in tools}
         self.assertEqual(len(names),7);self.assertNotIn('architect_pipeline_examples',names)
         self.assertFalse(any('publish' in name or 'run' in name for name in names))
@@ -131,11 +132,11 @@ class ModelTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             gpu.admit(root,'a');gpu.admit(root,'b')
             try:
-                with self.assertRaises(bc.ContractError):gpu.admit(root,'c')
+                gpu.admit(root,'c')
                 cancel=threading.Event();self.assertTrue(gpu.enter_slot(root,'a',cancel))
-                self.assertEqual(gpu.slot_status(root,'b')['queue_ahead'],1)
+                self.assertTrue(gpu.enter_slot(root,'c',cancel))
                 cancel.set();self.assertFalse(gpu.enter_slot(root,'b',cancel))
-            finally:gpu.leave_slot();gpu.release(root,'a');gpu.release(root,'b')
+            finally:gpu.release(root,'c');gpu.release(root,'a');gpu.release(root,'b')
             broker=gpu.Broker(root)
             with patch.object(broker,'info',return_value=None):
                 with self.assertRaises(bc.ContractError):broker.selected(root)

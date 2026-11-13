@@ -148,7 +148,7 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(run['status'], 'error')
         self.assertIn('Provider failed', run['error'])
 
-    def test_idempotent_start_and_single_active_run(self):
+    def test_idempotent_start_and_concurrent_runs(self):
         entered, release = threading.Event(), threading.Event()
         def completion(_):
             entered.set(); release.wait(3)
@@ -159,17 +159,19 @@ class PipelineTests(unittest.TestCase):
         self.assertTrue(entered.wait(3))
         try:
             self.assertEqual(self.start(run_id=run_id)['id'], first['id'])
-            with self.assertRaises(bc.ContractError) as error:
+            threads = [self.runner.thread]
+            for _ in range(2):
                 self.start()
-            self.assertEqual(error.exception.status, 409)
+                threads.append(self.runner.thread)
             diagram = scenario(); diagram['name'] = 'different'
             with self.assertRaises(bc.ContractError):
                 self.start(diagram, run_id=run_id)
         finally:
             release.set()
+        for thread in threads: thread.join(5)
         self.assertEqual(self.finish(first)['status'], 'ready')
         self.start(run_id=run_id)
-        self.completion.assert_called_once()
+        self.assertEqual(self.completion.call_count, 3)
 
     def test_cancel_retains_current_response_and_skips_next(self):
         entered, release = threading.Event(), threading.Event()

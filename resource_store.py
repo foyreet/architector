@@ -136,10 +136,10 @@ def request(server, context, body, action):
             digest = hashlib.sha256(ml.encode(values)).hexdigest()
             if action == 'cleanup-preview': return {'digest': digest, 'count': len(values), 'bytes': sum(a['bytes'] for a in values)}
             if body.get('digest') != digest: raise bc.ContractError('Список изменился. Проверьте очистку заново.', 409)
-            if not ml.WORKER_LOCK.acquire(blocking=False): raise bc.ContractError('Вычисления ещё выполняются.', 409)
+            if not ml.WORKER_LOCK.begin_cleanup(): raise bc.ContractError('Вычисления ещё выполняются.', 409)
             try:
                 for a in values: (ml.artifact_dir(store.root)/(a['id']+'.json')).unlink()
-            finally: ml.WORKER_LOCK.release()
+            finally: ml.WORKER_LOCK.end_cleanup()
             return {'removed': len(values)}
         if action == 'delete-run':
             project = store.get(body.get('project_id')); identity = body.get('run_id')

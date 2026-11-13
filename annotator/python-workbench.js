@@ -23,7 +23,7 @@ window.PythonWorkbench = ({api, node, diagram, context, save, update, pack, down
     container.append(grid);
   }
   function body(id) { return {diagram: diagram(), node_id: id, ...context()}; }
-  function codeText() { return JSON.stringify([$('python-code').value, $('python-params').value, $('python-timeout').value]); }
+  function codeText() { return JSON.stringify([$('python-code').value, $('python-params').value]); }
   function renderData() {
     const value = dataAfter && dataResult.prepared ? dataResult.prepared : dataResult;
     table($('data-rows'), value.rows, value.profile.columns.map(c => c.name));
@@ -114,7 +114,7 @@ window.PythonWorkbench = ({api, node, diagram, context, save, update, pack, down
     try {
       const params = JSON.parse($('python-params').value);
       if (!params || typeof params !== 'object' || Array.isArray(params)) throw new Error('Параметры должны быть объектом JSON.');
-      update(codeNode, {code: $('python-code').value, params: JSON.stringify(params), timeout: Number($('python-timeout').value)});
+      update(codeNode, {code: $('python-code').value, params: JSON.stringify(params)});
       codeSaved = codeText(); $('python-status').textContent = 'Код сохранён в схеме.'; return true;
     } catch (error) { $('python-status').textContent = error.message; return false; }
   }
@@ -125,7 +125,6 @@ window.PythonWorkbench = ({api, node, diagram, context, save, update, pack, down
     $('python-code').value = current.block.settings.code;
     try { $('python-params').value = JSON.stringify(JSON.parse(current.block.settings.params), null, 2); }
     catch { $('python-params').value = current.block.settings.params; }
-    $('python-timeout').value = current.block.settings.timeout;
     codeSaved = codeText(); $('python-result').hidden = true; $('python-status').textContent = '';
     $('python-dialog').showModal();
   };
@@ -135,7 +134,7 @@ window.PythonWorkbench = ({api, node, diagram, context, save, update, pack, down
     event.preventDefault(); const field = event.target;
     field.setRangeText('    ', field.selectionStart, field.selectionEnd, 'end'); field.dispatchEvent(new Event('input'));
   });
-  for (const id of ['python-code','python-params','python-timeout']) $(id).addEventListener('input', () => {
+  for (const id of ['python-code','python-params']) $(id).addEventListener('input', () => {
     codeRequest++; $('python-result').hidden = true; $('python-status').textContent = 'Есть несохранённые изменения.';
   });
   $('python-apply').onclick = applyCode;

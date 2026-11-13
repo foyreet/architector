@@ -52,7 +52,7 @@ def validate_value(value, spec):
     if kind == 'json':
         return python_blocks.validate_json(value)
     if kind in ('string', 'text'):
-        valid = isinstance(value, str) and len(value) <= spec.get('maxLength', 32000)
+        valid = isinstance(value, str) and len(value) <= spec.get('maxLength', math.inf)
         if valid and 'pattern' in spec:
             valid = re.fullmatch(spec['pattern'], value) is not None
     elif kind in ('integer', 'number'):

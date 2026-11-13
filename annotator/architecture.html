@@ -181,11 +181,11 @@
           <button type="button" id="unpack-subgraph">Развернуть для редактирования</button>
         </section>
         <div id="template-fields" hidden>
-          <label>Шаблон промпта<textarea id="prompt-template" rows="4" maxlength="32000" placeholder="Обработай текст: {{text}}"></textarea></label>
+          <label>Шаблон промпта<textarea id="prompt-template" rows="4" placeholder="Обработай текст: {{text}}"></textarea></label>
 
         </div>
         <div id="local-model-fields" hidden>
-          <label>Промпт<textarea id="local-prompt" maxlength="32000" rows="3"></textarea></label>
+          <label>Промпт<textarea id="local-prompt" rows="3"></textarea></label>
           <label>Лимит ответа<input id="local-max-tokens" type="number" min="1" max="16384" value="256"></label>
 
         </div>
@@ -234,8 +234,8 @@
           <label>Модель<input id="or-model" maxlength="160" list="model-options" placeholder="ID модели из OpenRouter" autocomplete="off"></label>
           <button type="button" id="load-models">Загрузить каталог моделей</button>
           <p class="muted" id="models-status" role="status"></p>
-          <label>Системная инструкция<textarea id="or-system" maxlength="16000" rows="3" placeholder="Роль и правила для модели"></textarea></label>
-          <label>Промпт<textarea id="or-prompt" maxlength="32000" rows="5" placeholder="Что должна сделать модель?"></textarea></label>
+          <label>Системная инструкция<textarea id="or-system" rows="3" placeholder="Роль и правила для модели"></textarea></label>
+          <label>Промпт<textarea id="or-prompt" rows="5" placeholder="Что должна сделать модель?"></textarea></label>
           <div class="parameter-pair"><label>Лимит токенов<input id="or-max-tokens" type="number" min="1" max="16384" step="1" value="1024"></label><label>Температура<input id="or-temperature" type="number" min="0" max="2" step="0.1" value="0.7"></label></div>
 
           <button type="button" class="primary" id="run-block">Запустить блок</button>
@@ -277,8 +277,8 @@
       <div id="codex-design" hidden><span id="codex-design-title"></span><span id="codex-design-state"></span><div class="codex-design-actions"><button id="codex-design-read" type="button">Прочитать</button><button id="codex-design-update" type="button">Обновить</button><button id="codex-design-remove" type="button">Убрать</button></div></div>
       <div id="codex-attach-menu" hidden><button id="codex-attach-file" type="button">Файл с устройства</button><button id="codex-attach-design" type="button">Мои дизайн-документы</button></div>
       <div id="codex-attachments" aria-live="polite"></div>
-      <label for="codex-message" class="sr-only">Сообщение AI</label><textarea id="codex-message" rows="3" maxlength="8000" placeholder="Опишите схему или задайте вопрос…"></textarea>
-      <div class="codex-send-row"><span class="muted">Используется ваше подключение</span><button id="codex-attach" type="button" aria-label="Прикрепить документ" title="Прикрепить документ · до 20 МиБ · PDF, DOCX, ODT, PPTX, XLSX, RTF и текстовые файлы"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m8 13 6-6a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7l9-9a7 7 0 0 1 10 10l-8 8"/></svg></button><button id="codex-voice" type="button" aria-label="Начать диктовку" aria-pressed="false" title="Голосовой ввод через браузер">🎙 Голос</button><button id="codex-send" class="primary" type="submit" aria-label="Отправить сообщение" disabled>Отправить</button></div>
+      <label for="codex-message" class="sr-only">Сообщение AI</label><textarea id="codex-message" rows="3" placeholder="Опишите схему или задайте вопрос…"></textarea>
+      <div class="codex-send-row"><span class="muted">Используется ваше подключение</span><button id="codex-attach" type="button" aria-label="Прикрепить документ" title="Прикрепить документ · PDF, DOCX, ODT, PPTX, XLSX, RTF и текстовые файлы"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m8 13 6-6a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7l9-9a7 7 0 0 1 10 10l-8 8"/></svg></button><button id="codex-voice" type="button" aria-label="Начать диктовку" aria-pressed="false" title="Голосовой ввод через браузер">🎙 Голос</button><button id="codex-send" class="primary" type="submit" aria-label="Отправить сообщение" disabled>Отправить</button></div>
     </form>
   </dialog>
   <dialog id="mobile-nav-dialog" aria-label="Меню приложения"></dialog>
@@ -392,10 +392,9 @@
   <dialog id="python-dialog" class="workbench-dialog">
     <div class="dialog-heading"><h2>Python — свой этап пайплайна</h2><button type="button" id="close-python" aria-label="Закрыть код">×</button></div>
     <p class="muted">Определите run(inputs, params). Входы: rows, data, value (JSON), table и model — из подключённых портов. Верните словарь с rows, data и/или report. Данные data сохраняются отдельно и передаются следующему Python-блоку.</p>
-    <div class="python-editor-grid"><label>Код<textarea id="python-code" spellcheck="false" maxlength="64000" rows="20"></textarea></label>
-      <div><label>Параметры JSON<textarea id="python-params" spellcheck="false" maxlength="64000" rows="10"></textarea></label>
-      <label>Лимит времени, секунд<input id="python-timeout" type="number" min="1" max="60" value="30"></label>
-      <p class="muted">Python 3.11 · NumPy · pandas · scikit-learn. Блок запускается отдельным локальным процессом. Время выполнения задаётся в настройках блока.</p></div></div>
+    <div class="python-editor-grid"><label>Код<textarea id="python-code" spellcheck="false" rows="20"></textarea></label>
+      <div><label>Параметры JSON<textarea id="python-params" spellcheck="false" rows="10"></textarea></label>
+      <p class="muted">Python 3.11 · NumPy · pandas · scikit-learn. Блок запускается отдельным локальным процессом.</p></div></div>
     <div class="workbench-actions"><button type="button" id="python-apply">Сохранить код</button><button type="button" id="python-test" class="primary">Пробный запуск на входных данных</button><button type="button" id="python-pack">Создать свой блок</button></div>
     <p id="python-status" role="status"></p>
     <div id="python-result" hidden><h3>Результат</h3><pre id="python-report"></pre><div id="python-rows" class="dataset-table"></div><button type="button" id="python-download">Скачать данные результата JSON</button><h3>Журнал</h3><pre id="python-logs"></pre></div>

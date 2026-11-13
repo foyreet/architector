@@ -13,8 +13,14 @@ def run(data):
     versions = {'python': sys.version.split()[0], 'scikit-learn': sklearn.__version__, 'numpy': np.__version__, 'scipy': scipy.__version__}
     task = data['task']; table = data.get('table', {})
     if task == 'split':
+        from collections import Counter
+        from math import ceil
+        labels = table['y']
+        counts = Counter(labels)
+        test_count = ceil(len(labels) * data['settings']['test_size'])
+        stratified = min(counts.values()) >= 2 and min(test_count, len(labels) - test_count) >= len(counts)
         train, test = train_test_split(list(range(len(table['y']))), test_size=data['settings']['test_size'],
-                                      random_state=data['settings']['seed'], stratify=table['y'])
+                                      random_state=data['settings']['seed'], stratify=labels if stratified else None)
         return {'train': train, 'test': test, 'versions': versions}
     if task == 'train':
         model = RandomForestClassifier(

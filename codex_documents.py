@@ -16,9 +16,6 @@ from xml.etree import ElementTree as ET
 
 import block_contracts as bc
 
-MAX_FILE = 20 * 1024 * 1024
-MAX_TEXT = 16 * 1024 * 1024
-MAX_STORED = 64 * 1024 * 1024
 PARSERS = threading.BoundedSemaphore(1)
 TEXT = {'.txt', '.md', '.markdown', '.csv', '.tsv', '.json', '.yaml', '.yml', '.xml', '.log', '.py', '.js', '.ts', '.css', '.sql'}
 FORMATS = TEXT | {'.pdf', '.docx', '.odt', '.pptx', '.xlsx', '.html', '.htm', '.rtf'}
@@ -53,22 +50,17 @@ def extract(data, suffix):
         reader = PdfReader(io.BytesIO(data))
         if reader.is_encrypted: fail('PDF защищён паролем. Прикрепите незашифрованную копию.')
         parts = []
-        total = 0
         has_text = False
         for index, page in enumerate(reader.pages):
             page_text = page.extract_text() or ''
             has_text = has_text or bool(page_text.strip())
             text = '\n[Страница %s]\n%s' % (index + 1, page_text)
-            total += len(text.encode('utf-8'))
-            if total > MAX_TEXT: fail('Извлечённый текст больше 16 МиБ. Разделите документ на части.', 413)
             parts.append(text)
         if not has_text:
             fail('В PDF нет доступного текста. Для скана сначала выполните распознавание OCR.')
         result = '\n'.join(parts)
     elif suffix in {'.docx', '.odt', '.pptx', '.xlsx'}:
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
-            if sum(item.file_size for item in archive.infolist()) > 64 * 1024 * 1024 or len(archive.infolist()) > 10000:
-                fail('Слишком большой распакованный документ. Разделите его на части.', 413)
             names = archive.namelist()
             if suffix == '.docx':
                 paths = [p for p in names if p == 'word/document.xml' or re.fullmatch(r'word/(footnotes|endnotes|header\d+|footer\d+)\.xml', p)]
@@ -107,25 +99,20 @@ def extract(data, suffix):
             parser = HTMLText(); parser.feed(result); result = ''.join(parser.parts)
     if not result.strip() or '\x00' in result:
         fail('В документе нет доступного текста. Прикрепите текстовую версию.')
-    if len(result.encode('utf-8')) > MAX_TEXT:
-        fail('Извлечённый текст больше 16 МиБ. Разделите документ на части.', 413)
     return result
 
 
 def parse(data, suffix):
-    # Untrusted PDF/ZIP parsers run with memory and time limits, outside server threads.
+    # Parse documents in a separate process.
     with PARSERS, tempfile.TemporaryDirectory(prefix='architect-document-') as folder:
         source, target = Path(folder) / ('input' + suffix), Path(folder) / 'result.json'
         source.write_bytes(data)
-        try:
-            result = subprocess.run([sys.executable, str(Path(__file__).resolve()), str(source), str(target)],
-                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=35)
-            if result.returncode or not target.exists(): fail('Не удалось обработать документ. Попробуйте экспортировать его в PDF или TXT.')
-            value = json.loads(target.read_text())
-            if 'error' in value: fail(value['error'])
-            return value['text']
-        except subprocess.TimeoutExpired:
-            fail('Обработка документа заняла слишком много времени. Разделите его на части.')
+        result = subprocess.run([sys.executable, str(Path(__file__).resolve()), str(source), str(target)],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if result.returncode or not target.exists(): fail('Не удалось обработать документ. Попробуйте экспортировать его в PDF или TXT.')
+        value = json.loads(target.read_text())
+        if 'error' in value: fail(value['error'])
+        return value['text']
 
 
 def file_path(identity):
@@ -143,17 +130,12 @@ def upload(store, scope, body):
         fail('Некорректное имя документа.')
     suffix = Path(name).suffix.lower()
     if suffix not in FORMATS: fail('Формат не поддерживается. Экспортируйте документ в PDF, DOCX, ODT, RTF или TXT.')
-    if not isinstance(encoded, str) or len(encoded) > ((MAX_FILE + 2) // 3) * 4: fail('Документ должен быть не больше 20 МиБ.', 413)
+    if not isinstance(encoded, str): fail('Ожидается документ в формате base64.', 413)
     try: data = base64.b64decode(encoded, validate=True)
     except (ValueError, binascii.Error): fail('Не удалось прочитать файл.')
-    if not data or len(data) > MAX_FILE: fail('Прикрепите непустой документ до 20 МиБ.', 413)
+    if not data: fail('Прикрепите непустой документ.', 413)
     text = parse(data, suffix)
-    folder = store.path('workspace/codex/documents')
     value = {'id': uuid.uuid4().hex, 'name': name, 'size': len(data), 'characters': len(text), 'text': text, 'scope': scope}
-    stored_size = len(json.dumps(value, ensure_ascii=False, indent=2).encode('utf-8')) + 1
-    if stored_size > 32 * 1024 * 1024: fail('Документ слишком большой для хранения. Разделите его на части.', 413)
-    if sum(p.stat().st_size for p in folder.glob('*.json')) + stored_size > MAX_STORED:
-        fail('Хранилище документов чата заполнено. Очистите ненужные разговоры.', 413)
     store.write(file_path(value['id']), value)
     return metadata(value)
 
@@ -214,11 +196,6 @@ if __name__ == '__main__':
     # Optional project-local dependency directory for system Python deployments.
     vendor = Path(__file__).resolve().parent / '.chat-deps'
     if vendor.is_dir(): sys.path.insert(0, str(vendor))
-    if sys.platform != 'win32':
-        import resource
-        if sys.platform == 'linux':
-            resource.setrlimit(resource.RLIMIT_AS, (1024 * 1024 * 1024, 1024 * 1024 * 1024))
-        resource.setrlimit(resource.RLIMIT_CPU, (30, 30))
     try: output = {'text': extract(Path(sys.argv[1]).read_bytes(), Path(sys.argv[1]).suffix)}
     except ModuleNotFoundError: output = {'error': 'На сервере не установлен обработчик этого формата. Установите зависимости requirements-chat.txt.'}
     except bc.ContractError as error: output = {'error': str(error)}

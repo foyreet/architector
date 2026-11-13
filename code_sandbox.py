@@ -10,11 +10,9 @@ import subprocess
 import sys
 import tempfile
 import threading
-import time
 
 import psutil
 
-LOCK = threading.Lock()
 MEMORY_MB = int(os.environ.get('ARCHITECTOR_PYTHON_MEMORY_MB', '0'))
 
 
@@ -28,10 +26,10 @@ def receive(sock, length):
 
 
 def validate(payload):
-    if not isinstance(payload, dict) or set(payload) != {'code', 'inputs', 'params', 'timeout'}: raise ValueError('Invalid Python request')
-    if not isinstance(payload['code'], str) or not 0 < len(payload['code']) <= 64000: raise ValueError('Invalid code')
+    if not isinstance(payload, dict) or set(payload) - {'code', 'inputs', 'params', 'timeout'} or not {'code', 'inputs', 'params'} <= payload.keys(): raise ValueError('Invalid Python request')
+    if not isinstance(payload['code'], str) or not payload['code'].strip(): raise ValueError('Invalid code')
     if not isinstance(payload['inputs'], dict) or not isinstance(payload['params'], dict): raise ValueError('Inputs and params must be objects')
-    if type(payload['timeout']) is not int or not 1 <= payload['timeout'] <= 60: raise ValueError('Invalid timeout')
+    if 'timeout' in payload and type(payload['timeout']) is not int: raise ValueError('Invalid timeout')
 
 
 def memory_usage(process, descendants):
@@ -62,7 +60,6 @@ def stop(process, descendants):
 
 def run(payload):
     validate(payload)
-    if not LOCK.acquire(blocking=False): return {'error': 'Python-исполнитель занят. Дождитесь завершения запуска.'}
     process = None
     descendants = {}
     finished = threading.Event()
@@ -88,23 +85,25 @@ def run(payload):
                         if not part: break
                 except OSError: pass
             reader = threading.Thread(target=read_output, daemon=True); reader.start()
-            chunks = bytearray(); deadline = time.monotonic() + payload['timeout']
+            chunks = bytearray()
+            from gpu_compute import EXECUTION
+            execution = EXECUTION.get()
             try:
                 while True:
-                    if time.monotonic() > deadline: return {'error': 'Превышено время выполнения Python-блока.'}
+                    if execution and execution[1].is_set(): return {'error': 'Выполнение Python-блока остановлено.'}
                     if MEMORY_MB > 0 and memory_usage(process, descendants) > MEMORY_MB * 1024 * 1024:
                         return {'error': f'Python-блок превысил лимит памяти {MEMORY_MB} МиБ.'}
                     try: part = parts.get(timeout=.1)
                     except queue.Empty: continue
                     if not part: break
                     chunks.extend(part)
-                process.wait(timeout=max(.01, deadline-time.monotonic()))
+                process.wait()
                 if process.returncode: return {'error': 'Процесс Python завершился с ошибкой.', 'logs': bytes(chunks[-8000:]).decode(errors='replace')}
                 try: response = json.loads(chunks)
                 except (ValueError, UnicodeError, RecursionError): return {'error': 'Код повредил протокол вывода. Используйте print() для журнала и return для результата.'}
                 if not isinstance(response, dict): return {'error': 'Некорректный ответ Python-блока.'}
                 response['runtime'] = {'executor': 'local-process', 'python': sys.version.split()[0], 'memory_mb': MEMORY_MB,
-                    'memory_limit': 'monitored' if MEMORY_MB > 0 else 'none', 'network': True, 'timeout': payload['timeout']}
+                    'memory_limit': 'monitored' if MEMORY_MB > 0 else 'none', 'network': True}
                 return response
             finally:
                 finished.set(); stop(process, descendants)
@@ -116,7 +115,6 @@ def run(payload):
     finally:
         finished.set()
         if process is not None and process.poll() is None: stop(process, descendants)
-        LOCK.release()
 
 
 class Handler(socketserver.BaseRequestHandler):

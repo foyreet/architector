@@ -6,7 +6,7 @@ window.TrainingConsole = ({api, context, diagram, secrets, onResumed}) => {
   const describe=()=>{
     const d=devices.find(d=>'gpu:'+d.id===main.value);
     const text=main.value==='cpu'?'':d?
-      `${d.shared?'Общий GPU':'Мой GPU'} · ${d.online?'онлайн':'офлайн'} · ${d.busy?'занят':'свободен'} · в очереди ${d.queue_count} · остаток ${Math.floor(d.remaining_seconds/60)} мин${d.reason?' · '+d.reason:''}`:'Выберите доступный GPU в поле вычислений';
+      `${d.shared?'Общий GPU':'Мой GPU'} · ${d.online?'онлайн':'офлайн'} · ${d.busy?'занят':'свободен'}${d.reason?' · '+d.reason:''}`:'Выберите доступный GPU в поле вычислений';
     $('compute-confirm-status').textContent=text;
     $('compute-confirm-status').hidden=!text;
   };

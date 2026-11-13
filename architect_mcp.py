@@ -29,15 +29,15 @@ SPEC = obj({
     'name': {'type': 'string', 'minLength': 1, 'maxLength': 160},
     'description': {'type': 'string', 'maxLength': 32000},
     'source_project_id': {**PROJECT, 'description': 'Optional own project whose pinned custom block definitions should be reused.'},
-    'blocks': {'type': 'array', 'minItems': 1, 'maxItems': 100, 'items': obj({
+    'blocks': {'type': 'array', 'minItems': 1, 'items': obj({
         'id': {'type': 'string', 'pattern': '^[A-Za-z0-9_-]{1,80}$'}, 'kind': TEXT,
         'name': {'type': 'string', 'maxLength': 100}, 'description': {'type': 'string', 'maxLength': 2000},
         'settings': {'type': 'object'}, 'inputs': {'type': 'object'}}, ('id', 'kind'))},
-    'connections': {'type': 'array', 'maxItems': 300, 'items': obj({
+    'connections': {'type': 'array', 'items': obj({
         'from': TEXT, 'to': TEXT, 'from_port': TEXT, 'to_port': TEXT}, ('from', 'to', 'from_port', 'to_port'))}
 }, ('name', 'blocks', 'connections'))
 
-BINDINGS = {'type': 'array', 'maxItems': 100, 'items': obj({
+BINDINGS = {'type': 'array', 'items': obj({
     'id': {'type': 'string', 'pattern': '^[A-Za-z0-9_-]{1,100}$'}, 'label': TEXT,
     'target': obj({'node': TEXT, 'port': TEXT}, ('node', 'port'))}, ('id', 'target'))}
 BLOCK = obj({'pipeline': SPEC, 'inputs': BINDINGS, 'outputs': BINDINGS, 'settings': BINDINGS},
@@ -74,7 +74,7 @@ def check(value, schema, label='arguments'):
         for key, item in value.items():
             if key in props: check(item, props[key], label + '.' + key)
     elif kind == 'array':
-        if not isinstance(value, list) or not schema.get('minItems', 0) <= len(value) <= schema.get('maxItems', 1000): raise bc.ContractError(label + ': некорректный список.')
+        if not isinstance(value, list) or not schema.get('minItems', 0) <= len(value) <= schema.get('maxItems', float('inf')): raise bc.ContractError(label + ': некорректный список.')
         for item in value: check(item, schema['items'], label)
     elif kind == 'string':
         if not isinstance(value, str) or not schema.get('minLength', 0) <= len(value) <= schema.get('maxLength', 32000): raise bc.ContractError(label + ': некорректная строка.')
@@ -122,7 +122,7 @@ def build(spec, store, reusable=False):
         if not progress: raise bc.ContractError('В схеме есть цикл.')
     warnings = ['Проверка статическая: данные не скачивались, код и обучение не запускались.']
     if any(n['block']['kind'] == 'python_code' for n in checked['nodes']):
-        warnings.append('Python: стандартная библиотека, NumPy, pandas, scikit-learn; без сети, настраиваемая память, до 60 секунд.')
+        warnings.append('Python: стандартная библиотека, NumPy, pandas, scikit-learn. Блок выполняется локально.')
     return graph, {'valid': True, 'order': [{'id': key, 'name': next(n['name'] for n in checked['nodes'] if n['id'] == key)} for key in order], 'warnings': warnings}
 
 

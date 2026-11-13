@@ -163,8 +163,8 @@ inherit = "none"
     def read(self):
         try:
             while True:
-                line = self.process.stdout.readline(1024 * 1024 + 1)
-                if not line or len(line) > 1024 * 1024:
+                line = self.process.stdout.readline()
+                if not line:
                     break
                 event = json.loads(line)
                 if 'id' in event and 'method' not in event:
@@ -318,7 +318,7 @@ inherit = "none"
                         text = 'Подготовлены изменения схемы. Проверьте их и нажмите «Применить к схеме».'
                     if params.get('turn', {}).get('status') != 'completed' or not text.strip():
                         fail(ERROR, 502)
-                    return text[:32000]
+                    return text
             fail('Ответ Codex занял слишком много времени. Запрос мог быть обработан; автоматического повтора нет.', 504)
         finally:
             self.tool_thread = None
@@ -388,8 +388,6 @@ def build_prompt(store, body, record, message):
             context = {**(context or {}), 'diagram': diagram}
     value = {'context': context, 'history': [{'role': m['role'], 'text': m['text']} for m in record['messages'][-12:]], 'message': message}
     prompt = json.dumps(value, ensure_ascii=False)
-    if len(prompt.encode()) > 200000:
-        fail('Контекст слишком большой. Отключите передачу схемы или начните новый разговор.', 413)
     return prompt
 
 
@@ -471,8 +469,8 @@ def request(root, user, body, action, hub=None):
             return connection.status()
         if action != 'send': fail('Маршрут чата не найден.', 404)
         message = body.get('message')
-        if not isinstance(message, str) or not 1 <= len(message.strip()) <= 8000:
-            fail('Введите сообщение от 1 до 8000 символов.')
+        if not isinstance(message, str) or not message.strip():
+            fail('Введите сообщение.')
         if type(body.get('include_context', True)) is not bool:
             fail('Некорректный выбор контекста.')
         if key in JOBS: fail('Codex уже готовит ответ. Дождитесь завершения.', 409)
@@ -493,8 +491,8 @@ def request(root, user, body, action, hub=None):
         if len(record['messages']) >= 100:
             fail('В разговоре уже 100 сообщений. Очистите историю, чтобы начать заново.')
         identities = body.get('attachments', [])
-        if not isinstance(identities, list) or len(identities) > 3 or any(not isinstance(i, str) for i in identities) or len(set(identities)) != len(identities):
-            fail('Можно прикрепить до трёх документов к сообщению.')
+        if not isinstance(identities, list) or any(not isinstance(i, str) for i in identities) or len(set(identities)) != len(identities):
+            fail('Некорректный список документов.')
         attached = [codex_documents.metadata(codex_documents.get(store, path, i)) for i in identities]
         available = {a['id']: a for m in record['messages'] for a in m.get('attachments', [])}
         available.update({a['id']: a for a in attached})

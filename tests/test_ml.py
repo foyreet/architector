@@ -95,11 +95,7 @@ class MLTests(unittest.TestCase):
         graph['edges'][1]['fromPort']='row'
         with self.assertRaises(bc.ContractError): pr.validate(graph)
 
-    def test_worker_timeout_and_missing_runtime(self):
-        import subprocess
-        with patch.object(ml.subprocess,'run',side_effect=subprocess.TimeoutExpired('worker',120)):
-            with self.assertRaises(bc.ContractError): ml.worker('split')
-        self.assertFalse(ml.WORKER_LOCK.locked())
-        with patch.object(ml.subprocess,'run',side_effect=FileNotFoundError()):
+    def test_worker_missing_runtime(self):
+        with patch.object(ml.subprocess,'Popen',side_effect=FileNotFoundError()):
             with self.assertRaises(bc.ContractError): ml.worker('split')
 

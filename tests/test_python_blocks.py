@@ -42,7 +42,7 @@ class PythonBlockTests(unittest.TestCase):
             sandbox.assert_not_called()
         payload={'code':'def run(inputs, params): return {}','params':{},'inputs':{},'timeout':30}
         code_sandbox.validate(payload)
-        for replacement in ({'timeout':1000},{'image':'evil'},{'mount':'/'},{'timeout':True}):
+        for replacement in ({'image':'evil'},{'mount':'/'},{'timeout':True}):
             with self.assertRaises(ValueError):code_sandbox.validate(dict(payload,**replacement))
 
     def test_artifacts_and_output_contracts(self):

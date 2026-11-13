@@ -28,10 +28,9 @@ def run(inputs, params):
         self.assertIn('локальный Python', result['logs'])
         self.assertEqual(result['runtime']['executor'], 'local-process')
 
-    def test_timeout_and_recovery(self):
-        result = execute('import time\ndef run(inputs, params):\n    time.sleep(20)', 1)
-        self.assertIn('время', result['error'])
-        self.assertEqual(execute('def run(inputs, params): return {}')['result'], {})
+    def test_legacy_timeout_is_ignored(self):
+        result = execute('import time\ndef run(inputs, params):\n    time.sleep(1.2)\n    return {}', 1)
+        self.assertEqual(result['result'], {})
 
     def test_memory_monitor_stops_process_without_large_allocation(self):
         with patch.object(runner, 'MEMORY_MB', 256), patch.object(runner, 'memory_usage', return_value=10**12):

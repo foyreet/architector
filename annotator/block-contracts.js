@@ -41,7 +41,7 @@ window.BlockContracts = async function () {
       visit(value);
       return copy(value);
     }
-    if (['text', 'string'].includes(spec.type)) valid = typeof value === 'string' && value.length <= (spec.maxLength ?? 32000) && (!spec.pattern || new RegExp(spec.pattern).test(value));
+    if (['text', 'string'].includes(spec.type)) valid = typeof value === 'string' && value.length <= (spec.maxLength ?? Infinity) && (!spec.pattern || new RegExp(spec.pattern).test(value));
     if (['integer', 'number'].includes(spec.type)) valid = typeof value === 'number' && Number.isFinite(value) &&
       (spec.type !== 'integer' || Number.isInteger(value)) && value >= (spec.minimum ?? -Infinity) && value <= (spec.maximum ?? Infinity);
     if (spec.type === 'string[]') valid = Array.isArray(value) && value.length <= (spec.maxItems ?? 5000) && value.every(s => typeof s === 'string' && s.length <= (spec.maxLength ?? 500));

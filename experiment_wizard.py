@@ -52,8 +52,10 @@ def build(body):
     prep=bc.normalize_block({'kind':'ml_prepare','version':1,'settings':{'target':target,'features':','.join(features),'missing':config.get('missing','error'),'duplicates':config.get('duplicates','drop')}})
     split=bc.normalize_block({'kind':'ml_split','version':1,'settings':{'test_size':config.get('test_size',.2),'seed':config.get('seed',42)}})
     table,details=ml.prepare(rows,prep['settings']);count=len(table['y']);classes=len(details['classes']);test=math.ceil(count*split['settings']['test_size'])
-    if test<classes or count-test<classes:raise bc.ContractError('Для этого разделения слишком мало строк: в Train и Test должно быть не меньше строк, чем классов. Измените долю Test или добавьте данные.')
     warnings=[]
+    if count < 2: raise bc.ContractError('Для разделения нужны хотя бы две строки.')
+    if min(details['classes'].values()) < 2 or min(test, count-test) < classes:
+        warnings.append('Разбиение будет случайным. Редкие классы могут отсутствовать в Train или Test.')
     if min(details['classes'].values())<5:warnings.append('В некоторых классах меньше пяти строк. Оценка качества будет нестабильной; добавьте данные.')
     if details['dropped_rows']:warnings.append(f"Будут удалены строки с пропусками или некорректными значениями: {details['dropped_rows']}.")
     if details['duplicates_removed']:warnings.append(f"Будут удалены дубли выбранных признаков и цели: {details['duplicates_removed']}.")

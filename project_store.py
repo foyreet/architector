@@ -56,7 +56,10 @@ class ProjectStore:
             path.parent.mkdir(parents=True, exist_ok=True)
             temp = self.path(relative + '.tmp')
             with temp.open('w', encoding='utf-8') as file:
-                file.write(value if plain else json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + '\n')
+                if plain: file.write(value)
+                else:
+                    json.dump(value, file, ensure_ascii=False, allow_nan=False)
+                    file.write('\n')
                 file.flush(); os.fsync(file.fileno())
             os.replace(temp, path)
         except OSError:
@@ -199,8 +202,6 @@ class ProjectStore:
                             steps[node_id] = self.read(relative)
                     entry = {'record': record, 'steps': steps}
                     package['history'].append(entry)
-                    if len(package['history']) > 100:
-                        raise bc.ContractError('В пакете допускается до 100 запусков. Для полной истории скопируйте папку проекта.', 413)
         return package
 
     def import_package(self, body):
@@ -208,8 +209,8 @@ class ProjectStore:
         if not isinstance(package, dict) or package.get('format') != 'architect.project-package' or package.get('version') != 1:
             raise bc.ContractError('Неизвестный формат пакета проекта.')
         history = package.get('history', [])
-        if not isinstance(history, list) or len(history) > 100:
-            raise bc.ContractError('Пакет может содержать до 100 запусков.')
+        if not isinstance(history, list):
+            raise bc.ContractError('История должна быть списком запусков.')
         # Imported history is an inert archive; never a queue of work to resume.
         archived = []
         for entry in history:
@@ -217,7 +218,7 @@ class ProjectStore:
                 raise bc.ContractError('Некорректная история в пакете.')
             record = entry['record']
             order, nodes = record.get('order'), record.get('nodes')
-            if not isinstance(order, list) or len(order) > 500 or not isinstance(nodes, dict) or len(nodes) > 500:
+            if not isinstance(order, list) or not isinstance(nodes, dict):
                 raise bc.ContractError('Некорректные шаги истории.')
             if any(not isinstance(key, str) or not isinstance(nodes.get(key), dict) for key in order) or len(set(order)) != len(order):
                 raise bc.ContractError('Некорректные ID шагов истории.')

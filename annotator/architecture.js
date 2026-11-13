@@ -98,8 +98,8 @@
     };
     object(raw);
     if (raw.format !== 'architect' || ![1, 2, 3, 4].includes(raw.version)) fail();
-    for (const [key, max] of [['types', 200], ['nodes', 500], ['edges', 1000]]) {
-      if (!Array.isArray(raw[key]) || raw[key].length > max) fail();
+    for (const key of ['types', 'nodes', 'edges']) {
+      if (!Array.isArray(raw[key])) fail();
     }
     const ids = new Set();
     const identifier = value => {
@@ -227,7 +227,6 @@
   }
 
   function addNode(type) {
-    if (state.nodes.length >= 500) return toast('На одной схеме можно разместить до 500 блоков.');
     commit(() => {
       const node = makeNode(type);
       state.nodes.push(node);
@@ -288,7 +287,6 @@
   }
   async function addPersonalBlock(item) {
     const existing = state.types.find(type => type.behavior === item.type.block.kind && type.name === item.type.name && type.description === item.type.description && type.color === item.type.color);
-    if ((!existing && state.types.length >= 200) || state.nodes.length >= 500) throw new Error('Достигнут лимит блоков или типов схемы.');
     const original = JSON.stringify(state), diagram = serializable();
     const definitions = new Map((diagram.definitions || []).map(d => [d.kind, d]));
     for (const d of item.definitions) definitions.set(d.kind, d);
@@ -388,7 +386,6 @@
               kind: spec.type === 'annotation' ? 'annotation' : 'data'};
             const error = Contracts.connectionError(state.nodes, state.edges, edge);
             if (error) return toast(error);
-            if (state.edges.length >= 1000) return toast('На одной схеме можно создать до 1000 связей.');
             commit(() => { state.edges.push(edge); connection = null; });
           } else toast('Сначала нажмите выход другого блока.');
         };
@@ -605,7 +602,6 @@
   }
 
   function openBlockDialog() {
-    if (state.types.length >= 200 || state.nodes.length >= 500) return toast('Достигнут лимит: 200 типов или 500 блоков.');
     setLibrary(false);
     $('block-form').reset(); $('block-create-error').hidden = true; $('block-dialog').showModal();
   }
@@ -1084,7 +1080,6 @@
       button.type = 'button'; button.dataset.mlKind = kind; button.dataset.blockSearch = Contracts.get(kind).label + ' ' + kind;
       if (kind === 'python_code') button.id = 'add-python-block';
       button.onclick = () => {
-        if (state.nodes.length >= 500 || state.types.length >= 200) return toast('Достигнут лимит блоков или типов схемы.');
         commit(() => { const node = makeNode(mlType(kind)); state.nodes.push(node); selected = node.id; });
         setLibrary(false);
         $('viewport').focus({preventScroll: true});
@@ -1107,7 +1102,7 @@
       if (spec.enum) for (const value of spec.enum) { const option = el('option', '', spec.choices?.[value] || value); option.value = value; field.append(option); }
       else if (['number', 'integer'].includes(spec.type)) {
         field.type = 'number'; field.min = spec.minimum; field.max = spec.maximum; field.step = spec.type === 'integer' ? '1' : '0.05';
-      } else { field.type = 'text'; field.maxLength = spec.maxLength || 4000; }
+      } else { field.type = 'text'; if (spec.maxLength) field.maxLength = spec.maxLength; }
       field.dataset.setting = spec.id; field.value = block.settings[spec.id];
       label.append(field); $('ml-parameters').append(label);
     }
@@ -1815,7 +1810,6 @@
           const add = el('button', '', file); add.title = 'Добавить чтение ' + file;
           add.onclick = () => {
             if (selected && !saveNode()) return;
-            if (state.nodes.length >= 500 || state.types.length >= 200) return toast('Достигнут лимит блоков или типов схемы.');
             commit(() => {
               const node = makeNode(mlType('csv')); node.name = file;
               node.execution = Contracts.toExecution({kind: 'csv', version: 1, inputs: {dataset: item.artifact, file}, settings: {delimiter: item.delimiter || ','}});
@@ -1936,7 +1930,6 @@
     downloadJSON({format: 'architect.block-package', version: 1, kind, definitions: [...needed].map(key => found.get(key))}, 'subgraph-' + kind.slice(9, 21));
   }
   async function importSubgraphPackage(value, addToCanvas = false) {
-      if (state.types.length >= 200 || (addToCanvas && state.nodes.length >= 500)) throw new Error('Достигнут лимит блоков или типов схемы.');
       if (value.format !== 'architect.block-package' || value.version !== 1 || !Array.isArray(value.definitions)) throw new Error('Некорректный пакет блока.');
       const definitions = new Map((state.definitions || []).map(d => [d.kind, d]));
       for (const d of value.definitions) definitions.set(d.kind, d);
@@ -1990,7 +1983,7 @@
   function renderPipeline() {
     const same = pipelineRun && pipelineSignature(serializable()) === pipelineSignature(pipelineRun.source_diagram || pipelineRun.diagram);
     const executable = serializable().nodes.some(node => node.block && node.block.kind !== 'note');
-    $('run-pipeline').disabled = !!activePipeline || pipelineStarting || !executable;
+    $('run-pipeline').disabled = pipelineStarting || !executable;
     $('compute-target').disabled = pipelineStarting;
     $('run-pipeline').setAttribute('aria-busy', String(pipelineStarting));
     $('history-training').disabled = !pipelineRun;
@@ -2005,7 +1998,7 @@
       $(id).textContent = waiting ? 'Отменить запуск' : 'Остановить';
       $(id).disabled = !!activePipeline?.cancel_requested;
     }
-    $('cancel-pipeline').hidden = !activePipeline;
+    $('cancel-pipeline').hidden = !pipelineRun || !['running', 'waiting'].includes(pipelineRun.status);
     $('pipeline-status').textContent = activePipeline ? liveStatus :
       pipelineRun ? `Запуск: ${pipelineLabels[pipelineRun.status]}` : 'Готов к запуску';
     if (pipelineRun && !same) $('pipeline-status').textContent += ' · показана другая версия схемы';
@@ -2107,6 +2100,7 @@
       const record = await api('/api/pipelines/run', {run_id: id});
       if (request !== historyRequest) return;
       pipelineRun = record;
+      if (['waiting', 'running'].includes(record.status)) { activePipeline = record; schedulePipelinePoll(); }
       renderPipelineList();
     } finally {
       if (request === historyRequest) { pipelineHistoryLoading = false; renderPipeline(); }
@@ -2122,7 +2116,7 @@
       if (!id) return;
       try {
         const record = await api('/api/pipelines/run', {run_id: id});
-        if (project !== activeProject) return;
+        if (project !== activeProject || activePipeline?.id !== id) return;
         activePipeline = ['waiting', 'running'].includes(record.status) ? record : null;
         const previousStep = pipelineRun?.id === id && pipelineStep ? pipelineRun.nodes[pipelineStep]?.status : null;
         if (pipelineRun?.id === id) pipelineRun = record;
@@ -2188,7 +2182,7 @@
     }
   });
   $('run-pipeline').onclick = async () => {
-    if (activePipeline || pipelineStarting) return;
+    if (pipelineStarting) return;
     if (selected && !saveNode()) return;
     const compute = training.selection();
     const secrets = {openrouter: openrouterKey, kaggle: $('kg-token').value.trim() || kaggleConnectionToken,
@@ -2233,10 +2227,11 @@
     } catch (error) { $('pipeline-start-error').textContent = error.message; }
     finally { pipelineStarting = false; $('pipeline-start-submit').disabled = false; renderPipeline(); schedulePipelinePoll(); }
   };
-  $('cancel-pipeline-live').onclick = $('cancel-pipeline').onclick = async () => {
-    if (!activePipeline) return;
+  $('cancel-pipeline-live').onclick = $('cancel-pipeline').onclick = async event => {
+    const target = event.currentTarget.id === 'cancel-pipeline' ? pipelineRun : activePipeline;
+    if (!target) return;
     try {
-      const record = await api('/api/pipelines/cancel', {run_id: activePipeline.id});
+      const record = await api('/api/pipelines/cancel', {run_id: target.id});
       activePipeline = ['waiting', 'running'].includes(record.status) ? record : null;
       if (pipelineRun?.id === record.id) pipelineRun = record;
       renderPipeline();
@@ -2366,7 +2361,6 @@
     connect: edge => {
       const error = Contracts.connectionError(state.nodes, state.edges, edge);
       if (error) throw new Error(error);
-      if (state.edges.length >= 1000) throw new Error('Достигнут лимит связей.');
       commit(() => state.edges.push(edge));
     }
   });
