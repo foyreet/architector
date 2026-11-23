@@ -795,12 +795,14 @@
       location.href = url;
     } catch (error) { toast(error.message); }
   }
-  $('problem-space-open').onclick = () => {
-    const url = new URL('/problem-space.html', location.origin);
+  function openSpace(path) {
+    const url = new URL(path, location.origin);
     if (activeProject) url.searchParams.set('project', activeProject.meta.id);
     if (unsaved || selected) window.open(url, '_blank', 'noopener');
     else location.href = url;
-  };
+  }
+  $('problem-space-open').onclick = () => openSpace('/problem-space.html');
+  $('solution-space-open').onclick = () => openSpace('/solution-space.html');
   $('design-document-create').onclick = () => openDesignDocuments(true);
 
   $('board-open').onclick = async () => {

@@ -106,8 +106,13 @@ def validate(options, context):
 def request(hub, user, body, action):
     if not user:
         raise ContractError('Рабочее пространство недоступно.', 401)
-    tree_id = identity(body.get('id'))
     with hub.db() as db:
+        if action == 'list':
+            rows = db.execute("""SELECT p.id, p.title, s.tree_id IS NOT NULL AS has_cases
+                                 FROM problem_spaces AS p LEFT JOIN solution_spaces AS s ON s.tree_id = p.id
+                                 WHERE p.owner = ? ORDER BY has_cases DESC, p.updated DESC, p.id""", (user['id'],))
+            return {'trees': [dict(row) for row in rows]}
+        tree_id = identity(body.get('id'))
         db.execute('BEGIN IMMEDIATE')
         row = db.execute('SELECT * FROM problem_spaces WHERE id=? AND owner=?', (tree_id, user['id'])).fetchone()
         if not row:
