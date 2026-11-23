@@ -65,13 +65,13 @@ class Compatible:
         except (URLError,TimeoutError,OSError):
             raise bc.ContractError('Не удалось связаться с API модели. Проверьте адрес и запущена ли локальная модель.',502) from None
         except (ValueError,UnicodeError): raise bc.ContractError('API вернул некорректный JSON.',502) from None
-    def answer(self,prompt,draft=None,model=None,effort=None,documents=None):
+    def answer(self,prompt,draft=None,model=None,effort=None,documents=None,instructions=None):
         import codex_edits, codex_documents
         from codex_chat import INSTRUCTIONS
         definitions=(codex_edits.TOOLS if draft else [])+(codex_documents.TOOLS if documents else [])
         allowed={t['name'] for t in definitions}
         tool_defs=[{'type':'function','function':{'name':t['name'],'description':t['description'],'parameters':t['inputSchema']}} for t in definitions]
-        messages=[{'role':'system','content':INSTRUCTIONS},{'role':'user','content':prompt}]
+        messages=[{'role':'system','content':instructions or INSTRUCTIONS},{'role':'user','content':prompt}]
         while True:
             payload={'model':self.value['model'],'messages':messages,'stream':False}
             if tool_defs: payload['tools']=tool_defs
