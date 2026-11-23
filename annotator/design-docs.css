@@ -8,3 +8,13 @@
 .delete-document{flex-shrink:0;color:#a52332}
 .delete-document:hover{background:#fff0f1;border-color:#d8a2a8}
 #save-status{margin:0 0 16px}
+
+#assist-content select{display:block;width:100%;font:inherit;margin:8px 0 16px;padding:10px}
+#assist-content fieldset{min-width:0;border:1px solid #cbd5e1;border-radius:8px}
+#assist-content label:has(input[type=checkbox]){display:flex;align-items:center;gap:10px;min-height:44px}
+#assist-content input[type=checkbox]{width:18px;height:18px;flex:none;margin:0}
+#assist-content section{padding:16px 0;border-bottom:1px solid #d7dfec}
+#design-assist-dialog,.section-sources{overflow-wrap:anywhere}
+#assist-content p,#assist-content blockquote,.section-sources p{white-space:pre-wrap}
+#assist-content summary,.section-sources summary{cursor:pointer;padding:8px 0}
+#assist-footer:empty,#source-update:empty{display:none}

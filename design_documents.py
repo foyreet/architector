@@ -6,7 +6,7 @@ import uuid
 from block_contracts import ContractError
 
 SECTIONS = ('problem', 'target', 'data_features', 'metric_validation', 'model_training')
-LABELS = ('Проблема', 'Таргет', 'Данные и признаки', 'Метрика и проверка', 'Модель и обучение')
+LABELS = ('Проблема и текущий процесс', 'Цели, таргет и антицели', 'Данные и признаки', 'Проверка, риски и открытые вопросы', 'Решение, альтернативы и обучение')
 KIND = 'design_document'
 FORMAT = 'architect.design-document'
 
@@ -31,6 +31,26 @@ def payload(body):
     return title.strip(), normalized
 
 
+def sources(value):
+    if not isinstance(value, dict) or value.keys() - set(SECTIONS):
+        raise ContractError('Некорректные ссылки на источники.')
+    for ref in value.values():
+        if not isinstance(ref, dict):
+            raise ContractError('Некорректный источник.')
+        identity(ref.get('tree_id'))
+        if (not isinstance(ref.get('title'), str) or
+            any(type(ref.get(k)) is not int for k in ('revision', 'version')) or
+            not isinstance(ref.get('answers'), list) or not isinstance(ref.get('cases'), list)):
+            raise ContractError('Некорректная версия источника.')
+        for answer in ref['answers']:
+            if not isinstance(answer, dict) or not isinstance(answer.get('path'), list) or not all(isinstance(q, str) for q in answer['path']) or not isinstance(answer.get('answer'), str):
+                raise ContractError('Некорректная ссылка на ответ.')
+        for case in ref['cases']:
+            if not isinstance(case, dict) or type(case.get('id')) is not int or not isinstance(case.get('title'), str):
+                raise ContractError('Некорректная ссылка на кейс.')
+    return value
+
+
 def owned(db, user, doc_id):
     row = db.execute('SELECT * FROM design_documents WHERE id=? AND owner=?', (identity(doc_id), user['id'])).fetchone()
     if not row: raise ContractError('Дизайн-документ не найден на этом компьютере.', 404)
@@ -39,15 +59,18 @@ def owned(db, user, doc_id):
 
 def public(row):
     return {'id': row['id'], 'title': row['title'], 'sections': json.loads(row['sections']),
-            'revision': row['revision'], 'updated': row['updated'], 'source_release': row['source_release']}
+            'sources': json.loads(row['sources']), 'revision': row['revision'], 'updated': row['updated'], 'source_release': row['source_release']}
 
 
 def snapshot(row):
-    return {'format': FORMAT, 'version': 1, 'title': row['title'], 'sections': json.loads(row['sections'])}
+    return {'format': FORMAT, 'version': 1, 'title': row['title'], 'sections': json.loads(row['sections']), 'sources': json.loads(row['sources'])}
 
 
 def request(hub, user, body, action):
     if user is None: raise ContractError('Войдите в аккаунт Архитектора, чтобы работать с документами.', 401)
+    if action in ('compose', 'review'):
+        from design_assistant import request as assist
+        return assist(hub, user, body, action)
     if action == 'suggest-questions':
         from problem_spaces import suggest_questions
         title, sections = payload(body)
@@ -78,6 +101,8 @@ def request(hub, user, body, action):
             tree = problem_tree((package if action == 'import' else body).get('problem_tree', []))
             db.execute('INSERT INTO design_documents(id,owner,title,sections,revision,updated,source_release,problem_tree) VALUES(?,?,?,?,?,?,?,?)',
                        (doc_id, user['id'], name, json.dumps(sections, ensure_ascii=False), 1, time.time(), source, json.dumps(tree, ensure_ascii=False)))
+            refs = sources((package if action == 'import' else body).get('sources', {}))
+            db.execute('UPDATE design_documents SET sources=? WHERE id=?', (json.dumps(refs, ensure_ascii=False), doc_id))
             if tree:
                 db.execute('INSERT INTO problem_spaces(id,owner,title,problem,tree,revision,updated) VALUES(?,?,?,?,?,?,?)',
                            (doc_id, user['id'], name, sections['problem'], json.dumps(tree, ensure_ascii=False), 1, time.time()))
@@ -96,13 +121,14 @@ def request(hub, user, body, action):
             revision = body.get('revision')
             if type(revision) is not int: raise ContractError('Укажите версию документа.')
             # A retry after a lost response must not create another revision.
-            same = name == row['title'] and sections == json.loads(row['sections'])
+            refs = sources(body.get('sources', json.loads(row['sources'])))
+            same = refs == json.loads(row['sources']) and name == row['title'] and sections == json.loads(row['sections'])
             if revision == row['revision']-1 and same: return {'document': public(row)}
             if revision != row['revision']:
                 raise ContractError('Документ изменён в другой вкладке. Сохраните свой вариант отдельно или загрузите сохранённую версию.', 409)
             if not same:
-                db.execute('UPDATE design_documents SET title=?,sections=?,revision=revision+1,updated=? WHERE id=?',
-                           (name, json.dumps(sections, ensure_ascii=False), time.time(), row['id']))
+                db.execute('UPDATE design_documents SET title=?,sections=?,sources=?,revision=revision+1,updated=? WHERE id=?',
+                           (name, json.dumps(sections, ensure_ascii=False), json.dumps(refs, ensure_ascii=False), time.time(), row['id']))
             return {'document': public(owned(db, user, row['id']))}
         if action == 'export': return {'package': snapshot(row)}
         raise ContractError('Маршрут документа не найден.', 404)
