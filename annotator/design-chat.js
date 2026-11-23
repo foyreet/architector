@@ -1,6 +1,6 @@
 'use strict';
 window.DesignChat = (() => {
-  const fields = [['problem','Проблема'],['target','Таргет'],['data_features','Данные и признаки'],['metric_validation','Метрика и проверка'],['model_training','Модель и обучение']];
+  const fields = [['problem','Проблема и текущий процесс'],['target','Цели, таргет и антицели'],['data_features','Данные и признаки'],['metric_validation','Проверка, риски и открытые вопросы'],['model_training','Решение, альтернативы и обучение']];
   const node = (tag, text, cls='') => { const e=document.createElement(tag); e.textContent=text; e.className=cls; return e; };
   function modal(title) {
     const dialog=document.createElement('dialog');dialog.className='design-chat-dialog';dialog.setAttribute('aria-label',title);

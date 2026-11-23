@@ -9,7 +9,7 @@
     location.replace(legacy);
     return;
   }
-  const fields=[['problem','Проблема'],['target','Таргет'],['data_features','Данные и признаки'],['metric_validation','Метрика и проверка'],['model_training','Модель и обучение']];
+  const fields=[['problem','Проблема и текущий процесс'],['target','Цели, таргет и антицели'],['data_features','Данные и признаки'],['metric_validation','Проверка, риски и открытые вопросы'],['model_training','Решение, альтернативы и обучение']];
   const query=new URLSearchParams(location.search),project=query.get('project');
   if(/^[a-f0-9-]{36}$/.test(project||''))$('back-schema').href+='?project='+encodeURIComponent(project);
   let account=null,doc=null,release=null,dirty=false,conflicted=false,blocked=false,saving=null,working=false,mode='mine',preview=null;
@@ -18,12 +18,13 @@
   function message(text=''){ $('message').textContent=text;$('message').hidden=!text; }
   function error(text='',target='editor-error'){const e=$(target);e.textContent=text;e.hidden=!text;if(text&&!e.closest('[hidden]')){e.tabIndex=-1;e.focus({preventScroll:true});e.scrollIntoView({block:'nearest'});}}
   async function api(action,body={},community=false){
-    let r;try{r=await fetch('/api/'+(community?'community/':'design-documents/')+action,{method:'POST',headers:{'Content-Type':'application/json','X-Architect-Request':'1',...(account?{'X-Architect-Account':account.id}:{})},body:JSON.stringify(body)});}catch{throw Error('Не удалось связаться с сервером. Повторите попытку; введённый текст сохранён в редакторе.');}
+    let r;try{r=await fetch('/api/'+(community === true ? 'community/' : community === 'solution-spaces' ? 'solution-spaces/' : 'design-documents/')+action,{method:'POST',headers:{'Content-Type':'application/json','X-Architect-Request':'1',...(account?{'X-Architect-Account':account.id}:{})},body:JSON.stringify(body)});}catch{throw Error('Не удалось связаться с сервером. Повторите попытку; введённый текст сохранён в редакторе.');}
     const data=await r.json();if(!r.ok){const e=Error(data.error||'Не удалось выполнить запрос.');e.status=r.status;throw e;}return data;
   }
-  function value(){return {title:$('title').value,sections:Object.fromEntries(fields.map(([k])=>[k,$('section-'+k).value]))};}
-  function same(a,b){return a.title===b.title&&fields.every(([k])=>a.sections[k]===b.sections[k]);}
-  function controls(){ $('add-chat').disabled=!!saving||conflicted||blocked;$('save').disabled=(!dirty&&!!doc?.revision)||!!saving||conflicted||blocked;$('publish').disabled=!!saving||conflicted||blocked;$('conflict').hidden=!conflicted;$('save-status').textContent=doc?(saving?'Сохранение…':dirty?'Есть несохранённые изменения':doc.revision?'Все изменения сохранены':'Новый документ · ещё не сохранён'):''; }
+  const assistant = window.setupDesignAssistant({fields, api, read:value, changed, getId:()=>doc?.id});
+  function value(){return {sources:assistant.sources(),title:$('title').value,sections:Object.fromEntries(fields.map(([k])=>[k,$('section-'+k).value]))};}
+  function same(a,b){return JSON.stringify(a.sources||{})===JSON.stringify(b.sources||{})&&a.title===b.title&&fields.every(([k])=>a.sections[k]===b.sections[k]);}
+  function controls(){ $('compose-doc').disabled=!!saving||conflicted||blocked;$('add-chat').disabled=!!saving||conflicted||blocked;$('save').disabled=(!dirty&&!!doc?.revision)||!!saving||conflicted||blocked;$('publish').disabled=!!saving||conflicted||blocked;$('conflict').hidden=!conflicted;$('save-status').textContent=doc?(saving?'Сохранение…':dirty?'Есть несохранённые изменения':doc.revision?'Все изменения сохранены':'Новый документ · ещё не сохранён'):''; }
   function cache(){if(!doc||release)return;try{if(dirty)localStorage.setItem(draftKey(),JSON.stringify({...value(),revision:doc.revision}));else localStorage.removeItem(draftKey());}catch{error('Браузер не сохранил резервную копию. Сохраните документ на сервер перед закрытием.');}}
   function changed(){dirty=!same(value(),doc);cache();controls();}
   function renderSections(parent,data,editable){parent.replaceChildren();fields.forEach(([k,label],i)=>{const section=node('section','','doc-section');if(editable){const l=node('label',`${i+1}. ${label}`);l.htmlFor='section-'+k;const input=document.createElement('textarea');input.id=l.htmlFor;input.value=data[k];input.addEventListener('input',changed);section.append(l,input);}else{section.append(node('h3',`${i+1}. ${label}`),node('p',data[k]||'Не заполнено','section-text'));}parent.append(section);});}
@@ -52,7 +53,7 @@
     $('auth').hidden=true;$('list').hidden=true;$('editor').hidden=false;$('title-label').hidden=false;$('title').hidden=false;$('title').value=content.title;$('read-title').hidden=true;
     $('save').hidden=false;$('publish').hidden=false;$('copy').hidden=true;$('publication-info').hidden=!doc.source_release;
     $('publication-info').textContent=doc.source_release?'Личная копия публикации. Ваши изменения не затрагивают оригинал.':'';
-    renderSections($('sections'),content.sections,true);updateURL(doc.revision?{id:doc.id}:{new:doc.id});$('back-list').textContent='← Мои документы';controls();window.scrollTo(0,0);
+    renderSections($('sections'),content.sections,true);$('doc-assist').hidden=false;assistant.load(content.sources);updateURL(doc.revision?{id:doc.id}:{new:doc.id});$('back-list').textContent='← Мои документы';controls();window.scrollTo(0,0);
   }
   async function open(id){const result=await api('get',{id});openEditor(result.document);}
   function retryId(kind){const k='architect.design-pending.'+account.id+'.'+kind;let id;try{id=sessionStorage.getItem(k);}catch{}id ||= crypto.randomUUID();try{sessionStorage.setItem(k,id);}catch{}return {id,clear(){try{sessionStorage.removeItem(k);}catch{}}};}
@@ -79,7 +80,7 @@
     release=result;doc=null;dirty=false;conflicted=false;blocked=false;error();message();
     $('auth').hidden=true;$('list').hidden=true;$('editor').hidden=false;$('title-label').hidden=true;$('title').hidden=true;$('read-title').hidden=false;$('read-title').textContent=result.name;
     $('save').hidden=true;$('publish').hidden=true;$('copy').hidden=false;$('publication-info').hidden=false;$('publication-info').textContent=`@${result.username} · версия ${result.number} · Опубликованный документ`;
-    renderSections($('sections'),result.package.sections,false);updateURL({release:id});$('back-list').textContent='← Каталог сообщества';controls();window.scrollTo(0,0);
+    $('doc-assist').hidden=true;renderSections($('sections'),result.package.sections,false);updateURL({release:id});$('back-list').textContent='← Каталог сообщества';controls();window.scrollTo(0,0);
   }
   $('add-chat').onclick=()=>task(async()=>{
     if(!release&&(!doc.revision||dirty)){error('Сначала нажмите «Сохранить», чтобы добавить актуальный документ в AI Chat.');return;}

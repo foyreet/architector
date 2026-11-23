@@ -54,6 +54,7 @@
     container.replaceChildren();
     for (const item of plan.options) {
       const card = document.createElement('article');
+      if (editable) card.id = 'case-' + (container.children.length + 1);
       for (const [key, label] of Object.entries(labels)) {
         if (!editable) {
           if (item[key]) card.append(element(key === 'title' ? 'h3' : 'strong', key === 'title' ? item[key] : label));
@@ -138,6 +139,10 @@
     if (working) { cards($('options'), working, true); $('workspace').hidden = false; }
     if (!source.answers.length) status('Запишите хотя бы один ответ в дереве, чтобы построить кейсы.');
     controls();
+    if (/^#case-\d+$/.test(location.hash)) {
+      if (params.has('version') && String(version) !== params.get('version')) status('Подборка кейсов изменилась. Открыта текущая версия.');
+      else document.getElementById(location.hash.slice(1))?.scrollIntoView();
+    }
   }
   async function library() {
     $('library').hidden = false;
