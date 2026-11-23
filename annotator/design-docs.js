@@ -16,6 +16,7 @@
   const tree = window.problemSpace(changed, (request, path) => api('suggest-questions', {...value(), request, path}));
   if (/^[a-f0-9-]{36}$/.test(project || '')) $('tree-ai-settings').href += '&project=' + encodeURIComponent(project);
   function showMode(problems) {
+    if (problems) tree.updateOrigin();
     $('sections').hidden = problems;
     $('problem-space').hidden = !problems;
     $('document-mode').setAttribute('aria-current', problems ? 'false' : 'page');
@@ -57,9 +58,10 @@
     $('auth').hidden=true;$('list').hidden=true;$('editor').hidden=false;$('title-label').hidden=false;$('title').hidden=false;$('title').value=content.title;$('read-title').hidden=true;
     $('save').hidden=false;$('publish').hidden=false;$('copy').hidden=true;$('publication-info').hidden=!doc.source_release;
     $('publication-info').textContent=doc.source_release?'Личная копия публикации. Ваши изменения не затрагивают оригинал.':'';
-    tree.load(content.problem_tree || []);
+    renderSections($('sections'),content.sections,true);
+    tree.load(structuredClone(content.problem_tree || []));
     $('document-modes').hidden=false;showMode(new URLSearchParams(location.search).get('mode')==='problems');
-    renderSections($('sections'),content.sections,true);updateURL(doc.revision?{id:doc.id}:{new:doc.id});$('back-list').textContent='← Мои документы';controls();window.scrollTo(0,0);
+    updateURL(doc.revision?{id:doc.id}:{new:doc.id});$('back-list').textContent='← Мои документы';controls();window.scrollTo(0,0);
   }
   async function open(id){const result=await api('get',{id});openEditor(result.document);}
   function retryId(kind){const k='architect.design-pending.'+account.id+'.'+kind;let id;try{id=sessionStorage.getItem(k);}catch{}id ||= crypto.randomUUID();try{sessionStorage.setItem(k,id);}catch{}return {id,clear(){try{sessionStorage.removeItem(k);}catch{}}};}
@@ -97,7 +99,7 @@
     if(!await window.DesignChat.attach(call,{project_id:selected},source))return;
     location.href='/architecture.html?project='+encodeURIComponent(selected)+'&chat=1';
   });
-  $('title').addEventListener('input',changed);
+  $('title').addEventListener('input', () => { tree.updateOrigin(); changed(); });
   $('save').onclick=()=>task(save);$('create').onclick=()=>task(()=>create());$('mine').onclick=()=>task(()=>list('mine'));$('catalog').onclick=()=>task(()=>list('catalog'));
   $('search-form').onsubmit=e=>{e.preventDefault();task(()=>list('catalog'));};$('back-list').onclick=()=>task(()=>list(release?'catalog':'mine'));
   $('back-schema').onclick=e=>{if(!doc||(!dirty&&!saving))return;e.preventDefault();task(async()=>{if(await leaveEditor()){discardDraft();location.href=$('back-schema').href;}});};

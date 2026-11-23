@@ -16,7 +16,9 @@
 <div class="actions"><button id="tree-generate">Запросить вопросы</button><button id="tree-cancel">Отмена</button></div>
 <p id="tree-ai-status" role="status"></p><div id="tree-proposal" hidden><h3>Предложенные вопросы</h3><div id="tree-preview"></div><button id="tree-apply" class="primary">Добавить в дерево</button></div>
 </section>
-<div class="problem-layout"><div id="tree-branches" aria-label="Ветви вопросов"></div><section id="question-editor" aria-label="Редактирование вопроса"></section></div></section></main>
+<div class="problem-layout"><section class="tree-board" aria-label="Дерево вопросов">
+<div class="tree-controls"><button id="tree-smaller" aria-label="Уменьшить масштаб">−</button><output id="tree-scale" aria-label="Масштаб">100%</output><button id="tree-larger" aria-label="Увеличить масштаб">+</button><button id="tree-fit">Вписать дерево</button><button id="tree-all" hidden>Все ветви</button></div>
+<div id="tree-viewport" tabindex="0" aria-label="Полотно дерева"><div id="tree-map"><button id="tree-origin" type="button" aria-label="Открыть раздел «Проблема»"><span></span></button><div id="tree-branches" aria-label="Ветви вопросов"></div></div></div></section><section id="question-editor" aria-label="Редактирование вопроса"></section></div></section></main>
 <dialog id="publish-dialog"><div class="dialog-heading"><h2>Публикация документа</h2><button id="preview-close" aria-label="Закрыть предпросмотр">×</button></div><p>Всем посетителям каталога будет доступна эта версия. Дальнейшие личные правки её не изменят.</p><p id="publish-error" role="alert" hidden></p><h3 id="preview-title"></h3><div id="preview-sections"></div><div class="dialog-actions"><button id="publish-cancel">Отмена</button><button id="publish-confirm" class="primary">Опубликовать в каталоге</button></div></dialog>
 <script src="/design-chat.js"></script><script src="/problem-space.js"></script><script src="/design-docs.js"></script></body></html>
 

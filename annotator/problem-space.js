@@ -4,6 +4,48 @@ window.problemSpace = function (changed, suggest) {
   const $ = id => document.getElementById(id);
   const levels = ['Общий вопрос', 'Уточнение задачи', 'Технический вопрос'];
   let roots = [], selected = null;
+  const viewport = $('tree-viewport'), map = $('tree-map');
+  let focusedPath = null, scale = 1;
+  function setScale(value) {
+    scale = value;
+    map.style.zoom = String(scale);
+    $('tree-scale').textContent = Math.round(scale * 100) + '%';
+  }
+  $('tree-smaller').onclick = () => setScale(Math.max(.1, scale / 1.25));
+  $('tree-larger').onclick = () => setScale(Math.min(3, scale * 1.25));
+  $('tree-fit').onclick = () => {
+    setScale(1);
+    setScale(Math.min(1, viewport.clientWidth / map.offsetWidth, viewport.clientHeight / map.offsetHeight));
+    viewport.scrollTo(0, 0);
+  };
+  $('tree-all').onclick = () => { focusedPath = null; renderBranches(); revealSelected(); };
+  let drag = null;
+  viewport.onpointerdown = event => {
+    if (event.pointerType !== 'mouse' || event.button !== 0 || event.target.closest('button')) return;
+    drag = [event.clientX, event.clientY, viewport.scrollLeft, viewport.scrollTop];
+    viewport.setPointerCapture(event.pointerId);
+  };
+  viewport.onpointermove = event => {
+    if (drag) viewport.scrollTo(drag[2] + drag[0] - event.clientX, drag[3] + drag[1] - event.clientY);
+  };
+  viewport.onpointerup = viewport.onlostpointercapture = () => { drag = null; };
+  function revealSelected() {
+    const card = map.querySelector('[aria-current=true]');
+    if (!card || !viewport.clientWidth) return;
+    const rect = card.getBoundingClientRect(), frame = viewport.getBoundingClientRect();
+    if (rect.right > frame.right || rect.left < frame.left) viewport.scrollLeft += rect.left - frame.left - 16;
+    if (rect.bottom > frame.bottom || rect.top < frame.top) viewport.scrollTop += rect.top - frame.top - 16;
+  }
+  function updateOrigin() {
+    const origin = $('tree-origin');
+    const text = $('section-problem')?.value.trim() || $('title').value.trim() || 'Сформулировать проблему';
+    origin.firstElementChild.textContent = text;
+    origin.title = text;
+  }
+  $('tree-origin').onclick = () => {
+    $('document-mode').click();
+    $('section-problem').focus();
+  };
   const folded = new Set();
   function question(text, children = []) { return {question: text, answer: '', children}; }
   function button(label, action) {
@@ -43,7 +85,7 @@ window.problemSpace = function (changed, suggest) {
       input.value = item[field];
       input.oninput = () => {
         item[field] = input.value;
-        if (field === 'question') renderBranches();
+        renderBranches();
         changed();
       };
       wrapper.append(input);
@@ -52,8 +94,19 @@ window.problemSpace = function (changed, suggest) {
     const actions = document.createElement('div');
     actions.className = 'actions';
     if (depth < 2) actions.append(button(depth === 0 ? 'Добавить уточнение' : 'Добавить технический вопрос', () => {
+      focusedPath = null;
       folded.delete(item);
       add(item.children, depth + 1);
+    }));
+    if (depth < 2) actions.append(button('Углубить с AI', () => {
+      target.value = 'branch';
+      showAI(true);
+    }));
+    actions.append(button('Показать ветвь', () => {
+      focusedPath = selectionPath.slice();
+      renderBranches();
+      revealSelected();
+      $('tree-all').focus();
     }));
     actions.append(button('Удалить вопрос', () => {
       if (!confirm('Удалить этот вопрос вместе с его ответом и уточнениями?')) return;
@@ -63,21 +116,29 @@ window.problemSpace = function (changed, suggest) {
       $('add-root').focus();
     }));
     editor.append(actions);
+    revealSelected();
     if (focus) { const input = editor.querySelector('textarea'); input.focus(); input.select(); }
+  }
+  function descendants(item) {
+    return item.children.reduce((count, child) => count + 1 + descendants(child), 0);
   }
   function renderBranches() {
     const container = $('tree-branches');
+    updateOrigin();
+    $('tree-all').hidden = !focusedPath;
     container.replaceChildren();
     selectionPath = [];
     function branch(items, path) {
       const list = document.createElement('ul');
       for (const [i, item] of items.entries()) {
+        if (focusedPath && path.length < focusedPath.length && i !== focusedPath[path.length]) continue;
         const itemPath = [...path, i], depth = path.length;
         if (item === selected) selectionPath = itemPath;
         const li = document.createElement('li'), row = document.createElement('div');
         row.className = 'branch-row';
+        row.dataset.level = depth;
         if (item.children.length) {
-          const toggle = button(folded.has(item) ? '▸' : '▾', () => {
+          const toggle = button(folded.has(item) ? '+' + descendants(item) : '−', () => {
             if (folded.has(item)) folded.delete(item);
             else {
               if (selectionPath.length > itemPath.length && itemPath.every((v, i) => selectionPath[i] === v)) select(item, items, depth);
@@ -93,7 +154,11 @@ window.problemSpace = function (changed, suggest) {
         }
         const choose = button(item.question || levels[depth], () => select(item, items, depth, true));
         choose.setAttribute('aria-current', String(item === selected));
-        row.append(choose); li.append(row);
+        const state = document.createElement('small');
+        state.textContent = item.answer.trim() ? 'Есть ответ' : 'Без ответа';
+        choose.setAttribute('aria-label', item.question || levels[depth]);
+        choose.append(state);
+        row.prepend(choose); li.append(row);
         if (item.children.length && !folded.has(item)) li.append(branch(item.children, itemPath));
         list.append(li);
       }
@@ -110,12 +175,13 @@ window.problemSpace = function (changed, suggest) {
   }
   function load(nodes) {
     clearProposal();
+    focusedPath = null;
     roots = nodes;
     folded.clear();
     if (roots.length) select(roots[0], roots, 0);
     else { selected = null; target.value = 'root'; target.options[1].disabled = true; renderBranches(); $('question-editor').replaceChildren(); }
   }
-  $('add-root').onclick = () => add(roots, 0);
+  $('add-root').onclick = () => { focusedPath = null; add(roots, 0); };
   function preview(items) {
     const list = document.createElement('ul');
     for (const item of items) {
@@ -164,6 +230,7 @@ window.problemSpace = function (changed, suggest) {
     if (!proposal) return;
     const {items, parent} = proposal;
     const destination = parent ? parent.children : roots;
+    focusedPath = null;
     if (parent) folded.delete(parent);
     for (const item of items) destination.push(item);
     showAI(false);
@@ -172,11 +239,13 @@ window.problemSpace = function (changed, suggest) {
   };
   return {
     load(nodes) {
+      setScale(1);
       ai.hidden = true;
       $('tree-ai-open').setAttribute('aria-expanded', 'false');
       $('tree-request').value = '';
       load(nodes);
     },
+    updateOrigin,
     value: () => roots
   };
 };

@@ -82,6 +82,17 @@ def main():
             expect(page.locator('#tree-branches li')).to_have_count(0)
             page.locator('#tree-apply').click()
             page.get_by_label('Ответ', exact=True).fill('Руководитель отдела')
+            expect(page.locator('#tree-origin')).to_have_text('Сохранённая проблема')
+            page.get_by_role('button', name='Добавить уточнение', exact=True).click()
+            page.get_by_label('Вопрос', exact=True).fill('Как проверить результат?')
+            parent, child = page.locator('.branch-row').all()
+            assert child.bounding_box()['x'] >= parent.bounding_box()['x'] + parent.bounding_box()['width']
+            page.locator('#tree-fit').click()
+            assert page.locator('#tree-viewport').evaluate('e => e.scrollWidth <= e.clientWidth + 1')
+            parent.locator('[aria-expanded]').click()
+            expect(page.locator('.branch-row')).to_have_count(1)
+            parent.locator('[aria-expanded]').click()
+            expect(page.locator('.branch-row')).to_have_count(2)
             page.locator('#document-mode').click()
             # Failed first save preserves the editor and does not leave an empty row.
             page.route('**/api/design-documents/create', lambda route: route.fulfill(status=503, json={'error': 'Сохранение недоступно'}))
@@ -105,6 +116,13 @@ def main():
             identity = saved[0]['id']
             assert api('get', {'id': identity})['document']['sections']['problem'] == 'Сохранённая проблема'
             assert api('get', {'id': identity})['document']['problem_tree'][0]['answer'] == 'Руководитель отдела'
+            page.reload()
+            page.locator('#problem-mode').click()
+            page.get_by_label('Ответ', exact=True).fill('Обновлённый ответ')
+            page.locator('#save').click()
+            expect(page.locator('#save-status')).to_have_text('Все изменения сохранены')
+            assert api('get', {'id': identity})['document']['problem_tree'][0]['answer'] == 'Обновлённый ответ'
+            page.locator('#document-mode').click()
             page.screenshot(path=str(artifacts / f'editor-{width}.png'))
             page.locator('#section-problem').fill('Несохранённая правка')
             # A failed transition must keep dirty state and allow an explicit save.
