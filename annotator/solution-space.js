@@ -2,7 +2,16 @@
 (() => {
   const $ = id => document.getElementById(id);
   const params = new URLSearchParams(location.search), id = params.get('id');
-  $('back').href = '/problem-space.html?' + params;
+  function page(path, treeId) {
+    const url = new URL(path, location.origin);
+    if (params.has('project')) url.searchParams.set('project', params.get('project'));
+    if (treeId) url.searchParams.set('id', treeId);
+    return url;
+  }
+  $('back').href = id ? page('/problem-space.html', id) : page('/architecture.html');
+  $('back').textContent = id ? '← К дереву вопросов' : '← К схеме';
+  $('switch-tree').hidden = !id;
+  $('switch-tree').href = page('/solution-space.html');
   const labels = {title:'Кейс', validation:'Критерий готовности', rationale:'Почему это нужно', approach:'Возможный подход',
     tradeoffs:'Ограничения и компромиссы', assumptions:'Предположения', business_query:'Запрос по бизнес-задаче', query:'Запрос по технической задаче'};
   const status = text => { $('status').textContent = text; };
@@ -122,6 +131,7 @@
   window.addEventListener('beforeunload', e => { if (dirty) e.preventDefault(); });
   async function start() {
     const data = await api('get');
+    $('editor').hidden = false;
     source = data.source; version = data.version; working = data.saved;
     $('title').textContent = source.title; $('problem').textContent = source.problem;
     for (const a of source.answers) $('answers').append(element('strong', a.path.join(' → ')),element('p', a.answer));
@@ -129,5 +139,26 @@
     if (!source.answers.length) status('Запишите хотя бы один ответ в дереве, чтобы построить кейсы.');
     controls();
   }
-  if (id) start().catch(e => status(e.message)); else status('Откройте пространство решений из нужного дерева вопросов.');
+  async function library() {
+    $('library').hidden = false;
+    status('Загрузка деревьев…');
+    const {trees} = await api('list');
+    status('');
+    const list = $('tree-list');
+    if (!trees.length) {
+      const create = element('a', 'Создать дерево проблем');
+      const url = page('/problem-space.html');
+      url.searchParams.set('new', '1');
+      create.href = url;
+      list.append(element('p', 'Пока нет сохранённых деревьев.'), create);
+    }
+    for (const tree of trees) {
+      const link = document.createElement('a');
+      link.className = 'document-row';
+      link.href = page('/solution-space.html', tree.id);
+      link.append(element('strong', tree.title), element('small', tree.has_cases ? 'Есть сохранённые кейсы' : 'Кейсы ещё не созданы'));
+      list.append(link);
+    }
+  }
+  (id ? start() : library()).catch(e => status(e.message));
 })();
