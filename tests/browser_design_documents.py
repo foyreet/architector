@@ -36,7 +36,10 @@ def main():
             def dialog(accept):
                 page.once('dialog', lambda d: d.accept() if accept else d.dismiss())
 
-            page.goto(server.origin + '/design-docs.html?new=1')
+            page.goto(server.origin + '/design-docs.html?new=1&mode=problems')
+            expect(page.locator('#problem-space')).to_be_visible()
+            expect(page.locator('#tree-branches li')).to_have_count(0)
+            page.locator('#document-mode').click()
             expect(page.locator('#sections textarea')).to_have_count(5)
             expect(page.locator('#save-status')).to_contain_text('ещё не сохранён')
             assert documents() == [] and not writes
@@ -69,6 +72,17 @@ def main():
             title = 'Длинное русское название дизайн-документа для проверки сохранения ' + str(width)
             page.locator('#title').fill(title)
             page.locator('#section-problem').fill('Сохранённая проблема')
+            page.locator('#problem-mode').click()
+            page.locator('#tree-ai-open').click()
+            page.locator('#tree-request').fill('Разобрать задачу')
+            result = {'questions': [{'question': 'Кто принимает решение?', 'answer': '', 'children': []}]}
+            page.route('**/api/design-documents/suggest-questions', lambda route: route.fulfill(json=result))
+            page.locator('#tree-generate').click()
+            expect(page.locator('#tree-preview')).to_contain_text('Кто принимает решение?')
+            expect(page.locator('#tree-branches li')).to_have_count(0)
+            page.locator('#tree-apply').click()
+            page.get_by_label('Ответ', exact=True).fill('Руководитель отдела')
+            page.locator('#document-mode').click()
             # Failed first save preserves the editor and does not leave an empty row.
             page.route('**/api/design-documents/create', lambda route: route.fulfill(status=503, json={'error': 'Сохранение недоступно'}))
             page.locator('#save').click()
@@ -90,6 +104,7 @@ def main():
             assert len(saved) == 1 and saved[0]['title'] == title
             identity = saved[0]['id']
             assert api('get', {'id': identity})['document']['sections']['problem'] == 'Сохранённая проблема'
+            assert api('get', {'id': identity})['document']['problem_tree'][0]['answer'] == 'Руководитель отдела'
             page.screenshot(path=str(artifacts / f'editor-{width}.png'))
             page.locator('#section-problem').fill('Несохранённая правка')
             # A failed transition must keep dirty state and allow an explicit save.

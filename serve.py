@@ -51,6 +51,7 @@ ASSETS = {
     '/design-chat.js': ('design-chat.js', 'text/javascript'),
     '/design-chat.css': ('design-chat.css', 'text/css'),
     '/design-docs.html': ('design-docs.html', 'text/html'),
+    '/problem-space.js': ('problem-space.js', 'text/javascript'),
     '/design-docs.js': ('design-docs.js', 'text/javascript'),
     '/design-docs.css': ('design-docs.css', 'text/css'),
     '/board.html': ('board.html', 'text/html'),

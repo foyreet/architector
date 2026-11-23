@@ -8,3 +8,20 @@
 .delete-document{flex-shrink:0;color:#a52332}
 .delete-document:hover{background:#fff0f1;border-color:#d8a2a8}
 #save-status{margin:0 0 16px}
+
+.problem-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;margin:20px 0}
+#tree-branches ul{list-style:none;margin:0;padding:0}
+#tree-branches ul ul{border-left:2px solid #cdd8ef;margin-left:12px;padding-left:12px}
+.branch-row{display:flex;align-items:baseline;gap:4px}
+.branch-row button{border:0;background:transparent;text-align:left;overflow-wrap:anywhere}
+.branch-row [aria-current=true]{background:#e5edff;color:#173b95;font-weight:650}
+#question-editor:not(:empty){background:white;border:1px solid #d7dfec;border-radius:12px;padding:18px;align-self:start}
+#question-editor h2{margin-bottom:14px}
+@media(max-width:700px){.problem-layout{grid-template-columns:minmax(0,1fr)}#document-modes{flex-wrap:wrap}.editor-toolbar{position:static}}
+
+#tree-ai{background:white;border:1px solid #d7dfec;border-radius:12px;padding:18px;margin-top:16px}
+#tree-ai select{max-width:100%;font:inherit;padding:6px}
+#tree-preview{overflow-wrap:anywhere}
+#question-editor textarea{min-height:0;scroll-margin-top:100px}
+#question-editor textarea:first-of-type{height:auto}
+#tree-request{min-height:0}

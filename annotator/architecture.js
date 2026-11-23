@@ -780,7 +780,7 @@
   $('delete-node').onclick = deleteNode;
   $('diagram-name').onchange = () => commit(() => { state.name = $('diagram-name').value.trim() || 'Новая схема'; });
   $('save').onclick = saveCurrentProject;
-  async function openDesignDocuments(create, releaseId) {
+  async function openDesignDocuments(create, releaseId, problemSpace = false) {
     if (selected && !saveNode()) return;
     try {
       if (!activeProject && !runView) {
@@ -790,11 +790,13 @@
       await flushProject();
       const url = new URL('/design-docs.html', location.origin);
       if (activeProject) url.searchParams.set('project', activeProject.meta.id);
+      if (problemSpace) url.searchParams.set('mode', 'problems');
       if (create) url.searchParams.set('new', '1');
       if (releaseId) url.searchParams.set('release', releaseId);
       location.href = url;
     } catch (error) { toast(error.message); }
   }
+  $('problem-space-open').onclick = () => openDesignDocuments(true, null, true);
   $('design-document-create').onclick = () => openDesignDocuments(true);
 
   $('board-open').onclick = async () => {

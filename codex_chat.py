@@ -271,13 +271,13 @@ inherit = "none"
                           'code': result['userCode'], 'expires_at': time.time() + 14 * 60}
         return self.status()
 
-    def answer(self, prompt, draft=None, model=None, effort=None, documents=None):
+    def answer(self, prompt, draft=None, model=None, effort=None, documents=None, instructions=INSTRUCTIONS):
         while not self.events.empty():
             try: self.events.get_nowait()
             except queue.Empty: break
         thread = self.rpc('thread/start', {'cwd': str(self.work), 'sandbox': 'read-only',
             'approvalPolicy': 'never', 'ephemeral': True, 'environments': [],
-            'baseInstructions': INSTRUCTIONS, **({'model': model} if model else {}),
+            'baseInstructions': instructions, **({'model': model} if model else {}),
             'dynamicTools': (codex_edits.TOOLS if draft else []) + (codex_documents.TOOLS if documents else []),
             'config': {'features.shell_tool': False, 'features.apps': False, 'features.plugins': False,
                        'features.multi_agent': False, 'features.view_image': False, 'web_search': 'disabled'}})['thread']['id']
@@ -350,6 +350,25 @@ def client(root):
     if settings['provider'] == 'compatible': return ai_connection.Compatible(settings)
     if settings['provider'] == 'codex': return codex_client(root)
     fail('Сначала настройте свою модель в AI Chat.', 409)
+
+
+def standalone_answer(root, prompt, instructions):
+    """Use the configured connection without writing to a project conversation."""
+    key = str(Path(root).resolve())
+    with LOCK:
+        account_lock = ACCOUNT_LOCKS.setdefault(key, threading.RLock())
+    with account_lock:
+        if key in JOBS:
+            fail('Модель ещё готовит предыдущий ответ.', 409)
+        connection = client(root)
+        if not connection.status()['connected']:
+            fail('Подключите модель в AI Chat.', 401)
+        JOBS[key] = str(uuid.uuid4())
+    try:
+        return connection.answer(prompt, instructions=instructions)
+    finally:
+        with account_lock:
+            JOBS.pop(key, None)
 
 
 def conversation(root, body):
