@@ -38,13 +38,13 @@ window.problemSpace = function (changed, suggest) {
   }
   function updateOrigin() {
     const origin = $('tree-origin');
-    const text = $('section-problem')?.value.trim() || $('title').value.trim() || 'Сформулировать проблему';
+    const text = $('formulation').value.trim() || $('title').value.trim() || 'Сформулировать проблему';
     origin.firstElementChild.textContent = text;
     origin.title = text;
   }
   $('tree-origin').onclick = () => {
-    $('document-mode').click();
-    $('section-problem').focus();
+    $('root-editor').showModal();
+    $('formulation').focus();
   };
   const folded = new Set();
   function question(text, children = []) { return {question: text, answer: '', children}; }
@@ -73,10 +73,16 @@ window.problemSpace = function (changed, suggest) {
     if (depth >= 2) target.value = 'root';
     renderBranches();
     const editor = $('question-editor');
+    editor.hidden = !focus;
     editor.replaceChildren();
     const heading = document.createElement('h2');
     heading.textContent = levels[depth];
-    editor.append(heading);
+    const close = button('Закрыть', () => {
+      editor.hidden = true;
+      map.querySelector('[aria-current=true]')?.focus();
+    });
+    close.className = 'inspector-close';
+    editor.append(close, heading);
     for (const [field, label] of [['question', 'Вопрос'], ['answer', 'Ответ']]) {
       const wrapper = document.createElement('label');
       wrapper.textContent = label;

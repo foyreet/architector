@@ -1,6 +1,14 @@
 (() => {
   'use strict';
   const $=id=>document.getElementById(id);
+  const legacy = new URL(location.href);
+  if (legacy.searchParams.get('mode') === 'problems') {
+    legacy.pathname = '/problem-space.html';
+    legacy.searchParams.delete('mode');
+    legacy.searchParams.set('legacy', '1');
+    location.replace(legacy);
+    return;
+  }
   const fields=[['problem','Проблема'],['target','Таргет'],['data_features','Данные и признаки'],['metric_validation','Метрика и проверка'],['model_training','Модель и обучение']];
   const query=new URLSearchParams(location.search),project=query.get('project');
   if(/^[a-f0-9-]{36}$/.test(project||''))$('back-schema').href+='?project='+encodeURIComponent(project);
@@ -13,22 +21,8 @@
     let r;try{r=await fetch('/api/'+(community?'community/':'design-documents/')+action,{method:'POST',headers:{'Content-Type':'application/json','X-Architect-Request':'1',...(account?{'X-Architect-Account':account.id}:{})},body:JSON.stringify(body)});}catch{throw Error('Не удалось связаться с сервером. Повторите попытку; введённый текст сохранён в редакторе.');}
     const data=await r.json();if(!r.ok){const e=Error(data.error||'Не удалось выполнить запрос.');e.status=r.status;throw e;}return data;
   }
-  const tree = window.problemSpace(changed, (request, path) => api('suggest-questions', {...value(), request, path}));
-  if (/^[a-f0-9-]{36}$/.test(project || '')) $('tree-ai-settings').href += '&project=' + encodeURIComponent(project);
-  function showMode(problems) {
-    if (problems) tree.updateOrigin();
-    $('sections').hidden = problems;
-    $('problem-space').hidden = !problems;
-    $('document-mode').setAttribute('aria-current', problems ? 'false' : 'page');
-    $('problem-mode').setAttribute('aria-current', problems ? 'page' : 'false');
-    const url = new URL(location.href);
-    if (problems) url.searchParams.set('mode', 'problems'); else url.searchParams.delete('mode');
-    history.replaceState(null, '', url);
-  }
-  $('document-mode').onclick = () => showMode(false);
-  $('problem-mode').onclick = () => showMode(true);
-  function value(){return {title:$('title').value,problem_tree:structuredClone(tree.value()),sections:Object.fromEntries(fields.map(([k])=>[k,$('section-'+k).value]))};}
-  function same(a,b){return JSON.stringify(a.problem_tree||[])===JSON.stringify(b.problem_tree||[])&&a.title===b.title&&fields.every(([k])=>a.sections[k]===b.sections[k]);}
+  function value(){return {title:$('title').value,sections:Object.fromEntries(fields.map(([k])=>[k,$('section-'+k).value]))};}
+  function same(a,b){return a.title===b.title&&fields.every(([k])=>a.sections[k]===b.sections[k]);}
   function controls(){ $('add-chat').disabled=!!saving||conflicted||blocked;$('save').disabled=(!dirty&&!!doc?.revision)||!!saving||conflicted||blocked;$('publish').disabled=!!saving||conflicted||blocked;$('conflict').hidden=!conflicted;$('save-status').textContent=doc?(saving?'Сохранение…':dirty?'Есть несохранённые изменения':doc.revision?'Все изменения сохранены':'Новый документ · ещё не сохранён'):''; }
   function cache(){if(!doc||release)return;try{if(dirty)localStorage.setItem(draftKey(),JSON.stringify({...value(),revision:doc.revision}));else localStorage.removeItem(draftKey());}catch{error('Браузер не сохранил резервную копию. Сохраните документ на сервер перед закрытием.');}}
   function changed(){dirty=!same(value(),doc);cache();controls();}
@@ -58,10 +52,7 @@
     $('auth').hidden=true;$('list').hidden=true;$('editor').hidden=false;$('title-label').hidden=false;$('title').hidden=false;$('title').value=content.title;$('read-title').hidden=true;
     $('save').hidden=false;$('publish').hidden=false;$('copy').hidden=true;$('publication-info').hidden=!doc.source_release;
     $('publication-info').textContent=doc.source_release?'Личная копия публикации. Ваши изменения не затрагивают оригинал.':'';
-    renderSections($('sections'),content.sections,true);
-    tree.load(structuredClone(content.problem_tree || []));
-    $('document-modes').hidden=false;showMode(new URLSearchParams(location.search).get('mode')==='problems');
-    updateURL(doc.revision?{id:doc.id}:{new:doc.id});$('back-list').textContent='← Мои документы';controls();window.scrollTo(0,0);
+    renderSections($('sections'),content.sections,true);updateURL(doc.revision?{id:doc.id}:{new:doc.id});$('back-list').textContent='← Мои документы';controls();window.scrollTo(0,0);
   }
   async function open(id){const result=await api('get',{id});openEditor(result.document);}
   function retryId(kind){const k='architect.design-pending.'+account.id+'.'+kind;let id;try{id=sessionStorage.getItem(k);}catch{}id ||= crypto.randomUUID();try{sessionStorage.setItem(k,id);}catch{}return {id,clear(){try{sessionStorage.removeItem(k);}catch{}}};}
@@ -71,7 +62,7 @@
   async function list(next='mine'){
     if(!await leaveEditor())return;const result=next==='mine'?await api('list'):await api('catalog',{kind:'design_document',search:$('search').value},true);
     discardDraft();
-    showMode(false);mode=next;doc=null;release=null;dirty=false;error();message();$('auth').hidden=true;$('editor').hidden=true;$('list').hidden=false;$('search-form').hidden=mode!=='catalog';
+    mode=next;doc=null;release=null;dirty=false;error();message();$('auth').hidden=true;$('editor').hidden=true;$('list').hidden=false;$('search-form').hidden=mode!=='catalog';
     $('mine').setAttribute('aria-current',mode==='mine'?'page':'false');$('catalog').setAttribute('aria-current',mode==='catalog'?'page':'false');
     updateURL({view:mode});$('documents').replaceChildren();
     const rows=mode==='mine'?result.documents:result.releases;
@@ -88,7 +79,6 @@
     release=result;doc=null;dirty=false;conflicted=false;blocked=false;error();message();
     $('auth').hidden=true;$('list').hidden=true;$('editor').hidden=false;$('title-label').hidden=true;$('title').hidden=true;$('read-title').hidden=false;$('read-title').textContent=result.name;
     $('save').hidden=true;$('publish').hidden=true;$('copy').hidden=false;$('publication-info').hidden=false;$('publication-info').textContent=`@${result.username} · версия ${result.number} · Опубликованный документ`;
-    $('document-modes').hidden=true;showMode(false);
     renderSections($('sections'),result.package.sections,false);updateURL({release:id});$('back-list').textContent='← Каталог сообщества';controls();window.scrollTo(0,0);
   }
   $('add-chat').onclick=()=>task(async()=>{
@@ -99,7 +89,7 @@
     if(!await window.DesignChat.attach(call,{project_id:selected},source))return;
     location.href='/architecture.html?project='+encodeURIComponent(selected)+'&chat=1';
   });
-  $('title').addEventListener('input', () => { tree.updateOrigin(); changed(); });
+  $('title').addEventListener('input',changed);
   $('save').onclick=()=>task(save);$('create').onclick=()=>task(()=>create());$('mine').onclick=()=>task(()=>list('mine'));$('catalog').onclick=()=>task(()=>list('catalog'));
   $('search-form').onsubmit=e=>{e.preventDefault();task(()=>list('catalog'));};$('back-list').onclick=()=>task(()=>list(release?'catalog':'mine'));
   $('back-schema').onclick=e=>{if(!doc||(!dirty&&!saving))return;e.preventDefault();task(async()=>{if(await leaveEditor()){discardDraft();location.href=$('back-schema').href;}});};
