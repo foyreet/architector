@@ -65,7 +65,7 @@
   async function save() {
     if (saving || !id) return;
     saving = true;
-    $('save').disabled = $('library').disabled = true;
+    $('solutions').disabled = $('save').disabled = $('library').disabled = true;
     const previousKey = key();
     const dest = conflict ? crypto.randomUUID() : id;
     const sent = JSON.stringify(value());
@@ -74,10 +74,11 @@
       openTreeAfterSave(dest, result.revision);
       localStorage.removeItem(previousKey);
       if (sent !== JSON.stringify(value())) changed();
+      return !dirty;
     } catch (error) {
       if (error.status === 409) { conflict = true; $('save').textContent = 'Сохранить копию'; }
       status(error.message);
-    } finally { saving = false; $('save').disabled = $('library').disabled = false; }
+    } finally { saving = false; $('solutions').disabled = $('save').disabled = $('library').disabled = false; }
   }
   function openTreeAfterSave(dest, version) {
     id = dest; revision = version; dirty = conflict = false;
@@ -87,6 +88,15 @@
     status('Сохранено');
   }
   $('save').onclick = save;
+  $('solutions').onclick = async () => {
+    if (!id || saving) return;
+    if (conflict) { status('Сначала сохраните свою версию дерева как копию.'); return; }
+    if ((dirty || !revision) && !await save()) return;
+    const next = new URL('/solution-space.html', location.origin);
+    next.searchParams.set('id', id);
+    if (project) next.searchParams.set('project', project);
+    location.href = next;
+  };
   $('title').oninput = $('formulation').oninput = () => { tree.updateOrigin(); changed(); };
   $('library').onclick = async () => {
     try {

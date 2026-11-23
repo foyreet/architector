@@ -1,0 +1,16 @@
+main{max-width:1440px}
+header{flex-wrap:wrap}
+#problem,.answer,.content{white-space:pre-wrap;overflow-wrap:anywhere}
+#context{margin:16px 0;background:white;border:1px solid #cdd8e8;border-radius:10px;padding:12px 16px}
+summary{cursor:pointer;font-weight:600}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px;margin:14px 0}
+article{min-width:0;background:white;border:1px solid #ccd7e7;border-radius:12px;padding:18px;overflow-wrap:anywhere}
+article textarea{min-height:0;margin-bottom:12px} article h3{margin-top:0}
+#preview{background:#edf3ff;border-radius:12px;padding:16px}
+#preview,#workspace{margin:20px 0}
+#stale{color:#865410}
+.sources section{border-top:1px solid #cdd8e8;margin-top:16px;padding-top:16px}
+.sources small,article strong,#answers strong{display:block}.sources small{color:#536680;margin:6px 0}
+article details{margin:14px 0}article p{white-space:pre-wrap}
+.case-toolbar{position:sticky;top:0;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;background:#f6f8fc;border-bottom:1px solid #ccd7e7}
+#options textarea{scroll-margin-top:70px}
