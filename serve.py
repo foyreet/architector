@@ -25,6 +25,7 @@ import project_store
 import subgraphs
 import local_workspace as community
 import whiteboard
+import problem_spaces
 import design_documents
 import app_config
 import architect_mcp
@@ -51,6 +52,9 @@ ASSETS = {
     '/design-chat.js': ('design-chat.js', 'text/javascript'),
     '/design-chat.css': ('design-chat.css', 'text/css'),
     '/design-docs.html': ('design-docs.html', 'text/html'),
+    '/problem-space.html': ('problem-space.html', 'text/html'),
+    '/problem-space.css': ('problem-space.css', 'text/css'),
+    '/tree-workspace.js': ('tree-workspace.js', 'text/javascript'),
     '/problem-space.js': ('problem-space.js', 'text/javascript'),
     '/design-docs.js': ('design-docs.js', 'text/javascript'),
     '/design-docs.css': ('design-docs.css', 'text/css'),
@@ -249,7 +253,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def page_navigation(self):
         """A link on another site may open the static page itself; the API stays same-origin."""
-        return (self.command == 'GET' and urlsplit(self.path).path in ('/', '/architecture.html', '/board.html', '/design-docs.html') and
+        return (self.command == 'GET' and urlsplit(self.path).path in ('/', '/architecture.html', '/board.html', '/design-docs.html', '/problem-space.html') and
                 self.headers.get('Sec-Fetch-Mode') == 'navigate' and self.headers.get('Sec-Fetch-Dest') == 'document')
 
     def send_json(self, value, status=200):
@@ -283,7 +287,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             self.local_request()
             path = urlsplit(self.path).path
-            if not path.startswith(('/api/community/', '/api/boards/', '/api/design-documents/')) and path not in ('/api/codex/config', '/api/codex/configure', '/api/codex/test', '/api/local/info', '/api/codex/status', '/api/codex/login', '/api/codex/logout', '/api/codex/history', '/api/codex/send', '/api/codex/clear', '/api/codex/proposal', '/api/codex/models', '/api/codex/upload', '/api/codex/remove-attachment', '/api/codex/design-get', '/api/codex/design-attach', '/api/codex/design-update', '/api/codex/design-remove', '/api/openrouter/chat', '/api/openrouter/models',
+            if not path.startswith(('/api/community/', '/api/boards/', '/api/problem-spaces/', '/api/design-documents/')) and path not in ('/api/codex/config', '/api/codex/configure', '/api/codex/test', '/api/local/info', '/api/codex/status', '/api/codex/login', '/api/codex/logout', '/api/codex/history', '/api/codex/send', '/api/codex/clear', '/api/codex/proposal', '/api/codex/models', '/api/codex/upload', '/api/codex/remove-attachment', '/api/codex/design-get', '/api/codex/design-attach', '/api/codex/design-update', '/api/codex/design-remove', '/api/openrouter/chat', '/api/openrouter/models',
                             '/api/kaggle/download', '/api/kaggle/files', '/api/kaggle/preview',
                             '/api/huggingface/info', '/api/huggingface/download', '/api/huggingface/status',
                             '/api/series/preview', '/api/series/start', '/api/series/list', '/api/series/get', '/api/series/cancel', '/api/series/resume',
@@ -328,6 +332,9 @@ class Handler(BaseHTTPRequestHandler):
                 raise ApiError('Каталог сообщества и аккаунты отсутствуют в локальной версии.', 404)
             if path.startswith(('/api/practice/', '/api/models/', '/api/gpu/')) or path in ('/api/projects/tutorial', '/api/code/examples'):
                 raise ApiError('Эта функция отсутствует в локальной версии.', 404)
+            if path.startswith('/api/problem-spaces/'):
+                self.send_json(problem_spaces.request(hub, user, body, path.rsplit('/', 1)[1]))
+                return
             if path.startswith('/api/design-documents/'):
                 self.send_json(design_documents.request(hub, user, body, path.rsplit('/', 1)[1]))
                 return

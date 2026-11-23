@@ -52,6 +52,13 @@ class Community:
                 db.execute('CREATE TABLE IF NOT EXISTS design_documents(id TEXT PRIMARY KEY, owner TEXT NOT NULL, title TEXT NOT NULL, sections TEXT NOT NULL, revision INTEGER NOT NULL, updated REAL NOT NULL, source_release TEXT)')
                 if 'problem_tree' not in {r['name'] for r in db.execute('PRAGMA table_info(design_documents)')}:
                     db.execute("ALTER TABLE design_documents ADD COLUMN problem_tree TEXT NOT NULL DEFAULT '[]'")
+                if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='problem_spaces'").fetchone():
+                    with db:
+                        db.execute('BEGIN IMMEDIATE')
+                        db.execute('CREATE TABLE IF NOT EXISTS problem_spaces(id TEXT PRIMARY KEY, owner TEXT NOT NULL, title TEXT NOT NULL, problem TEXT NOT NULL, tree TEXT NOT NULL, revision INTEGER NOT NULL, updated REAL NOT NULL)')
+                        db.execute("""INSERT OR IGNORE INTO problem_spaces
+                            SELECT id, owner, title, json_extract(sections, '$.problem'), problem_tree, 1, updated
+                            FROM design_documents WHERE problem_tree != '[]'""")
                 with db: yield db
             finally: db.close()
 

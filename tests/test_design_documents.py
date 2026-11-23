@@ -5,7 +5,6 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 import uuid
@@ -48,43 +47,6 @@ class Documents(unittest.TestCase):
         sections = {key: 'Ж' * 40000 for key in docs.SECTIONS}
         self.save(title='Д' * 161, sections=sections)
         self.assertEqual(self.call('get', self.doc)['document']['sections'], sections)
-
-    def test_problem_tree_round_trip_and_legacy_documents(self):
-        leaf = {'question': 'Технический вопрос', 'answer': 'Ответ', 'children': []}
-        branch = {'question': 'Уточнение', 'answer': '', 'children': [leaf]}
-        tree = [{'question': 'Общий вопрос', 'answer': '', 'children': [branch]}]
-        self.save(problem_tree=tree)
-        legacy_update = {k: v for k, v in self.doc.items() if k != 'problem_tree'}
-        self.doc = self.call('save', {**legacy_update, 'title': 'Правка разделов'})['document']
-        self.assertEqual(self.doc['problem_tree'], tree)
-        package = self.call('export', self.doc)['package']
-        def restore(package):
-            return self.call('import', {'id': str(uuid.uuid4()), 'package': package})['document']
-        self.assertEqual(restore(package)['problem_tree'], tree)
-        del package['problem_tree']
-        self.assertEqual(restore(package)['problem_tree'], [])
-        with self.assertRaises(ContractError):
-            self.call('save', {**self.doc, 'problem_tree': [{**leaf, 'children': tree}]})
-        self.assertEqual(self.call('get', self.doc)['document'], self.doc)
-
-    def test_suggest_for_a_branch_is_validated_and_does_not_mutate_document(self):
-        self.save(problem_tree=[{'question': 'Цель', 'answer': 'Измерить спрос', 'children': []}])
-        body = {**self.doc, 'path': [0], 'request': 'Уточни цель'}
-        leaf = {'question': 'Какие данные есть?', 'children': []}
-        with patch('codex_chat.standalone_answer', return_value=json.dumps([leaf])) as model:
-            proposal = self.call('suggest-questions', body)
-            self.assertEqual(json.loads(model.call_args.args[1])['problem_tree'], self.doc['problem_tree'])
-        self.assertEqual(proposal['questions'], [{**leaf, 'answer': ''}])
-        with patch('codex_chat.standalone_answer') as model:
-            for response in ('[]', 'текст', json.dumps([{**leaf, 'children': [{**leaf, 'children': [leaf]}]}])):
-                model.return_value = response
-                with self.assertRaises(ContractError):
-                    self.call('suggest-questions', body)
-            model.reset_mock()
-            with self.assertRaises(ContractError):
-                self.call('suggest-questions', {**body, 'path': [2]})
-            model.assert_not_called()
-        self.assertEqual(self.call('get', self.doc)['document'], self.doc)
 
     def test_concurrent_saves_and_retry(self):
         old=dict(self.doc);body=self.save()
