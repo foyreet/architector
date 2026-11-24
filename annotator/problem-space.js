@@ -1,8 +1,16 @@
 'use strict';
 
-window.problemSpace = function (changed, suggest) {
+window.problemSpace = function (changed, suggest, metrics = false) {
   const $ = id => document.getElementById(id);
   const levels = ['Общий вопрос', 'Уточнение задачи', 'Технический вопрос'];
+  const nameKey = metrics ? 'name' : 'question';
+  const headingFor = depth => metrics ? 'Метрика' : levels[depth];
+  const canExtend = depth => metrics || depth < 2;
+  const fields = metrics ? [
+    ['name', 'Название метрики'], ['role', 'Роль (бизнес, онлайн, офлайн, прокси, функция потерь…)'],
+    ['definition', 'Определение или формула'], ['unit', 'Единица измерения'], ['direction', 'Направление улучшения'],
+    ['measurement', 'Данные и окно измерения'], ['relation', 'Связь с родителем'], ['check', 'Как проверить связь']
+  ] : [['question', 'Вопрос'], ['answer', 'Ответ']];
   let roots = [], selected = null;
   const viewport = $('tree-viewport'), map = $('tree-map');
   let focusedPath = null, scale = 1;
@@ -38,7 +46,7 @@ window.problemSpace = function (changed, suggest) {
   }
   function updateOrigin() {
     const origin = $('tree-origin');
-    const text = $('formulation').value.trim() || $('title').value.trim() || 'Сформулировать проблему';
+    const text = $('formulation').value.trim() || $('title').value.trim() || (metrics ? 'Задать бизнес-цель' : 'Сформулировать проблему');
     origin.firstElementChild.textContent = text;
     origin.title = text;
   }
@@ -69,27 +77,28 @@ window.problemSpace = function (changed, suggest) {
   function select(item, siblings, depth, focus = false) {
     if (selected !== item && target.value === 'branch') clearProposal();
     selected = item;
-    target.options[1].disabled = depth >= 2;
-    if (depth >= 2) target.value = 'root';
+    target.options[1].disabled = !canExtend(depth);
+    if (!canExtend(depth)) target.value = 'root';
     renderBranches();
     const editor = $('question-editor');
     editor.hidden = !focus;
     editor.replaceChildren();
     const heading = document.createElement('h2');
-    heading.textContent = levels[depth];
+    heading.textContent = headingFor(depth);
     const close = button('Закрыть', () => {
       editor.hidden = true;
       map.querySelector('[aria-current=true]')?.focus();
     });
     close.className = 'inspector-close';
     editor.append(close, heading);
-    for (const [field, label] of [['question', 'Вопрос'], ['answer', 'Ответ']]) {
+    for (const [field, label] of fields) {
       const wrapper = document.createElement('label');
       wrapper.textContent = label;
       const input = document.createElement('textarea');
       input.rows = field === 'answer' ? 4 : 2;
       input.value = item[field];
       input.oninput = () => {
+        clearProposal();
         item[field] = input.value;
         renderBranches();
         changed();
@@ -99,23 +108,48 @@ window.problemSpace = function (changed, suggest) {
     }
     const actions = document.createElement('div');
     actions.className = 'actions';
-    if (depth < 2) actions.append(button(depth === 0 ? 'Добавить уточнение' : 'Добавить технический вопрос', () => {
+    if (canExtend(depth)) actions.append(button(metrics ? 'Добавить дочернюю метрику' : depth === 0 ? 'Добавить уточнение' : 'Добавить технический вопрос', () => {
       focusedPath = null;
       folded.delete(item);
       add(item.children, depth + 1);
     }));
-    if (depth < 2) actions.append(button('Углубить с AI', () => {
+    if (canExtend(depth)) actions.append(button('Углубить с AI', () => {
       target.value = 'branch';
       showAI(true);
     }));
+    if (metrics) {
+      const label = document.createElement('label'), move = document.createElement('select');
+      label.textContent = 'Перенести ветвь';
+      move.append(new Option('Выберите нового родителя', ''));
+      const destinations = [];
+      function destination(nodes, title, depth) {
+        if (nodes !== siblings) {
+          destinations.push({nodes, depth});
+          move.append(new Option(title, String(destinations.length)));
+        }
+        for (const child of nodes) {
+          if (child !== item) destination(child.children, title + ' → ' + child.name, depth + 1);
+        }
+      }
+      destination(roots, 'Бизнес-цель', 0);
+      move.onchange = () => {
+        if (!move.value) return;
+        const dest = destinations[Number(move.value) - 1];
+        clearProposal(); folded.clear(); focusedPath = null;
+        siblings.splice(siblings.indexOf(item), 1);
+        dest.nodes.push(item);
+        select(item, dest.nodes, dest.depth, true); changed();
+      };
+      label.append(move); editor.append(label);
+    }
     actions.append(button('Показать ветвь', () => {
       focusedPath = selectionPath.slice();
       renderBranches();
       revealSelected();
       $('tree-all').focus();
     }));
-    actions.append(button('Удалить вопрос', () => {
-      if (!confirm('Удалить этот вопрос вместе с его ответом и уточнениями?')) return;
+    actions.append(button(metrics ? 'Удалить метрику' : 'Удалить вопрос', () => {
+      if (!confirm(metrics ? 'Удалить метрику вместе со всей ветвью?' : 'Удалить этот вопрос вместе с его ответом и уточнениями?')) return;
       siblings.splice(siblings.indexOf(item), 1);
       load(roots);
       changed();
@@ -155,14 +189,14 @@ window.problemSpace = function (changed, suggest) {
           });
           const index = toggles++;
           toggle.setAttribute('aria-expanded', String(!folded.has(item)));
-          toggle.setAttribute('aria-label', 'Уточнения к вопросу «' + item.question + '»');
+          toggle.setAttribute('aria-label', (metrics ? 'Ветвь метрики «' : 'Уточнения к вопросу «') + item[nameKey] + '»');
           row.append(toggle);
         }
-        const choose = button(item.question || levels[depth], () => select(item, items, depth, true));
+        const choose = button(item[nameKey] || headingFor(depth), () => select(item, items, depth, true));
         choose.setAttribute('aria-current', String(item === selected));
         const state = document.createElement('small');
-        state.textContent = item.answer.trim() ? 'Есть ответ' : 'Без ответа';
-        choose.setAttribute('aria-label', item.question || levels[depth]);
+        state.textContent = metrics ? [item.role, item.direction, item.relation].filter(Boolean).join(' · ') : item.answer.trim() ? 'Есть ответ' : 'Без ответа';
+        choose.setAttribute('aria-label', item[nameKey] || headingFor(depth));
         choose.append(state);
         row.prepend(choose); li.append(row);
         if (item.children.length && !folded.has(item)) li.append(branch(item.children, itemPath));
@@ -174,7 +208,9 @@ window.problemSpace = function (changed, suggest) {
     if (roots.length) container.append(branch(roots, []));
   }
   function add(list, depth) {
-    const item = question(levels[depth]);
+    const item = metrics
+      ? {...Object.fromEntries(fields.map(([key]) => [key, ''])), name: 'Новая метрика', children: []}
+      : question(levels[depth]);
     list.push(item);
     select(item, list, depth, true);
     changed();
@@ -192,7 +228,18 @@ window.problemSpace = function (changed, suggest) {
     const list = document.createElement('ul');
     for (const item of items) {
       const li = document.createElement('li');
-      li.textContent = item.question;
+      li.textContent = item[nameKey];
+      if (metrics) {
+        const detail = document.createElement('details');
+        const summary = document.createElement('summary');
+        summary.textContent = 'Описание метрики'; detail.append(summary);
+        for (const [key, label] of fields.slice(1)) {
+          if (!item[key]) continue;
+          const line = document.createElement('p');
+          line.textContent = label + ' · ' + item[key]; detail.append(line);
+        }
+        li.append(detail);
+      }
       if (item.children.length) li.append(preview(item.children));
       list.append(li);
     }
@@ -218,14 +265,14 @@ window.problemSpace = function (changed, suggest) {
     }
     const id = generation, parent = target.value === 'branch' ? selected : null;
     $('tree-generate').disabled = true;
-    status.textContent = 'Модель готовит вопросы…';
+    status.textContent = metrics ? 'Модель готовит метрики…' : 'Модель готовит вопросы…';
     try {
       const result = await suggest(request, parent ? selectionPath : []);
       if (id !== generation) return;
-      proposal = {items: result.questions, parent};
+      proposal = {items: metrics ? result.metrics : result.questions, parent};
       $('tree-preview').append(preview(proposal.items));
       $('tree-proposal').hidden = false;
-      status.textContent = 'Проверьте вопросы перед добавлением.';
+      status.textContent = metrics ? 'Проверьте определения и связи перед добавлением.' : 'Проверьте вопросы перед добавлением.';
     } catch (error) {
       if (id === generation) status.textContent = error.message;
     } finally {

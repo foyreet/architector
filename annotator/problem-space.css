@@ -54,3 +54,6 @@
 #space #tree-ai{position:absolute;z-index:3;right:10px;top:50px;margin:0;width:min(450px,calc(100% - 20px));max-height:calc(100% - 60px);overflow:auto;box-shadow:0 8px 26px #23345022}
 #entries{display:grid;gap:6px;margin:14px 0}
 @media(max-width:700px){.space-page header{gap:6px;padding:4px 8px}.space-page h1{font-size:16px}.space-page #title{flex:1;margin:0}.space-actions{gap:4px;padding:4px}.space-actions button{font-size:13px;padding:6px}.space-page #space #question-editor:not(:empty){left:0;right:0;top:auto;bottom:0;width:100%;max-height:55%;border-radius:12px 12px 0 0}}
+
+.metrics-page #tree-origin::before{content:'Бизнес-цель'}
+.metrics-page #question-editor select{width:100%;font:inherit;padding:8px}

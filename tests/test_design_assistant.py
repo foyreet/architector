@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from block_contracts import ContractError
 import design_documents as docs
+import metric_trees
 import problem_spaces
 import solution_spaces
 from local_workspace import Community, LOCAL_USER
@@ -45,6 +46,47 @@ class DesignAssistantTests(unittest.TestCase):
         for body, user in (({**self.body, 'version': 0}, LOCAL_USER), (self.body, {'id': 'other'})):
             with self.assertRaises(ContractError):
                 docs.request(self.hub, user, body, 'compose')
+        model.assert_not_called()
+
+    @patch('design_assistant.standalone_answer')
+    def test_metrics_only_and_combined_sources(self, model):
+        leaf = {**dict.fromkeys(metric_trees.FIELDS, ''), 'name': 'CTR', 'relation': 'Прокси',
+                'measurement': 'За неделю', 'check': 'Сверить с покупками', 'children': []}
+        tree = {'id': str(uuid.uuid4()), 'title': 'Поиск', 'goal': 'Рост продаж', 'revision': 0,
+                'metrics': [{**leaf, 'name': 'Покупки', 'children': [leaf]}]}
+        metric_trees.request(self.hub, LOCAL_USER, tree, 'save')
+        body = {**self.body, 'metric_tree_id': tree['id'], 'metric_revision': 1}
+        entry = {'text': 'Проверить CTR', 'answers': [], 'cases': [], 'metrics': [0, 2]}
+        model.return_value = json.dumps({'metric_validation': entry})
+        for selected in (False, True):
+            selection = body if selected else {**body, 'tree_id': '', 'cases': []}
+            proposal = docs.request(self.hub, LOCAL_USER, selection, 'compose')['proposals']['metric_validation']
+            context = json.loads(model.call_args.args[1])
+            metrics = context['metric_tree']['metrics']
+            self.assertEqual((metrics[1]['parent'], metrics[1]['check']), (metrics[0]['id'], leaf['check']))
+            self.assertEqual(bool(context['cases']), selected)
+            ref = proposal['source']
+            self.assertEqual('tree_id' in ref, selected)
+            snapshot = ref['metric_tree']
+            self.assertEqual(snapshot['nodes'][0]['path'], ['Покупки', 'CTR'])
+            self.assertEqual(snapshot['revision'], 1)
+            sources = {'metric_validation': ref}
+            doc = docs.request(self.hub, LOCAL_USER, {**self.body, 'id': str(uuid.uuid4()),
+                               'sources': sources}, 'create')['document']
+            self.assertEqual(docs.request(self.hub, LOCAL_USER, doc, 'export')['package']['sources'], sources)
+        model.return_value = '[]'
+        doc['sections']['metric_validation'] = entry['text']
+        docs.request(self.hub, LOCAL_USER, doc, 'review')
+        self.assertEqual(json.loads(model.call_args.args[1])['metric_sources']['metric_validation'], snapshot)
+        model.return_value = json.dumps({'metric_validation': {**entry, 'metrics': [3]}})
+        with self.assertRaises(ContractError) as invalid:
+            docs.request(self.hub, LOCAL_USER, body, 'compose')
+        self.assertEqual(invalid.exception.status, 502)
+        model.reset_mock()
+        for change, user, status in (({'metric_revision': 0}, LOCAL_USER, 409), ({}, {'id': 'other'}, 404)):
+            with self.assertRaises(ContractError) as err:
+                docs.request(self.hub, user, {**body, **change}, 'compose')
+            self.assertEqual(err.exception.status, status)
         model.assert_not_called()
 
     @patch('design_assistant.standalone_answer')

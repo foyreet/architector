@@ -61,6 +61,7 @@ class Community:
                         db.execute("""INSERT OR IGNORE INTO problem_spaces
                             SELECT id, owner, title, json_extract(sections, '$.problem'), problem_tree, 1, updated
                             FROM design_documents WHERE problem_tree != '[]'""")
+                db.execute('CREATE TABLE IF NOT EXISTS metric_trees(id TEXT PRIMARY KEY, owner TEXT NOT NULL, title TEXT NOT NULL, problem TEXT NOT NULL, tree TEXT NOT NULL, revision INTEGER NOT NULL, updated REAL NOT NULL)')
                 db.execute('CREATE TABLE IF NOT EXISTS solution_spaces(tree_id TEXT PRIMARY KEY, content TEXT NOT NULL, version INTEGER NOT NULL)')
                 with db: yield db
             finally: db.close()

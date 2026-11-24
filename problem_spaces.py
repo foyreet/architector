@@ -96,32 +96,44 @@ def request(hub, user, body, action):
     if action == 'suggest-questions':
         value = content(body)
         return suggest_questions(hub.root, body, {k: value[k] for k in ('title', 'problem')})
+    return stored_tree(hub, user, body, action, metrics=False)
+
+
+def stored_tree(hub, user, body, action, *, metrics):
+    table = 'metric_trees' if metrics else 'problem_spaces'
+    nodes_key = 'metrics' if metrics else 'problem_tree'
+    goal_key = 'goal' if metrics else 'problem'
     with hub.db() as db:
         owner = user['id']
         if action == 'list':
-            rows = db.execute('SELECT id,title FROM problem_spaces WHERE owner=? ORDER BY updated DESC', (owner,))
+            columns = 'id,title,revision' if metrics else 'id,title'
+            rows = db.execute(f'SELECT {columns} FROM {table} WHERE owner=? ORDER BY updated DESC', (owner,))
             return {'trees': [dict(row) for row in rows]}
         tree_id = identity(body.get('id'))
         db.execute('BEGIN IMMEDIATE')
-        row = db.execute('SELECT * FROM problem_spaces WHERE id=? AND owner=?', (tree_id, owner)).fetchone()
+        row = db.execute(f'SELECT * FROM {table} WHERE id=? AND owner=?', (tree_id, owner)).fetchone()
         if action == 'get':
             if not row:
                 raise ContractError('Дерево не найдено.', 404)
-            return {'id': tree_id, 'title': row['title'], 'problem': row['problem'],
-                    'problem_tree': json.loads(row['tree']), 'revision': row['revision']}
+            return {'id': tree_id, 'title': row['title'], goal_key: row['problem'],
+                    nodes_key: json.loads(row['tree']), 'revision': row['revision']}
         if action != 'save':
             raise ContractError('Маршрут дерева не найден.', 404)
-        value = content(body)
+        if metrics:
+            from metric_trees import content as metric_content
+            value = metric_content(body)
+        else:
+            value = content(body)
         revision = body.get('revision')
         if type(revision) is not int or revision < 0:
             raise ContractError('Некорректная версия дерева.')
-        if row and revision == row['revision'] - 1 and row['title'] == value['title'] and row['problem'] == value['problem'] and json.loads(row['tree']) == value['problem_tree']:
+        if row and revision == row['revision'] - 1 and row['title'] == value['title'] and row['problem'] == value[goal_key] and json.loads(row['tree']) == value[nodes_key]:
             return {'revision': row['revision']}
         if revision != (row['revision'] if row else 0):
             raise ContractError('Дерево изменено в другой вкладке. Сохраните свой вариант как копию.', 409)
-        fields = (value['title'], value['problem'], json.dumps(value['problem_tree'], ensure_ascii=False), revision + 1, time.time())
+        fields = (value['title'], value[goal_key], json.dumps(value[nodes_key], ensure_ascii=False), revision + 1, time.time())
         if row:
-            db.execute('UPDATE problem_spaces SET title=?,problem=?,tree=?,revision=?,updated=? WHERE id=? AND owner=?', (*fields, tree_id, owner))
+            db.execute(f'UPDATE {table} SET title=?,problem=?,tree=?,revision=?,updated=? WHERE id=? AND owner=?', (*fields, tree_id, owner))
         else:
-            db.execute('INSERT INTO problem_spaces(title,problem,tree,revision,updated,id,owner) VALUES(?,?,?,?,?,?,?)', (*fields, tree_id, owner))
+            db.execute(f'INSERT INTO {table}(title,problem,tree,revision,updated,id,owner) VALUES(?,?,?,?,?,?,?)', (*fields, tree_id, owner))
         return {'revision': revision + 1}
