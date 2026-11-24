@@ -1,15 +1,19 @@
 'use strict';
 (() => {
   const $ = id => document.getElementById(id);
-  const last = 'architect.problem-space.last';
+  const metrics = document.body.classList.contains('metrics-page');
+  const space = metrics ? 'architect.metric-tree' : 'architect.problem-space';
+  const endpoint = metrics ? '/api/metric-trees/' : '/api/problem-spaces/';
+  const goalKey = metrics ? 'goal' : 'problem', nodesKey = metrics ? 'metrics' : 'problem_tree';
+  const last = space + '.last';
   const url = new URL(location.href);
   const project = url.searchParams.get('project');
   if (project) $('back-schema').href += '?project=' + encodeURIComponent(project);
   let id, revision, dirty = false, saving = false, conflict = false;
-  const key = () => 'architect.problem-space.draft.' + id;
+  const key = () => space + '.draft.' + id;
   const status = message => { $('status').textContent = message; };
   async function api(action, body) {
-    const response = await fetch('/api/problem-spaces/' + action, {
+    const response = await fetch(endpoint + action, {
       method: 'POST', headers: {'Content-Type': 'application/json', 'X-Architect-Request': '1'},
       body: JSON.stringify(body)
     });
@@ -18,9 +22,9 @@
     return data;
   }
   const tree = window.problemSpace(changed, (request, path) =>
-    api('suggest-questions', {...value(), request, path}));
+    api(metrics ? 'suggest' : 'suggest-questions', {...value(), request, path}), metrics);
   function value() {
-    return {title: $('title').value, problem: $('formulation').value, problem_tree: tree.value()};
+    return {title: $('title').value, [goalKey]: $('formulation').value, [nodesKey]: tree.value()};
   }
   function changed() {
     dirty = true;
@@ -34,8 +38,8 @@
     conflict = !!draft && draft.revision !== revision;
     const data = draft || record;
     $('title').value = data.title;
-    $('formulation').value = data.problem;
-    tree.load(data.problem_tree);
+    $('formulation').value = data[goalKey];
+    tree.load(data[nodesKey]);
     dirty = !!draft;
     $('save').textContent = conflict ? 'Сохранить копию' : 'Сохранить';
     status(conflict ? 'Дерево изменилось в другой вкладке' : dirty ? 'Восстановлен черновик' : revision ? 'Сохранено' : '');
@@ -44,17 +48,17 @@
     history.replaceState(null, '', url);
     localStorage.setItem(last, id);
   }
-  const fresh = () => ({id: crypto.randomUUID(), title: 'Новое дерево', problem: '', problem_tree: [], revision: 0});
+  const fresh = () => ({id: crypto.randomUUID(), title: 'Новое дерево', [goalKey]: '', [nodesKey]: [], revision: 0});
   async function restore(treeId) {
     if (!treeId) { openTree(fresh()); return; }
-    let draft = JSON.parse(localStorage.getItem('architect.problem-space.draft.' + treeId) || 'null');
+    let draft = JSON.parse(localStorage.getItem(space + '.draft.' + treeId) || 'null');
     let record;
     try { record = await api('get', {id: treeId}); }
     catch (error) {
       if (error.status !== 404) throw error;
       record = {...fresh(), id: treeId};
     }
-    if (url.searchParams.has('legacy') && !draft) {
+    if (!metrics && url.searchParams.has('legacy') && !draft) {
       const old = JSON.parse(localStorage.getItem('architect.design-document.local.' + treeId) || 'null');
       if (old?.problem_tree) draft = {title: old.title, problem: old.sections?.problem || '', problem_tree: old.problem_tree, revision: record.revision};
     }
@@ -65,7 +69,8 @@
   async function save() {
     if (saving || !id) return;
     saving = true;
-    $('solutions').disabled = $('save').disabled = $('library').disabled = true;
+    if ($('solutions')) $('solutions').disabled = true;
+    $('save').disabled = $('library').disabled = true;
     const previousKey = key();
     const dest = conflict ? crypto.randomUUID() : id;
     const sent = JSON.stringify(value());
@@ -78,7 +83,7 @@
     } catch (error) {
       if (error.status === 409) { conflict = true; $('save').textContent = 'Сохранить копию'; }
       status(error.message);
-    } finally { saving = false; $('solutions').disabled = $('save').disabled = $('library').disabled = false; }
+    } finally { saving = false; if ($('solutions')) $('solutions').disabled = false; $('save').disabled = $('library').disabled = false; }
   }
   function openTreeAfterSave(dest, version) {
     id = dest; revision = version; dirty = conflict = false;
@@ -88,7 +93,7 @@
     status('Сохранено');
   }
   $('save').onclick = save;
-  $('solutions').onclick = async () => {
+  if ($('solutions')) $('solutions').onclick = async () => {
     if (!id || saving) return;
     if (conflict) { status('Сначала сохраните свою версию дерева как копию.'); return; }
     if ((dirty || !revision) && !await save()) return;
@@ -104,7 +109,7 @@
       $('entries').replaceChildren();
       const ids = new Set(result.trees.map(row => row.id));
       for (const storageKey of Object.keys(localStorage)) {
-        const prefix = 'architect.problem-space.draft.';
+        const prefix = space + '.draft.';
         if (!storageKey.startsWith(prefix)) continue;
         const draftId = storageKey.slice(prefix.length);
         if (!ids.has(draftId)) {
@@ -128,7 +133,7 @@
   $('new').onclick = () => { openTree(fresh()); $('trees').close(); };
   $('export').onclick = () => {
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([JSON.stringify({format:'architect.problem-space',version:1,...value()},null,2)],{type:'application/json'}));
+    a.href = URL.createObjectURL(new Blob([JSON.stringify({format:space,version:1,...value()},null,2)],{type:'application/json'}));
     a.download = ($('title').value || 'Дерево') + '.json';
     a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
@@ -138,8 +143,8 @@
       $('trees').close();
       try {
         const data = JSON.parse(await input.files[0].text());
-        if (data.version !== 1 || !['architect.problem-space','architect.design-document'].includes(data.format)) throw Error('Выберите JSON дерева.');
-        const record = {...fresh(), title: data.title, problem: data.problem ?? data.sections?.problem ?? '', problem_tree: data.problem_tree};
+        if (data.version !== 1 || !(metrics ? [space] : [space,'architect.design-document']).includes(data.format)) throw Error('Выберите JSON дерева.');
+        const record = {...fresh(), title: data.title, [goalKey]: data[goalKey] ?? data.sections?.problem ?? '', [nodesKey]: data[nodesKey]};
         const result = await api('save', record);
         openTree({...record, revision: result.revision});
       } catch (error) { status(error.message); }

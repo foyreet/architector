@@ -802,6 +802,7 @@
     else location.href = url;
   }
   $('problem-space-open').onclick = () => openSpace('/problem-space.html');
+  $('metric-tree-open').onclick = () => openSpace('/metric-tree.html');
   $('solution-space-open').onclick = () => openSpace('/solution-space.html');
   $('design-document-create').onclick = () => openDesignDocuments(true);
 
