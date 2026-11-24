@@ -6,7 +6,7 @@ import uuid
 from block_contracts import ContractError
 
 SECTIONS = ('problem', 'target', 'data_features', 'metric_validation', 'model_training')
-LABELS = ('Проблема и текущий процесс', 'Цели, таргет и антицели', 'Данные и признаки', 'Проверка, риски и открытые вопросы', 'Решение, альтернативы и обучение')
+LABELS = ('Проблема и текущий процесс', 'Цели, таргет и антицели', 'Данные и признаки', 'Метрики, проверка, риски и открытые вопросы', 'Решение, альтернативы и обучение')
 KIND = 'design_document'
 FORMAT = 'architect.design-document'
 
@@ -37,6 +37,21 @@ def sources(value):
     for ref in value.values():
         if not isinstance(ref, dict):
             raise ContractError('Некорректный источник.')
+        if 'metric_tree' in ref:
+            from metric_trees import FIELDS
+            metric = ref['metric_tree']
+            if (not isinstance(metric, dict) or not isinstance(metric.get('title'), str)
+                    or not isinstance(metric.get('goal'), str) or type(metric.get('revision')) is not int
+                    or metric['revision'] < 1 or not isinstance(metric.get('nodes'), list)):
+                raise ContractError('Некорректная ссылка на иерархию метрик.')
+            identity(metric.get('id'))
+            for node in metric['nodes']:
+                if (not isinstance(node, dict) or not isinstance(node.get('path'), list) or not node['path']
+                        or not all(isinstance(name, str) for name in node['path'])
+                        or not all(isinstance(node.get(k), str) for k in FIELDS)):
+                    raise ContractError('Некорректная ссылка на метрику.')
+            if 'tree_id' not in ref:
+                continue
         identity(ref.get('tree_id'))
         if (not isinstance(ref.get('title'), str) or
             any(type(ref.get(k)) is not int for k in ('revision', 'version')) or

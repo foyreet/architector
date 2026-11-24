@@ -106,7 +106,8 @@ def stored_tree(hub, user, body, action, *, metrics):
     with hub.db() as db:
         owner = user['id']
         if action == 'list':
-            rows = db.execute(f'SELECT id,title FROM {table} WHERE owner=? ORDER BY updated DESC', (owner,))
+            columns = 'id,title,revision' if metrics else 'id,title'
+            rows = db.execute(f'SELECT {columns} FROM {table} WHERE owner=? ORDER BY updated DESC', (owner,))
             return {'trees': [dict(row) for row in rows]}
         tree_id = identity(body.get('id'))
         db.execute('BEGIN IMMEDIATE')

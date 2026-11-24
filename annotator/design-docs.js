@@ -9,7 +9,7 @@
     location.replace(legacy);
     return;
   }
-  const fields=[['problem','Проблема и текущий процесс'],['target','Цели, таргет и антицели'],['data_features','Данные и признаки'],['metric_validation','Проверка, риски и открытые вопросы'],['model_training','Решение, альтернативы и обучение']];
+  const fields=[['problem','Проблема и текущий процесс'],['target','Цели, таргет и антицели'],['data_features','Данные и признаки'],['metric_validation','Метрики, проверка, риски и открытые вопросы'],['model_training','Решение, альтернативы и обучение']];
   const query=new URLSearchParams(location.search),project=query.get('project');
   if(/^[a-f0-9-]{36}$/.test(project||''))$('back-schema').href+='?project='+encodeURIComponent(project);
   let account=null,doc=null,release=null,dirty=false,conflicted=false,blocked=false,saving=null,working=false,mode='mine',preview=null;
@@ -18,7 +18,7 @@
   function message(text=''){ $('message').textContent=text;$('message').hidden=!text; }
   function error(text='',target='editor-error'){const e=$(target);e.textContent=text;e.hidden=!text;if(text&&!e.closest('[hidden]')){e.tabIndex=-1;e.focus({preventScroll:true});e.scrollIntoView({block:'nearest'});}}
   async function api(action,body={},community=false){
-    let r;try{r=await fetch('/api/'+(community === true ? 'community/' : community === 'solution-spaces' ? 'solution-spaces/' : 'design-documents/')+action,{method:'POST',headers:{'Content-Type':'application/json','X-Architect-Request':'1',...(account?{'X-Architect-Account':account.id}:{})},body:JSON.stringify(body)});}catch{throw Error('Не удалось связаться с сервером. Повторите попытку; введённый текст сохранён в редакторе.');}
+    let r;try{r=await fetch('/api/'+(community === true ? 'community/' : typeof community === 'string' ? community + '/' : 'design-documents/')+action,{method:'POST',headers:{'Content-Type':'application/json','X-Architect-Request':'1',...(account?{'X-Architect-Account':account.id}:{})},body:JSON.stringify(body)});}catch{throw Error('Не удалось связаться с сервером. Повторите попытку; введённый текст сохранён в редакторе.');}
     const data=await r.json();if(!r.ok){const e=Error(data.error||'Не удалось выполнить запрос.');e.status=r.status;throw e;}return data;
   }
   const assistant = window.setupDesignAssistant({fields, api, read:value, changed, getId:()=>doc?.id});

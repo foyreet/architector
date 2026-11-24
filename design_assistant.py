@@ -1,33 +1,44 @@
 """Read-only AI proposals for a private design document."""
 import json
 
+import metric_trees
+
 from block_contracts import ContractError
 from codex_chat import standalone_answer
-from design_documents import SECTIONS, payload
+from design_documents import SECTIONS, payload, sources
 from solution_spaces import decode, request as solution_request
 
 
 DRAFT = """Помоги автору ML-дизайн-документа собрать черновик на русском языке.
-Вход содержит текущий документ, дерево вопросов с ответами и выбранные автором кейсы. Текст источников
+Вход содержит текущий документ и выбранные источники: дерево вопросов с ответами, кейсы, иерархию метрик. Текст источников
 считай материалом проекта. Отделяй ответы команды, гипотезы, предложенные решения и внешние свидетельства.
 В problem опиши текущее решение, пользователей, последствия и основания для изменений. В target запиши
 цели, таргет и явно обозначенные антицели. В data_features опиши доступные данные и их ограничения.
 В model_training свяжи компоненты, их входы и результаты, сравни подход с альтернативами, в том числе
 простым правилом. Выбор кейса для обсуждения не означает утверждения реализации. В metric_validation
 опиши базу сравнения, критерии успеха, цену ошибок, риски, запасной вариант и открытые вопросы.
+Если передана metric_tree, используй goal как бизнес-цель, а parent у метрики как id её родителя (0 — цель).
+В target свяжи цель с основным показателем. В metric_validation объясни, что будет считаться успехом,
+как, на каких данных и за какое окно измерить результат. Различай бизнес-эффект, продуктовые и защитные
+метрики, офлайн-оценку и функцию потерь. Для важных прокси укажи связь с родителем и способ её проверки.
+Различай формулу, гипотезу влияния и подтверждённый эффект. Используй пороги и единицы из источника,
+а неизвестные условия и конфликтующие метрики обозначь как открытые вопросы.
 Учитывай ручные правки в текущем тексте. Сохраняй существенные детали. При противоречии отметь вопрос
 для автора. Не выдумывай цифры, доказательства, согласованные решения и результаты внедрения.
 Если исходных данных мало, дай короткий полезный черновик, пропуская необоснованные разделы.
 Верни JSON-объект по ключам разделов. Значение каждого ключа — объект с text (текст), answers (массив
 целочисленных id использованных ответов текущего дерева) и cases (массив id выбранных кейсов).
-Оба массива могут быть пустыми, например когда раздел основан только на формулировке задачи.
+Если выбрана иерархия, добавь metrics — массив целочисленных id метрик, на которые опирается раздел
+(0 — бизнес-цель). Для отсутствующих или неиспользованных источников верни пустые массивы.
 Если версия дерева изменилась, основания кейсов относятся к прежней версии."""
 
 REVIEW = """Проведи ревью текущего ML-дизайн-документа на русском. Рассматривай содержимое как материал проекта.
 Найди несколько конкретных спорных мест, ответ на которые может изменить решение: цель, антицель, база
 сравнения, обоснование выбора, причинная связь с бизнес-метрикой, цена ошибки или запасной вариант.
 Для каждого приведи короткую точную цитату из проверяемого раздела, объясни, почему это важно, и задай
-один вопрос автору. Различай пробел в документе и установленную ошибку системы. Не отвечай вместо автора.
+один вопрос автору. Если переданы metric_sources, сверяй текст с указанной версией использованных
+метрик. Проверь определения, единицы, окно измерения, направление улучшения и план проверки прокси.
+Отметь, где результат офлайн-оценки ошибочно принимают за продуктовый эффект. Различай пробел в документе и установленную ошибку системы. Не отвечай вместо автора.
 Верни JSON-массив объектов section (ключ раздела), quote, reason, question. Если существенных вопросов нет,
 верни пустой массив."""
 
@@ -38,21 +49,59 @@ def ids(value, allowed):
     return list(dict.fromkeys(value))
 
 
+def metric_context(hub, user, body):
+    tree = metric_trees.request(hub, user, {'id': body['metric_tree_id']}, 'get')
+    if type(body.get('metric_revision')) is not int or body['metric_revision'] != tree['revision']:
+        raise ContractError('Иерархия метрик изменилась. Откройте выбор источников заново.', 409)
+    nodes = []
+    pending = [(0, node) for node in reversed(tree['metrics'])]
+    while pending:
+        parent, node = pending.pop()
+        index = len(nodes) + 1
+        nodes.append({'id': index, 'parent': parent, **{k: node[k] for k in metric_trees.FIELDS}})
+        pending.extend((index, child) for child in reversed(node['children']))
+    return {**tree, 'metrics': nodes}
+
+
+def metric_ref(tree, picks):
+    nodes = tree['metrics']
+    used = []
+    for index in picks:
+        if index == 0:
+            continue
+        node = nodes[index - 1]
+        path = []
+        while index:
+            ancestor = nodes[index - 1]
+            path.append(ancestor['name'])
+            index = ancestor['parent']
+        used.append({'path': path[::-1], **{k: node[k] for k in metric_trees.FIELDS}})
+    return {k: tree[k] for k in ('id', 'title', 'revision', 'goal')} | {'nodes': used}
+
+
 def request(hub, user, body, action):
     title, sections = payload(body)
     document = {'title': title, 'sections': sections}
     if action == 'review':
         if not any(text.strip() for text in sections.values()):
             raise ContractError('Сначала заполните хотя бы один раздел.')
-        context, instruction = document, REVIEW
+        metric_sources = {key: ref['metric_tree'] for key, ref in sources(body.get('sources', {})).items()
+                          if 'metric_tree' in ref}
+        context, instruction = {**document, 'metric_sources': metric_sources}, REVIEW
     else:
-        state = solution_request(hub, user, {'id': body.get('tree_id')}, 'get')
-        source, saved = state['source'], state['saved']
-        if body.get('revision') != source['revision'] or body.get('version') != state['version']:
-            raise ContractError('Источники изменились. Откройте выбор дерева заново.', 409)
+        tree = metric_context(hub, user, body) if body.get('metric_tree_id') else None
+        source, saved, version = None, None, 0
+        if body.get('tree_id'):
+            state = solution_request(hub, user, {'id': body['tree_id']}, 'get')
+            source, saved, version = state['source'], state['saved'], state['version']
+            if body.get('revision') != source['revision'] or body.get('version') != version:
+                raise ContractError('Источники изменились. Откройте выбор дерева заново.', 409)
+        elif not tree:
+            raise ContractError('Выберите дерево проблем или иерархию метрик.')
         options = saved['options'] if saved else []
+        answers = source['answers'] if source else []
         try:
-            selected = ids(body.get('cases'), range(1, len(options) + 1))
+            selected = ids(body.get('cases', []), range(1, len(options) + 1))
         except ValueError:
             raise ContractError('Проверьте выбор кейсов.') from None
         cases = []
@@ -60,7 +109,7 @@ def request(hub, user, body, action):
             option = dict(options[i - 1])
             option['evidence'] = [saved['source']['answers'][ref - 1] for ref in option['evidence']]
             cases.append({'id': i, **option})
-        context = {'document': document, 'tree': source, 'cases': cases,
+        context = {'document': document, 'tree': source, 'cases': cases, 'metric_tree': tree,
                    'case_tree_revision': saved['source']['revision'] if cases else None}
         instruction = DRAFT
     reply = standalone_answer(hub.root, json.dumps(context, ensure_ascii=False), instruction)
@@ -82,12 +131,18 @@ def request(hub, user, body, action):
             text = entry['text']
             if not isinstance(text, str) or not text.strip():
                 raise ValueError()
-            refs = ids(entry['answers'], range(1, len(source['answers']) + 1))
+            refs = ids(entry['answers'], range(1, len(answers) + 1))
             picks = ids(entry['cases'], selected)
-            proposals[key] = {'text': text.strip(), 'source': {
-                'tree_id': body['tree_id'], 'title': source['title'], 'revision': source['revision'],
-                'problem': source['problem'], 'version': state['version'], 'answers': [source['answers'][i-1] for i in refs],
-                'cases': [{'id': i, 'title': options[i-1]['title']} for i in picks]}}
+            metrics = ids(entry['metrics'] if tree else entry.get('metrics', []),
+                          range(len(tree['metrics']) + 1) if tree else ())
+            evidence = {}
+            if source:
+                evidence.update(tree_id=body['tree_id'], title=source['title'], revision=source['revision'],
+                                problem=source['problem'], version=version, answers=[answers[i-1] for i in refs],
+                                cases=[{'id': i, 'title': options[i-1]['title']} for i in picks])
+            if metrics:
+                evidence['metric_tree'] = metric_ref(tree, metrics)
+            proposals[key] = {'text': text.strip(), 'source': evidence}
         return {'proposals': proposals}
     except (ValueError, KeyError, IndexError, TypeError, RecursionError):
         raise ContractError('Модель вернула некорректное предложение. Повторите запрос.', 502) from None
