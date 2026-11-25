@@ -5,8 +5,8 @@ import uuid
 
 from block_contracts import ContractError
 
-SECTIONS = ('problem', 'target', 'dataset', 'data_features', 'metric_validation', 'model_training')
-LABELS = ('Проблема и текущий процесс', 'Цели, таргет и антицели', 'Датасет', 'Данные и признаки', 'Метрики, проверка, риски и открытые вопросы', 'Решение, альтернативы и обучение')
+SECTIONS = ('problem', 'target', 'metric_validation', 'dataset', 'data_features', 'model_training')
+LABELS = ('Проблема и текущий процесс', 'Цели, таргет и антицели', 'Метрики', 'Датасет', 'Признаки', 'Решение, альтернативы и обучение')
 KIND = 'design_document'
 FORMAT = 'architect.design-document'
 
