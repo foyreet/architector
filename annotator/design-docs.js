@@ -31,6 +31,7 @@
       const insert = $(key + '-insert');
       if (insert) insert.hidden = !!$('section-' + key).value.trim();
     }
+    refreshSectionViews();
     dirty = !same(value(), doc);
     cache();
     controls();
@@ -58,11 +59,9 @@
     insert.hidden = !!input.value.trim();
     insert.onclick = () => {
       if (input.value.trim()) return;
-      input.value = outline.map(([heading]) => heading + '\n').join('\n');
+      input.value = outline.map(([heading]) => '## ' + heading + '\n').join('\n');
       input.dispatchEvent(new Event('input', {bubbles:true}));
-      input.focus();
-      const start = outline[0][0].length + 1;
-      input.setSelectionRange(start, start);
+      sectionViews.get(input.id.replace('section-', '')).editor.focus();
     };
     return insert;
   }
@@ -81,12 +80,90 @@
     guide.append(help, structureButton(input, items));
     return guide;
   }
+  const sectionViews = new Map();
+  function refreshSectionViews() {
+    for (const view of sectionViews.values()) view.refresh();
+  }
+  function sanitizeEditorHTML(html) {
+    const template = document.createElement('template');
+    template.innerHTML = html;
+    const content = template.content;
+    for (const unsafe of content.querySelectorAll('script,style,iframe,object,embed,img,svg,math,form,input,button,link,meta,video,audio,source,base,template')) unsafe.remove();
+    for (const el of content.querySelectorAll('*')) {
+      for (const attr of [...el.attributes]) {
+        if (!['href','title','class','colspan','rowspan','data-language','data-task','data-task-checked'].includes(attr.name)) el.removeAttribute(attr.name);
+      }
+      if (el.hasAttribute('href') && !/^(https?:|mailto:)/i.test(el.getAttribute('href'))) el.removeAttribute('href');
+    }
+    return template.innerHTML;
+  }
+  function sectionEditor(input, key) {
+    const host = node('div', '', 'visual-editor');
+    input.hidden = true;
+    let syncing = true;
+    const editor = new toastui.Editor({
+      el: host, initialValue: input.value, initialEditType: 'wysiwyg',
+      hideModeSwitch: true, height: 'auto', minHeight: '320px',
+      language: 'ru-RU', usageStatistics: false, autofocus: false,
+      toolbarItems: [['heading', 'bold', 'italic', 'strike'], ['quote', 'ul', 'ol', 'task'],
+        ['table', 'link'], ['code', 'codeblock']],
+      customHTMLSanitizer: sanitizeEditorHTML,
+      plugins: [({pmState}) => ({
+        wysiwygPlugins: [() => new pmState.Plugin({props: {transformPastedHTML: sanitizeEditorHTML}})]
+      })]
+    });
+    const editable = host.querySelector('.toastui-editor-ww-container [contenteditable=true]');
+    editable.setAttribute('role', 'textbox');
+    editable.setAttribute('aria-multiline', 'true');
+    editable.setAttribute('aria-labelledby', 'label-' + key);
+    editable.addEventListener('beforeinput', event => {
+      if (event.inputType !== 'insertText' || event.data !== ' ' || event.isComposing || !event.cancelable) return;
+      const selection = window.getSelection();
+      const anchor = selection?.anchorNode;
+      if (!selection?.isCollapsed || !selection.rangeCount) return;
+      const paragraph = anchor.nodeType === Node.TEXT_NODE ? anchor.parentElement : anchor;
+      if (paragraph.tagName !== 'P' || paragraph.parentElement !== editable) return;
+      const prefix = selection.getRangeAt(0).cloneRange();
+      prefix.setStart(paragraph, 0);
+      const marker = prefix.toString();
+      if (!/^(#{1,6}|[-*+]|1\.)$/.test(marker)) return;
+      event.preventDefault();
+      const [position] = editor.getSelection();
+      editor.deleteSelection(position - marker.length, position);
+      if (marker.startsWith('#')) editor.exec('heading', {level: marker.length});
+      else editor.exec(marker === '1.' ? 'orderedList' : 'bulletList');
+    }, true);
+    editor.on('change', () => {
+      if (syncing) return;
+      input.value = editable.textContent.trim() || editable.querySelector('table,hr') ? editor.getMarkdown() : '';
+      rendered = input.value;
+      input.dispatchEvent(new Event('input', {bubbles:true}));
+    });
+    let rendered = input.value;
+    sectionViews.set(key, {editor, refresh() {
+      if (rendered === input.value || editor.getMarkdown() === input.value) {
+        rendered = input.value;
+        return;
+      }
+      syncing = true;
+      editor.setMarkdown(input.value, false);
+      rendered = input.value;
+      syncing = false;
+    }});
+    syncing = false;
+    return [input, host];
+  }
   function renderSections(parent, data, editable) {
+    if (editable) {
+      for (const view of sectionViews.values()) view.editor.destroy();
+      sectionViews.clear();
+    }
     parent.replaceChildren();
     fields.forEach(([key, label], index) => {
       const section = node('section', '', 'doc-section');
       if (editable) {
         const title = node('label', (index + 1) + '. ' + label);
+        title.id = 'label-' + key;
         const input = document.createElement('textarea');
         input.id = title.htmlFor = 'section-' + key;
         input.value = data[key] ?? '';
@@ -97,12 +174,14 @@
           input.placeholder = 'ETL · Фильтрация · Генерация признаков · Разметка';
           section.append(datasetGuide(input));
         }
-        section.append(input);
+        section.append(...sectionEditor(input, key));
+        title.onclick = () => sectionViews.get(key).editor.focus();
       } else {
-        section.append(node('h3', (index + 1) + '. ' + label), node('p', data[key] || 'Не заполнено', 'section-text'));
+        section.append(node('h3', (index + 1) + '. ' + label), window.ChatMarkdown(data[key] || 'Не заполнено'));
       }
       parent.append(section);
     });
+    if (editable) requestAnimationFrame(refreshSectionViews);
   }
   function updateURL(values){const url=new URL(location.href);for(const k of ['id','release','new','view'])url.searchParams.delete(k);for(const [k,v]of Object.entries(values))url.searchParams.set(k,v);history.replaceState(null,'',url);}
   async function save(){

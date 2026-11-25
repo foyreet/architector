@@ -18,7 +18,7 @@ def main():
     with patch.object(serve.Handler, 'log_message', lambda *args: None), BoardServer() as server, sync_playwright() as pw:
         browser = pw.chromium.launch(executable_path=os.environ.get('PLAYWRIGHT_CHROMIUM_EXECUTABLE'))
         for width in (1440, 390):
-            context = browser.new_context(viewport={'width': width, 'height': 900 if width == 1440 else 844})
+            context = browser.new_context(viewport={'width': width, 'height': 900 if width == 1440 else 844}, has_touch=width == 390)
             page = context.new_page()
             errors = []
             writes = []
@@ -37,23 +37,49 @@ def main():
                 page.once('dialog', lambda d: d.accept() if accept else d.dismiss())
 
             page.goto(server.origin + '/design-docs.html?new=1')
-            expect(page.locator('#sections textarea')).to_have_count(5)
+            expect(page.locator('#sections .doc-section > textarea')).to_have_count(5)
             expect(page.locator('#save-status')).to_contain_text('ещё не сохранён')
             expect(page.locator('#sections .doc-section > label').nth(2)).to_have_text('3. Метрики')
-            dataset = page.get_by_label('4. Датасет', exact=True)
+            dataset = page.locator('#section-dataset')
             expect(page.locator('#sections .doc-section > label').nth(4)).to_have_text('5. Решение, альтернативы и обучение')
+            problem_editor = page.get_by_role('textbox', name='1. Проблема', exact=False)
+            problem_editor.press_sequentially('## Заголовок')
+            expect(problem_editor.locator('h2')).to_have_text('Заголовок')
+            problem_editor.press('Enter')
+            problem_editor.press_sequentially('- Пункт')
+            expect(problem_editor.locator('ul li')).to_have_text('Пункт')
+            problem_editor.press('ControlOrMeta+a')
+            problem_editor.press('Backspace')
             insert = page.locator('#dataset-insert')
             insert.click()
-            assert dataset.input_value().split() == ['ETL', 'Фильтрация', 'Генерация', 'признаков', 'Разметка']
+            assert dataset.input_value().replace('## ', '').split() == ['ETL', 'Фильтрация', 'Генерация', 'признаков', 'Разметка']
             expect(insert).to_be_hidden()
-            dataset.fill('')
+            page.locator('#section-dataset + .visual-editor .toastui-editor-ww-container [contenteditable=true]').press('ControlOrMeta+a')
+            page.keyboard.press('Backspace')
             expect(insert).to_be_visible()
             assert documents() == [] and not writes
             page.locator('#back-list').click()
             expect(page.locator('#documents')).to_contain_text('пока нет')
             page.locator('#create').click()
             page.locator('#title').fill('Несохранённый документ')
-            page.locator('#section-problem').fill('Текст только в черновике')
+            page.locator('#section-problem + .visual-editor .toastui-editor-ww-container [contenteditable=true]').fill('Текст только в черновике')
+            target_editor = page.get_by_role('textbox', name='2. Цели')
+            target_section = target_editor.locator('xpath=ancestor::section[1]')
+            target_section.get_by_role('button', name='Вставить ссылку').click()
+            link_dialog = target_section.locator('.toastui-editor-popup:visible')
+            link_dialog.locator('input').nth(0).fill('https://example.org')
+            link_dialog.locator('input').nth(1).fill('Источник')
+            link_dialog.get_by_role('button', name='Хорошо').click()
+            target_section.get_by_role('button', name='Вставить таблицу').click()
+            grid = target_section.locator('.toastui-editor-table-selection:visible')
+            if width == 390:
+                grid.tap(position={'x': 30, 'y': 30})
+            else:
+                grid.click(position={'x': 30, 'y': 30})
+            expect(target_editor.locator('th')).to_have_count(2)
+            expect(target_editor.locator('td')).to_have_count(2)
+            target_editor.locator('td').first.click()
+            page.keyboard.insert_text('Значение в таблице')
             dialog(False)
             page.locator('#back-list').click()
             expect(page.locator('#editor')).to_be_visible()
@@ -69,6 +95,8 @@ def main():
             dialog(True)
             page.reload()
             expect(page.locator('#section-problem')).to_have_value('Текст только в черновике')
+            expect(target_editor.locator('td').first).to_have_text('Значение в таблице')
+            expect(target_editor.locator('a[href="https://example.org"]')).to_have_text('Источник')
             assert documents() == []
             dialog(True)
             page.locator('#back-list').click()
@@ -77,7 +105,7 @@ def main():
             expect(page.locator('#section-problem')).to_have_value('')
             title = 'Длинное русское название дизайн-документа для проверки сохранения ' + str(width)
             page.locator('#title').fill(title)
-            page.locator('#section-problem').fill('Сохранённая проблема')
+            page.locator('#section-problem + .visual-editor .toastui-editor-ww-container [contenteditable=true]').fill('Сохранённая проблема')
             # Failed first save preserves the editor and does not leave an empty row.
             page.route('**/api/design-documents/create', lambda route: route.fulfill(status=503, json={'error': 'Сохранение недоступно'}))
             page.locator('#save').click()
@@ -100,7 +128,7 @@ def main():
             identity = saved[0]['id']
             assert api('get', {'id': identity})['document']['sections']['problem'] == 'Сохранённая проблема'
             page.screenshot(path=str(artifacts / f'editor-{width}.png'))
-            page.locator('#section-problem').fill('Несохранённая правка')
+            page.locator('#section-problem + .visual-editor .toastui-editor-ww-container [contenteditable=true]').fill('Несохранённая правка')
             # A failed transition must keep dirty state and allow an explicit save.
             page.route('**/api/design-documents/list', lambda route: route.fulfill(status=503, json={'error': 'Список недоступен'}))
             dialog(True)
@@ -111,7 +139,7 @@ def main():
             page.locator('#save').click()
             expect(page.locator('#save-status')).to_have_text('Все изменения сохранены')
             assert api('get', {'id': identity})['document']['sections']['problem'] == 'Несохранённая правка'
-            page.locator('#section-problem').fill('Правка для отмены')
+            page.locator('#section-problem + .visual-editor .toastui-editor-ww-container [contenteditable=true]').fill('Правка для отмены')
             dialog(True)
             page.locator('#back-list').click()
             expect(page.locator('.document-row')).to_have_count(1)

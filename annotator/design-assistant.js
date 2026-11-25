@@ -129,9 +129,9 @@ window.setupDesignAssistant = function ({fields, api, read, changed, getId}) {
       choices.push([key, choice.input, proposal]);
       section.append(choice.label);
       if (initial.sections[key]) {
-        section.append(el('strong', 'Сейчас в документе'), el('p', initial.sections[key]));
+        section.append(el('strong', 'Сейчас в документе'), window.ChatMarkdown(initial.sections[key]));
       }
-      section.append(el('strong', 'Предложение'), el('p', proposal.text));
+      section.append(el('strong', 'Предложение'), window.ChatMarkdown(proposal.text));
       if (Object.keys(proposal.source).length) section.append(evidence(proposal.source));
       content.append(section);
     }
