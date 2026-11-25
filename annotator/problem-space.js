@@ -7,10 +7,25 @@ window.problemSpace = function (changed, suggest, metrics = false) {
   const headingFor = depth => metrics ? 'Метрика' : levels[depth];
   const canExtend = depth => metrics || depth < 2;
   const fields = metrics ? [
-    ['name', 'Название метрики'], ['role', 'Роль (бизнес, онлайн, офлайн, прокси, функция потерь…)'],
+    ['name', 'Название метрики'], ['role', 'Роль'],
     ['definition', 'Определение или формула'], ['unit', 'Единица измерения'], ['direction', 'Направление улучшения'],
     ['measurement', 'Данные и окно измерения'], ['relation', 'Связь с родителем'], ['check', 'Как проверить связь']
   ] : [['question', 'Вопрос'], ['answer', 'Ответ']];
+  // Short metric fields are single-line inputs; role and direction offer common values but stay free text.
+  const lines = metrics ? {role: ['бизнес', 'онлайн', 'офлайн', 'прокси', 'функция потерь'],
+    unit: [], direction: ['больше', 'меньше', 'ближе к целевому значению']} : {};
+  for (const [field, values] of Object.entries(lines)) {
+    if (!values.length) continue;
+    const list = document.createElement('datalist');
+    list.id = 'metric-' + field + '-options';
+    for (const value of values) list.append(new Option(value));
+    document.body.append(list);
+  }
+  const roles = [['business', 'бизнес'], ['online', 'онлайн'], ['offline', 'офлайн'], ['proxy', 'прокси'], ['loss', 'потер'], ['loss', 'loss']];
+  const roleKind = role => {
+    const value = (role || '').toLowerCase();
+    return (roles.find(([kind, word]) => value.includes(word) || value.includes(kind)) || [''])[0];
+  };
   let roots = [], selected = null;
   const viewport = $('tree-viewport'), map = $('tree-map');
   let focusedPath = null, scale = 1;
@@ -85,17 +100,23 @@ window.problemSpace = function (changed, suggest, metrics = false) {
     editor.replaceChildren();
     const heading = document.createElement('h2');
     heading.textContent = headingFor(depth);
-    const close = button('Закрыть', () => {
+    const close = button('×', () => {
       editor.hidden = true;
       map.querySelector('[aria-current=true]')?.focus();
     });
     close.className = 'inspector-close';
-    editor.append(close, heading);
+    close.title = 'Закрыть';
+    close.setAttribute('aria-label', 'Закрыть');
+    const head = document.createElement('div');
+    head.className = 'inspector-head';
+    head.append(heading, close);
+    editor.append(head);
     for (const [field, label] of fields) {
       const wrapper = document.createElement('label');
       wrapper.textContent = label;
-      const input = document.createElement('textarea');
-      input.rows = field === 'answer' ? 4 : 2;
+      const input = document.createElement(field in lines ? 'input' : 'textarea');
+      if (lines[field]?.length) input.setAttribute('list', 'metric-' + field + '-options');
+      if (!(field in lines)) input.rows = field === 'answer' ? 4 : 2;
       input.value = item[field];
       input.oninput = () => {
         clearProposal();
@@ -142,20 +163,25 @@ window.problemSpace = function (changed, suggest, metrics = false) {
       };
       label.append(move); editor.append(label);
     }
-    actions.append(button('Показать ветвь', () => {
+    const focusBranch = button('Показать только эту ветвь', () => {
       focusedPath = selectionPath.slice();
       renderBranches();
       revealSelected();
       $('tree-all').focus();
-    }));
-    actions.append(button(metrics ? 'Удалить метрику' : 'Удалить вопрос', () => {
+    });
+    focusBranch.className = 'link-button';
+    const remove = button(metrics ? 'Удалить метрику' : 'Удалить вопрос', () => {
       if (!confirm(metrics ? 'Удалить метрику вместе со всей ветвью?' : 'Удалить этот вопрос вместе с его ответом и уточнениями?')) return;
       siblings.splice(siblings.indexOf(item), 1);
       load(roots);
       changed();
       $('add-root').focus();
-    }));
-    editor.append(actions);
+    });
+    remove.className = 'danger-button';
+    const footer = document.createElement('div');
+    footer.className = 'inspector-footer';
+    footer.append(focusBranch, remove);
+    editor.append(actions, footer);
     revealSelected();
     if (focus) { const input = editor.querySelector('textarea'); input.focus(); input.select(); }
   }
@@ -195,9 +221,24 @@ window.problemSpace = function (changed, suggest, metrics = false) {
         const choose = button(item[nameKey] || headingFor(depth), () => select(item, items, depth, true));
         choose.setAttribute('aria-current', String(item === selected));
         const state = document.createElement('small');
-        state.textContent = metrics ? [item.role, item.direction, item.relation].filter(Boolean).join(' · ') : item.answer.trim() ? 'Есть ответ' : 'Без ответа';
+        if (metrics) {
+          const kind = roleKind(item.role);
+          if (kind) row.dataset.role = kind;
+          if (item.role) {
+            const chip = document.createElement('span');
+            chip.className = 'metric-role';
+            chip.textContent = item.role;
+            state.append(chip);
+          }
+          const rest = [item.direction, item.relation].filter(Boolean).join(' · ');
+          if (rest) state.append(rest);
+        } else {
+          const answered = !!item.answer.trim();
+          row.dataset.state = answered ? 'answered' : 'open';
+          state.textContent = answered ? 'Есть ответ' : 'Без ответа';
+        }
         choose.setAttribute('aria-label', item[nameKey] || headingFor(depth));
-        choose.append(state);
+        if (state.childNodes.length) choose.append(state);
         row.prepend(choose); li.append(row);
         if (item.children.length && !folded.has(item)) li.append(branch(item.children, itemPath));
         list.append(li);
@@ -206,6 +247,54 @@ window.problemSpace = function (changed, suggest, metrics = false) {
     }
     let toggles = 0;
     if (roots.length) container.append(branch(roots, []));
+    else container.append(emptyGuide());
+    progress();
+  }
+  // The empty canvas explains the method: broad questions first, then narrower ones.
+  function emptyGuide() {
+    const guide = document.createElement('div');
+    guide.className = 'tree-empty';
+    const title = document.createElement('p');
+    title.className = 'tree-empty-title';
+    title.textContent = metrics ? 'Постройте дерево от бизнес-цели' : 'Сначала вопросы, потом решение';
+    const steps = document.createElement('ol');
+    const items = metrics ? [
+      ['Бизнес-метрика', 'что изменится для компании'],
+      ['Онлайн-метрики', 'что видно в работающей системе и A/B-тесте'],
+      ['Офлайн-метрики и функция потерь', 'что считаем до внедрения и что минимизирует модель']
+    ] : [
+      ['Общие вопросы', 'зачем это бизнесу, кто пользователь, что болит сейчас'],
+      ['Уточнения', 'как устроен процесс, где он ошибается, сколько стоит ошибка'],
+      ['Технические вопросы', 'какие данные есть на момент решения, какие ограничения у системы']
+    ];
+    for (const [name, text] of items) {
+      const li = document.createElement('li');
+      const strong = document.createElement('strong');
+      strong.textContent = name;
+      li.append(strong, document.createTextNode(text));
+      steps.append(li);
+    }
+    const hint = document.createElement('p');
+    hint.textContent = metrics
+      ? 'Добавьте метрику вручную или попросите AI предложить иерархию.'
+      : 'Добавьте общий вопрос вручную или попросите AI предложить первые вопросы.';
+    guide.append(title, steps, hint);
+    return guide;
+  }
+  function progress() {
+    const output = $('tree-progress');
+    if (!output) return;
+    let total = 0, done = 0;
+    (function count(nodes) {
+      for (const node of nodes) {
+        total++;
+        if (String((metrics ? node.definition : node.answer) || '').trim()) done++;
+        count(node.children);
+      }
+    })(roots);
+    output.textContent = !total ? '' : metrics
+      ? 'С определением: ' + done + ' из ' + total
+      : 'Отвечено: ' + done + ' из ' + total;
   }
   function add(list, depth) {
     const item = metrics
@@ -252,6 +341,16 @@ window.problemSpace = function (changed, suggest, metrics = false) {
     (open ? $('tree-request') : $('tree-ai-open')).focus();
   }
   $('tree-ai-open').onclick = () => showAI(ai.hidden);
+  // Escape closes the side panels; an input with suggestions keeps it for its own list.
+  ai.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !event.target.list) { event.stopPropagation(); showAI(false); }
+  });
+  $('question-editor').addEventListener('keydown', event => {
+    if (event.key !== 'Escape' || event.target.list || event.target.tagName === 'SELECT') return;
+    event.stopPropagation();
+    $('question-editor').hidden = true;
+    map.querySelector('[aria-current=true]')?.focus();
+  });
   $('tree-cancel').onclick = () => showAI(false);
   target.onchange = clearProposal;
   $('tree-request').oninput = clearProposal;

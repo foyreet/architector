@@ -61,6 +61,7 @@ ASSETS = {
     '/problem-space.html': ('problem-space.html', 'text/html'),
     '/problem-space.css': ('problem-space.css', 'text/css'),
     '/tree-workspace.js': ('tree-workspace.js', 'text/javascript'),
+    '/design-flow.js': ('design-flow.js', 'text/javascript'),
     '/problem-space.js': ('problem-space.js', 'text/javascript'),
     '/design-docs.js': ('design-docs.js', 'text/javascript'),
     '/design-assistant.js': ('design-assistant.js', 'text/javascript'),

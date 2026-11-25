@@ -32,6 +32,7 @@
       if (insert) insert.hidden = !!$('section-' + key).value.trim();
     }
     refreshSectionViews();
+    refreshOutline(key => $('section-' + key).value);
     dirty = !same(value(), doc);
     cache();
     controls();
@@ -81,6 +82,40 @@
     return guide;
   }
   const sectionViews = new Map();
+  // Section outline: shows which parts of the document are filled and jumps to them.
+  function renderOutline(read, editable) {
+    const outline = $('doc-outline'), list = document.createElement('ol');
+    outline.replaceChildren(node('p', '', 'outline-count'), list);
+    for (const [key, label] of fields) {
+      const link = node('a', label);
+      link.href = '#doc-section-' + key;
+      link.dataset.key = key;
+      link.append(node('span', '', 'visually-hidden'));
+      link.onclick = event => {
+        event.preventDefault();
+        // The editor's own focus() scrolls to the caret and cancels the smooth scroll.
+        if (editable) sectionViews.get(key)?.editable.focus({preventScroll: true});
+        const smooth = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+        document.getElementById('doc-section-' + key).scrollIntoView({block: 'start', behavior: smooth ? 'smooth' : 'auto'});
+      };
+      const item = node('li', '');
+      item.append(link);
+      list.append(item);
+    }
+    refreshOutline(read);
+  }
+  function refreshOutline(read) {
+    const links = [...$('doc-outline').querySelectorAll('a')];
+    let filled = 0;
+    for (const link of links) {
+      const done = !!String(read(link.dataset.key) || '').trim();
+      filled += done;
+      link.classList.toggle('filled', done);
+      link.lastChild.textContent = done ? ', заполнено' : ', пусто';
+    }
+    const count = $('doc-outline').querySelector('.outline-count');
+    if (count) count.textContent = 'Заполнено: ' + filled + ' из ' + links.length;
+  }
   function refreshSectionViews() {
     for (const view of sectionViews.values()) view.refresh();
   }
@@ -103,7 +138,7 @@
     let syncing = true;
     const editor = new toastui.Editor({
       el: host, initialValue: input.value, initialEditType: 'wysiwyg',
-      hideModeSwitch: true, height: 'auto', minHeight: '320px',
+      hideModeSwitch: true, height: 'auto', minHeight: '240px',
       language: 'ru-RU', usageStatistics: false, autofocus: false,
       toolbarItems: [['heading', 'bold', 'italic', 'strike'], ['quote', 'ul', 'ol', 'task'],
         ['table', 'link'], ['code', 'codeblock']],
@@ -140,7 +175,7 @@
       input.dispatchEvent(new Event('input', {bubbles:true}));
     });
     let rendered = input.value;
-    sectionViews.set(key, {editor, refresh() {
+    sectionViews.set(key, {editor, editable, refresh() {
       if (rendered === input.value || editor.getMarkdown() === input.value) {
         rendered = input.value;
         return;
@@ -161,6 +196,7 @@
     parent.replaceChildren();
     fields.forEach(([key, label], index) => {
       const section = node('section', '', 'doc-section');
+      section.id = 'doc-section-' + key;
       if (editable) {
         const title = node('label', (index + 1) + '. ' + label);
         title.id = 'label-' + key;
@@ -182,6 +218,7 @@
       parent.append(section);
     });
     if (editable) requestAnimationFrame(refreshSectionViews);
+    renderOutline(key => editable ? $('section-' + key).value : data[key], editable);
   }
   function updateURL(values){const url=new URL(location.href);for(const k of ['id','release','new','view'])url.searchParams.delete(k);for(const [k,v]of Object.entries(values))url.searchParams.set(k,v);history.replaceState(null,'',url);}
   async function save(){
@@ -233,7 +270,7 @@
     $('mine').setAttribute('aria-current',mode==='mine'?'page':'false');$('catalog').setAttribute('aria-current',mode==='catalog'?'page':'false');
     updateURL({view:mode});$('documents').replaceChildren();
     const rows=mode==='mine'?result.documents:result.releases;
-    if(!rows.length)$('documents').append(node('p',mode==='mine'?'У вас пока нет дизайн-документов.':$('search').value?'По этому запросу документов нет.':'В сообществе пока нет опубликованных дизайн-документов.','muted'));
+    if(!rows.length)$('documents').append(node('p',mode==='mine'?'У вас пока нет дизайн-документов. Создайте пустой документ или начните с шага «Проблемы»: черновик соберётся из деревьев.':$('search').value?'По этому запросу документов нет.':'В сообществе пока нет опубликованных дизайн-документов.','muted'));
     for(const row of rows){const item=node('div','','document-item'),button=node('button','','document-row');button.append(node('strong',row.title||row.name));if(mode==='catalog')button.append(node('small',`@${row.username} · версия ${row.number}`));button.onclick=()=>task(()=>mode==='mine'?open(row.id):openRelease(row.id));item.append(button);
       if(mode==='mine'){const remove=node('button','Удалить','delete-document');remove.setAttribute('aria-label','Удалить документ «'+row.title+'»');remove.onclick=()=>task(async()=>{
         if(!confirm('Удалить документ «'+row.title+'»? Это действие нельзя отменить.'))return;
