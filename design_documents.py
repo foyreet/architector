@@ -5,8 +5,8 @@ import uuid
 
 from block_contracts import ContractError
 
-SECTIONS = ('problem', 'target', 'metric_validation', 'dataset', 'data_features', 'model_training')
-LABELS = ('Проблема и текущий процесс', 'Цели, таргет и антицели', 'Метрики', 'Датасет', 'Признаки', 'Решение, альтернативы и обучение')
+SECTIONS = ('problem', 'target', 'metric_validation', 'dataset', 'model_training')
+LABELS = ('Проблема и текущий процесс', 'Цели, таргет и антицели', 'Метрики', 'Датасет', 'Решение, альтернативы и обучение')
 KIND = 'design_document'
 FORMAT = 'architect.design-document'
 
@@ -24,6 +24,13 @@ def normalize_sections(sections, *, previous_dataset=''):
         raise ContractError('Проверьте состав разделов документа.')
     # Documents saved before the dataset section contain the other five keys.
     sections = {'dataset': previous_dataset, **sections}
+    features = sections.pop('data_features', '')
+    if not isinstance(features, str):
+        raise ContractError('Каждый раздел должен содержать текст.')
+    if features.strip() and isinstance(sections['dataset'], str):
+        addition = 'Генерация признаков (из прежнего раздела)\n' + features
+        if addition not in sections['dataset']:
+            sections['dataset'] = (sections['dataset'] + '\n\n' + addition).lstrip('\n')
     if set(sections) != set(SECTIONS):
         raise ContractError('Проверьте состав разделов документа.')
     if any(not isinstance(v, str) for v in sections.values()):
@@ -39,7 +46,7 @@ def payload(body, *, previous_dataset=''):
 
 
 def sources(value):
-    if not isinstance(value, dict) or value.keys() - set(SECTIONS):
+    if not isinstance(value, dict) or value.keys() - (set(SECTIONS) | {'data_features'}):
         raise ContractError('Некорректные ссылки на источники.')
     for ref in value.values():
         if not isinstance(ref, dict):

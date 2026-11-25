@@ -55,6 +55,19 @@
     guide.append(help, insert);
     return guide;
   }
+  function metricsGuide() {
+    const help = node('details', '', 'metrics-guide');
+    help.append(node('summary', 'Памятка — функция потерь, офлайн- и онлайн-метрики'));
+    const list = document.createElement('dl');
+    const items = [
+      ['Функция потерь', 'Что модель минимизирует при обучении? Укажите функцию, причину выбора и веса ошибок. Учтите, одинаково ли стоят недооценка и переоценка. Например, в прогнозе спроса квантильная функция потерь позволяет учитывать разную цену дефицита и избытка.'],
+      ['Офлайн-метрики', 'Как сравниваем модели до внедрения? Укажите метрику, отложенную выборку, базовую модель и важные срезы. Проверьте влияние баланса классов и устойчивость результатов. Например, качество поиска можно оценить по NDCG или MRR на размеченных запросах.'],
+      ['Онлайн-метрики', 'Как измеряем эффект работающей системы для пользователей и бизнеса? Укажите основной показатель, контрольный вариант, окно наблюдения и способ проверки эффекта, например A/B-тест. Запишите показатели, ухудшение которых недопустимо. Для поиска это могут быть покупки, выручка и поведение пользователей.']
+    ];
+    for (const [heading, text] of items) list.append(node('dt', heading), node('dd', text));
+    help.append(list, node('p', 'Для каждой метрики задайте определение или формулу, единицу измерения и направление улучшения. Объясните связь с бизнес-целью и способ её проверки. Рост кликов может сопровождаться отсутствием роста покупок — проверку этой гипотезы стоит зафиксировать в документе.'));
+    return help;
+  }
   function renderSections(parent, data, editable) {
     parent.replaceChildren();
     fields.forEach(([key, label], index) => {
@@ -66,6 +79,7 @@
         input.value = data[key] ?? '';
         input.addEventListener('input', changed);
         section.append(title);
+        if (key === 'metric_validation') section.append(metricsGuide());
         if (key === 'dataset') {
           input.placeholder = 'ETL · Фильтрация · Генерация признаков · Разметка';
           section.append(datasetGuide(input));
@@ -100,6 +114,12 @@
       if(draft?.sections && !Object.hasOwn(draft.sections,'dataset')) {
         draft.sections.dataset=document.sections.dataset;
         if(document.sources?.dataset) draft.sources={...draft.sources,dataset:document.sources.dataset};
+      }
+      if(typeof draft?.sections?.data_features === 'string') {
+        const addition='Генерация признаков (из прежнего раздела)\n'+draft.sections.data_features;
+        if(draft.sections.data_features.trim() && !draft.sections.dataset.includes(addition))
+          draft.sections.dataset=(draft.sections.dataset+'\n\n'+addition).replace(/^\n+/, '');
+        delete draft.sections.data_features;
       }
       if(draft&&typeof draft.title==='string'&&fields.every(([k])=>typeof draft.sections?.[k]==='string')){
       if(same(draft,document))localStorage.removeItem(draftKey());else{content=draft;dirty=true;conflicted=draft.revision!==document.revision;message('Восстановлены несохранённые изменения из этого браузера.');}

@@ -57,6 +57,8 @@ def request(hub, user, store, path, record, body, action):
 def attachment(snapshot):
     if not snapshot: return None
     fields = [(key, label) for key, label in zip(docs.SECTIONS, docs.LABELS) if key in snapshot['sections']]
+    if 'data_features' in snapshot['sections']:
+        fields.append(('data_features', 'Признаки из прежней версии'))
     text = snapshot['title'] + '\n\n' + '\n\n'.join(f'{i+1}. {label}\n{snapshot["sections"][key]}' for i, (key, label) in enumerate(fields))
     return {'id': 'design-' + snapshot['digest'], 'name': snapshot['title'], 'size': len(text.encode()), 'characters': len(text), 'text': text}
 

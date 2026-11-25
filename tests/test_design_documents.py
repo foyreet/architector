@@ -64,6 +64,15 @@ class Documents(unittest.TestCase):
         self.assertEqual(updated['sections']['dataset'], 'Наблюдения')
         self.assertEqual(updated['sources']['dataset'], ref)
 
+    def test_old_features_are_kept_in_dataset(self):
+        sections = {key: '' for key in docs.SECTIONS}
+        sections.update(dataset='Источники', data_features='История покупок')
+        normalized = docs.normalize_sections(sections)
+        self.assertNotIn('data_features', normalized)
+        self.assertIn('История покупок', normalized['dataset'])
+        self.assertEqual(docs.normalize_sections(normalized), normalized)
+        self.assertEqual(docs.normalize_sections({**normalized, 'data_features': 'История покупок'}), normalized)
+
     def test_large_document_roundtrip(self):
         sections = {key: 'Ж' * 40000 for key in docs.SECTIONS}
         self.save(title='Д' * 161, sections=sections)
