@@ -39,6 +39,15 @@ def main():
             page.goto(server.origin + '/design-docs.html?new=1')
             expect(page.locator('#sections textarea')).to_have_count(5)
             expect(page.locator('#save-status')).to_contain_text('ещё не сохранён')
+            expect(page.locator('#sections .doc-section > label').nth(2)).to_have_text('3. Метрики')
+            dataset = page.get_by_label('4. Датасет', exact=True)
+            expect(page.locator('#sections .doc-section > label').nth(4)).to_have_text('5. Решение, альтернативы и обучение')
+            insert = page.locator('#dataset-insert')
+            insert.click()
+            assert dataset.input_value().split() == ['ETL', 'Фильтрация', 'Генерация', 'признаков', 'Разметка']
+            expect(insert).to_be_hidden()
+            dataset.fill('')
+            expect(insert).to_be_visible()
             assert documents() == [] and not writes
             page.locator('#back-list').click()
             expect(page.locator('#documents')).to_contain_text('пока нет')

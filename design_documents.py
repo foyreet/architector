@@ -1,12 +1,12 @@
-"""Private five-section ML design documents and immutable community snapshots."""
+"""Private ML design documents and immutable community snapshots."""
 import json
 import time
 import uuid
 
 from block_contracts import ContractError
 
-SECTIONS = ('problem', 'target', 'data_features', 'metric_validation', 'model_training')
-LABELS = ('Проблема и текущий процесс', 'Цели, таргет и антицели', 'Данные и признаки', 'Метрики, проверка, риски и открытые вопросы', 'Решение, альтернативы и обучение')
+SECTIONS = ('problem', 'target', 'metric_validation', 'dataset', 'model_training')
+LABELS = ('Проблема и текущий процесс', 'Цели, таргет и антицели', 'Метрики', 'Датасет', 'Решение, альтернативы и обучение')
 KIND = 'design_document'
 FORMAT = 'architect.design-document'
 
@@ -19,20 +19,34 @@ def identity(value):
     return value
 
 
-def payload(body):
-    title, sections = body.get('title'), body.get('sections')
-    if not isinstance(title, str) or not title.strip():
-        raise ContractError('Введите название документа.')
-    if not isinstance(sections, dict) or set(sections) != set(SECTIONS):
-        raise ContractError('Документ должен содержать пять разделов.')
+def normalize_sections(sections, *, previous_dataset=''):
+    if not isinstance(sections, dict):
+        raise ContractError('Проверьте состав разделов документа.')
+    # Documents saved before the dataset section contain the other five keys.
+    sections = {'dataset': previous_dataset, **sections}
+    features = sections.pop('data_features', '')
+    if not isinstance(features, str):
+        raise ContractError('Каждый раздел должен содержать текст.')
+    if features.strip() and isinstance(sections['dataset'], str):
+        addition = 'Генерация признаков (из прежнего раздела)\n' + features
+        if addition not in sections['dataset']:
+            sections['dataset'] = (sections['dataset'] + '\n\n' + addition).lstrip('\n')
+    if set(sections) != set(SECTIONS):
+        raise ContractError('Проверьте состав разделов документа.')
     if any(not isinstance(v, str) for v in sections.values()):
         raise ContractError('Каждый раздел должен содержать текст.')
-    normalized = {k: sections[k] for k in SECTIONS}
-    return title.strip(), normalized
+    return {key: sections[key] for key in SECTIONS}
+
+
+def payload(body, *, previous_dataset=''):
+    title = body.get('title')
+    if not isinstance(title, str) or not title.strip():
+        raise ContractError('Введите название документа.')
+    return title.strip(), normalize_sections(body.get('sections'), previous_dataset=previous_dataset)
 
 
 def sources(value):
-    if not isinstance(value, dict) or value.keys() - set(SECTIONS):
+    if not isinstance(value, dict) or value.keys() - (set(SECTIONS) | {'data_features'}):
         raise ContractError('Некорректные ссылки на источники.')
     for ref in value.values():
         if not isinstance(ref, dict):
@@ -73,12 +87,12 @@ def owned(db, user, doc_id):
 
 
 def public(row):
-    return {'id': row['id'], 'title': row['title'], 'sections': json.loads(row['sections']),
+    return {'id': row['id'], 'title': row['title'], 'sections': normalize_sections(json.loads(row['sections'])),
             'sources': json.loads(row['sources']), 'revision': row['revision'], 'updated': row['updated'], 'source_release': row['source_release']}
 
 
 def snapshot(row):
-    return {'format': FORMAT, 'version': 1, 'title': row['title'], 'sections': json.loads(row['sections']), 'sources': json.loads(row['sources'])}
+    return {'format': FORMAT, 'version': 1, 'title': row['title'], 'sections': normalize_sections(json.loads(row['sections'])), 'sources': json.loads(row['sources'])}
 
 
 def request(hub, user, body, action):
@@ -132,12 +146,16 @@ def request(hub, user, body, action):
             db.execute('DELETE FROM design_documents WHERE id=? AND owner=?', (row['id'], user['id']))
             return {'deleted': row['id']}
         if action == 'save':
-            name, sections = payload(body)
+            previous = normalize_sections(json.loads(row['sections']))
+            name, sections = payload(body, previous_dataset=previous['dataset'])
             revision = body.get('revision')
             if type(revision) is not int: raise ContractError('Укажите версию документа.')
             # A retry after a lost response must not create another revision.
-            refs = sources(body.get('sources', json.loads(row['sources'])))
-            same = refs == json.loads(row['sources']) and name == row['title'] and sections == json.loads(row['sections'])
+            previous_sources = json.loads(row['sources'])
+            refs = sources(body.get('sources', previous_sources))
+            if 'dataset' not in body['sections'] and 'dataset' in previous_sources:
+                refs = {**refs, 'dataset': previous_sources['dataset']}
+            same = refs == previous_sources and name == row['title'] and sections == previous
             if revision == row['revision']-1 and same: return {'document': public(row)}
             if revision != row['revision']:
                 raise ContractError('Документ изменён в другой вкладке. Сохраните свой вариант отдельно или загрузите сохранённую версию.', 409)

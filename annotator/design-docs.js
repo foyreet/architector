@@ -9,7 +9,7 @@
     location.replace(legacy);
     return;
   }
-  const fields=[['problem','Проблема и текущий процесс'],['target','Цели, таргет и антицели'],['data_features','Данные и признаки'],['metric_validation','Метрики, проверка, риски и открытые вопросы'],['model_training','Решение, альтернативы и обучение']];
+  const fields = window.DesignChat.fields;
   const query=new URLSearchParams(location.search),project=query.get('project');
   if(/^[a-f0-9-]{36}$/.test(project||''))$('back-schema').href+='?project='+encodeURIComponent(project);
   let account=null,doc=null,release=null,dirty=false,conflicted=false,blocked=false,saving=null,working=false,mode='mine',preview=null;
@@ -26,8 +26,84 @@
   function same(a,b){return JSON.stringify(a.sources||{})===JSON.stringify(b.sources||{})&&a.title===b.title&&fields.every(([k])=>a.sections[k]===b.sections[k]);}
   function controls(){ $('compose-doc').disabled=!!saving||conflicted||blocked;$('add-chat').disabled=!!saving||conflicted||blocked;$('save').disabled=(!dirty&&!!doc?.revision)||!!saving||conflicted||blocked;$('publish').disabled=!!saving||conflicted||blocked;$('conflict').hidden=!conflicted;$('save-status').textContent=doc?(saving?'Сохранение…':dirty?'Есть несохранённые изменения':doc.revision?'Все изменения сохранены':'Новый документ · ещё не сохранён'):''; }
   function cache(){if(!doc||release)return;try{if(dirty)localStorage.setItem(draftKey(),JSON.stringify({...value(),revision:doc.revision}));else localStorage.removeItem(draftKey());}catch{error('Браузер не сохранил резервную копию. Сохраните документ на сервер перед закрытием.');}}
-  function changed(){dirty=!same(value(),doc);cache();controls();}
-  function renderSections(parent,data,editable){parent.replaceChildren();fields.forEach(([k,label],i)=>{const section=node('section','','doc-section');if(editable){const l=node('label',`${i+1}. ${label}`);l.htmlFor='section-'+k;const input=document.createElement('textarea');input.id=l.htmlFor;input.value=data[k];input.addEventListener('input',changed);section.append(l,input);}else{section.append(node('h3',`${i+1}. ${label}`),node('p',data[k]||'Не заполнено','section-text'));}parent.append(section);});}
+  function changed() {
+    for (const key of ['dataset', 'metric_validation']) {
+      const insert = $(key + '-insert');
+      if (insert) insert.hidden = !!$('section-' + key).value.trim();
+    }
+    dirty = !same(value(), doc);
+    cache();
+    controls();
+  }
+  const datasetOutline = [
+    ['ETL', 'Что означает один пример? Из каких источников, за какой период и по каким ключам собирается выборка? Где и в каком формате она хранится, как часто обновляется?'],
+    ['Фильтрация', 'Какие примеры включаем или исключаем? Как обрабатываем пропуски, дубли, шум и редкие случаи? Что проверяем вручную?'],
+    ['Генерация признаков', 'Из каких исходных полей и метаданных вычисляем признаки или эмбеддинги? Какие преобразования и окна используем? Что известно на момент прогноза?'],
+    ['Разметка', 'Какая метка нужна и откуда она берётся? Если её ставит человек, как описаны классы, спорные примеры и проверка качества?']
+  ];
+  function datasetGuide(input) {
+    const guide = node('div', '', 'dataset-guide');
+    const help = document.createElement('details');
+    help.append(node('summary', 'Что описать в каждом подразделе'));
+    const list = document.createElement('dl');
+    for (const [heading, question] of datasetOutline) list.append(node('dt', heading), node('dd', question));
+    help.append(list);
+    guide.append(help, structureButton(input, datasetOutline));
+    return guide;
+  }
+  function structureButton(input, outline) {
+    const insert = node('button', 'Вставить структуру');
+    insert.type = 'button';
+    insert.id = input.id.replace('section-', '') + '-insert';
+    insert.hidden = !!input.value.trim();
+    insert.onclick = () => {
+      if (input.value.trim()) return;
+      input.value = outline.map(([heading]) => heading + '\n').join('\n');
+      input.dispatchEvent(new Event('input', {bubbles:true}));
+      input.focus();
+      const start = outline[0][0].length + 1;
+      input.setSelectionRange(start, start);
+    };
+    return insert;
+  }
+  function metricsGuide(input) {
+    const help = node('details', '', 'metrics-guide');
+    help.append(node('summary', 'Памятка — функция потерь, офлайн- и онлайн-метрики'));
+    const list = document.createElement('dl');
+    const items = [
+      ['Функция потерь', 'Что модель минимизирует при обучении? Укажите функцию, причину выбора и веса ошибок. Учтите, одинаково ли стоят недооценка и переоценка. Например, в прогнозе спроса квантильная функция потерь позволяет учитывать разную цену дефицита и избытка.'],
+      ['Офлайн-метрики', 'Как сравниваем модели до внедрения? Укажите метрику, отложенную выборку, базовую модель и важные срезы. Проверьте влияние баланса классов и устойчивость результатов. Например, качество поиска можно оценить по NDCG или MRR на размеченных запросах.'],
+      ['Онлайн-метрики', 'Как измеряем эффект работающей системы для пользователей и бизнеса? Укажите основной показатель, контрольный вариант, окно наблюдения и способ проверки эффекта, например A/B-тест. Запишите показатели, ухудшение которых недопустимо. Для поиска это могут быть покупки, выручка и поведение пользователей.']
+    ];
+    for (const [heading, text] of items) list.append(node('dt', heading), node('dd', text));
+    help.append(list, node('p', 'Для каждой метрики задайте определение или формулу, единицу измерения и направление улучшения. Объясните связь с бизнес-целью и способ её проверки. Рост кликов может сопровождаться отсутствием роста покупок — проверку этой гипотезы стоит зафиксировать в документе.'));
+    const guide = node('div', '', 'dataset-guide');
+    guide.append(help, structureButton(input, items));
+    return guide;
+  }
+  function renderSections(parent, data, editable) {
+    parent.replaceChildren();
+    fields.forEach(([key, label], index) => {
+      const section = node('section', '', 'doc-section');
+      if (editable) {
+        const title = node('label', (index + 1) + '. ' + label);
+        const input = document.createElement('textarea');
+        input.id = title.htmlFor = 'section-' + key;
+        input.value = data[key] ?? '';
+        input.addEventListener('input', changed);
+        section.append(title);
+        if (key === 'metric_validation') section.append(metricsGuide(input));
+        if (key === 'dataset') {
+          input.placeholder = 'ETL · Фильтрация · Генерация признаков · Разметка';
+          section.append(datasetGuide(input));
+        }
+        section.append(input);
+      } else {
+        section.append(node('h3', (index + 1) + '. ' + label), node('p', data[key] || 'Не заполнено', 'section-text'));
+      }
+      parent.append(section);
+    });
+  }
   function updateURL(values){const url=new URL(location.href);for(const k of ['id','release','new','view'])url.searchParams.delete(k);for(const [k,v]of Object.entries(values))url.searchParams.set(k,v);history.replaceState(null,'',url);}
   async function save(){
     if(saving)return saving;if(!dirty&&doc.revision)return true;if(conflicted||blocked)return false;
@@ -47,7 +123,18 @@
   function openEditor(document,restore=true){
     doc=document;release=null;dirty=false;conflicted=false;blocked=false;let content=document;
     error();message();
-    if(restore){try{const draft=JSON.parse(localStorage.getItem(draftKey())||'null');if(draft&&typeof draft.title==='string'&&fields.every(([k])=>typeof draft.sections?.[k]==='string')){
+    if(restore){try{const draft=JSON.parse(localStorage.getItem(draftKey())||'null');
+      if(draft?.sections && !Object.hasOwn(draft.sections,'dataset')) {
+        draft.sections.dataset=document.sections.dataset;
+        if(document.sources?.dataset) draft.sources={...draft.sources,dataset:document.sources.dataset};
+      }
+      if(typeof draft?.sections?.data_features === 'string') {
+        const addition='Генерация признаков (из прежнего раздела)\n'+draft.sections.data_features;
+        if(draft.sections.data_features.trim() && !draft.sections.dataset.includes(addition))
+          draft.sections.dataset=(draft.sections.dataset+'\n\n'+addition).replace(/^\n+/, '');
+        delete draft.sections.data_features;
+      }
+      if(draft&&typeof draft.title==='string'&&fields.every(([k])=>typeof draft.sections?.[k]==='string')){
       if(same(draft,document))localStorage.removeItem(draftKey());else{content=draft;dirty=true;conflicted=draft.revision!==document.revision;message('Восстановлены несохранённые изменения из этого браузера.');}
     }}catch{error('Не удалось прочитать локальный черновик.');}}
     $('auth').hidden=true;$('list').hidden=true;$('editor').hidden=false;$('title-label').hidden=false;$('title').hidden=false;$('title').value=content.title;$('read-title').hidden=true;

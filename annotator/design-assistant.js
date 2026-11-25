@@ -52,7 +52,7 @@ window.setupDesignAssistant = function ({fields, api, read, changed, getId}) {
   function showRefs() {
     document.querySelectorAll('.section-sources').forEach(box => box.remove());
     for (const [key, ref] of Object.entries(refs)) {
-      const input = $('section-' + key);
+      const input = $('section-' + (key === 'data_features' ? 'dataset' : key));
       if (!input) continue;
       const box = evidence(ref);
       box.className = 'section-sources';
