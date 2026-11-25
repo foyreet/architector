@@ -8,6 +8,8 @@ from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from test_whiteboard import BoardServer
 import codex_chat as chat
+import codex_design
+import subgraphs
 import design_documents as docs
 from block_contracts import ContractError
 
@@ -62,6 +64,18 @@ class DesignChat(unittest.TestCase):
                 self.assertEqual(e.exception.status,409)
             self.assertIsNotNone(self.call('design-get')['document'])
         finally:chat.JOBS.pop(key,None)
+
+    def test_legacy_attachment_retains_its_text_and_change_status(self):
+        doc = docs.request(self.s.hub, self.user, {'id': str(uuid.uuid4())}, 'create')['document']
+        sections = {k: v for k, v in doc['sections'].items() if k != 'dataset'}
+        previous = {'title': doc['title'], 'sections': sections, 'source_type': 'private',
+                    'source_id': doc['id'], 'revision': doc['revision'],
+                    'digest': subgraphs.digest({'title': doc['title'], 'sections': sections})}
+        self.assertNotIn('Датасет', codex_design.attachment(previous)['text'])
+        record = {'design_document': previous}
+        self.assertFalse(codex_design.view(self.s.hub, self.user, record)['changed'])
+        docs.request(self.s.hub, self.user, {**doc, 'sections': {**sections, 'dataset': 'Новая выборка'}}, 'save')
+        self.assertTrue(codex_design.view(self.s.hub, self.user, record)['changed'])
 
     def test_deleted_source_keeps_attached_snapshot(self):
         attached=self.attach()

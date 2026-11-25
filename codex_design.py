@@ -23,7 +23,8 @@ def view(hub, user, record):
     if snapshot:
         try:
             current = source(hub, user, snapshot['source_type'], snapshot['source_id'])
-            result['changed'] = current['digest'] != snapshot['digest']
+            result['changed'] = (current['title'] != snapshot['title'] or
+                                 current['sections'] != docs.normalize_sections(snapshot['sections']))
         except ContractError:
             result['unavailable'] = True
     return result
@@ -55,6 +56,7 @@ def request(hub, user, store, path, record, body, action):
 
 def attachment(snapshot):
     if not snapshot: return None
-    text = snapshot['title'] + '\n\n' + '\n\n'.join(f'{i+1}. {label}\n{snapshot["sections"][key]}' for i, (key, label) in enumerate(zip(docs.SECTIONS, docs.LABELS)))
+    fields = [(key, label) for key, label in zip(docs.SECTIONS, docs.LABELS) if key in snapshot['sections']]
+    text = snapshot['title'] + '\n\n' + '\n\n'.join(f'{i+1}. {label}\n{snapshot["sections"][key]}' for i, (key, label) in enumerate(fields))
     return {'id': 'design-' + snapshot['digest'], 'name': snapshot['title'], 'size': len(text.encode()), 'characters': len(text), 'text': text}
 

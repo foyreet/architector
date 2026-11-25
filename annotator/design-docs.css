@@ -18,3 +18,9 @@
 #assist-content p,#assist-content blockquote,.section-sources p{white-space:pre-wrap}
 #assist-content summary,.section-sources summary{cursor:pointer;padding:8px 0}
 #assist-footer:empty,#source-update:empty{display:none}
+
+.dataset-guide {display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:8px 16px}
+.dataset-guide summary {cursor:pointer; padding:8px 0}
+.dataset-guide dt {font-weight:600}
+.dataset-guide dd {margin:4px 0 12px}
+#section-dataset {min-height:225px}

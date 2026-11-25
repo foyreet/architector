@@ -1,6 +1,6 @@
 'use strict';
 window.DesignChat = (() => {
-  const fields = [['problem','Проблема и текущий процесс'],['target','Цели, таргет и антицели'],['data_features','Данные и признаки'],['metric_validation','Метрики, проверка, риски и открытые вопросы'],['model_training','Решение, альтернативы и обучение']];
+  const fields = [['problem','Проблема и текущий процесс'],['target','Цели, таргет и антицели'],['dataset','Датасет'],['data_features','Данные и признаки'],['metric_validation','Метрики, проверка, риски и открытые вопросы'],['model_training','Решение, альтернативы и обучение']];
   const node = (tag, text, cls='') => { const e=document.createElement(tag); e.textContent=text; e.className=cls; return e; };
   function modal(title) {
     const dialog=document.createElement('dialog');dialog.className='design-chat-dialog';dialog.setAttribute('aria-label',title);
@@ -12,7 +12,7 @@ window.DesignChat = (() => {
   }
   function sections(parent, snapshot) {
     parent.replaceChildren(node('h3',snapshot.title));
-    fields.forEach(([key,label],i)=>{const section=node('section','','design-chat-section');section.append(node('h4',`${i+1}. ${label}`),node('p',snapshot.sections[key]||'Не заполнено'));parent.append(section);});
+    fields.filter(([key]) => key in snapshot.sections).forEach(([key,label],i)=>{const section=node('section','','design-chat-section');section.append(node('h4',`${i+1}. ${label}`),node('p',snapshot.sections[key]||'Не заполнено'));parent.append(section);});
   }
   function read(snapshot) { const m=modal('Прикреплённый дизайн-документ');sections(m.content,snapshot); }
   async function attach(api, scope, source) {
@@ -47,6 +47,6 @@ window.DesignChat = (() => {
       api('/api/projects/list',{}).then(data=>{if(!m.dialog.open)return;for(const p of data.projects)select.append(new Option(p.name+' · '+new Date(p.updated_at).toLocaleString('ru-RU'),p.id));if(!data.projects.length)m.content.append(node('p','Сначала создайте схему, затем добавьте документ в её AI Chat.'));}).catch(e=>m.error(e.message));
     });
   }
-  return {read,choose,attach,pickProject};
+  return {fields,read,choose,attach,pickProject};
 })();
 

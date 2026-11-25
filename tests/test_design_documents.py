@@ -43,6 +43,27 @@ class Documents(unittest.TestCase):
         for value in ('../bad',None,23,{},[]):
             with self.subTest(value=value),self.assertRaises(ContractError):self.call('create',{'id':value})
         with self.assertRaises(ContractError):self.publish()
+    def test_legacy_sections_and_saves_preserve_dataset(self):
+        old = {k: k for k in docs.SECTIONS if k != 'dataset'}
+        with self.hub.db() as db:
+            db.execute('UPDATE design_documents SET sections=? WHERE id=?',
+                       (json.dumps(old), self.doc['id']))
+        upgraded = self.call('get', self.doc)['document']
+        self.assertEqual(upgraded['sections'], {**old, 'dataset': ''})
+        self.assertEqual(upgraded['revision'], self.doc['revision'])
+        self.assertEqual(self.call('save', upgraded)['document']['revision'], upgraded['revision'])
+        package = self.call('export', upgraded)['package']
+        imported = self.call('import', {'id': str(uuid.uuid4()), 'package': {**package, 'sections': old}})['document']
+        self.assertEqual(imported['sections'], upgraded['sections'])
+        ref = {'tree_id': str(uuid.uuid4()), 'revision': 1, 'version': 0,
+               'title': 'Источник', 'answers': [], 'cases': []}
+        doc = self.call('save', {**upgraded, 'sections': {**old, 'dataset': 'Наблюдения'},
+                                 'sources': {'dataset': ref}})['document']
+        updated = self.call('save', {**doc, 'sections': {**old, 'target': 'Правка старого клиента'},
+                                     'sources': {}})['document']
+        self.assertEqual(updated['sections']['dataset'], 'Наблюдения')
+        self.assertEqual(updated['sources']['dataset'], ref)
+
     def test_large_document_roundtrip(self):
         sections = {key: 'Ж' * 40000 for key in docs.SECTIONS}
         self.save(title='Д' * 161, sections=sections)

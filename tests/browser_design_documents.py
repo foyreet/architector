@@ -37,8 +37,15 @@ def main():
                 page.once('dialog', lambda d: d.accept() if accept else d.dismiss())
 
             page.goto(server.origin + '/design-docs.html?new=1')
-            expect(page.locator('#sections textarea')).to_have_count(5)
+            expect(page.locator('#sections textarea')).to_have_count(6)
             expect(page.locator('#save-status')).to_contain_text('ещё не сохранён')
+            dataset = page.get_by_label('3. Датасет', exact=True)
+            insert = page.get_by_role('button', name='Вставить структуру')
+            insert.click()
+            assert dataset.input_value().split() == ['ETL', 'Фильтрация', 'Генерация', 'признаков', 'Разметка']
+            expect(insert).to_be_hidden()
+            dataset.fill('')
+            expect(insert).to_be_visible()
             assert documents() == [] and not writes
             page.locator('#back-list').click()
             expect(page.locator('#documents')).to_contain_text('пока нет')
