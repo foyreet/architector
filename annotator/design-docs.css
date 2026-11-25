@@ -24,3 +24,55 @@
 .dataset-guide dt, .metrics-guide dt {font-weight:600}
 .dataset-guide dd, .metrics-guide dd {margin:4px 0 12px}
 #section-dataset {min-height:225px}
+
+#editor {max-width:1240px}
+#sections textarea {min-height:280px; line-height:1.7}
+#editor :focus-visible:not(.ProseMirror) {outline:2px solid #285bef; outline-offset:3px}
+.codex-markdown { min-width: 0; font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.codex-markdown > :first-child { margin-top: 0; }
+.codex-markdown > :last-child { margin-bottom: 0; }
+.codex-markdown p { white-space: normal; margin: 0 0 10px; }
+.codex-markdown :is(h3, h4, h5, h6) { font-size: 15px; line-height: 1.4; margin: 14px 0 8px; }
+.codex-markdown strong { font-weight: 650; }
+.codex-markdown :is(ul, ol) { padding-left: 22px; margin: 8px 0 12px; }
+.codex-markdown li { margin: 5px 0; }
+.codex-markdown li > :is(ul, ol, p) { margin-bottom: 5px; }
+.codex-markdown code { font: .9em ui-monospace, SFMono-Regular, Consolas, monospace; background: #e8edf6; padding: 2px 4px; border-radius: 4px; }
+.codex-markdown pre { max-width: 100%; overflow: auto; padding: 10px; border-radius: 6px; background: #e8edf6; white-space: pre; overflow-wrap: normal; overscroll-behavior: contain; }
+.codex-markdown pre code { padding: 0; border-radius: 0; }
+.codex-markdown blockquote { margin: 10px 0; padding-left: 10px; border-left: 3px solid #bbc9e0; color: #52617a; }
+.codex-markdown a { color: #2054c7; text-decoration: underline; text-underline-offset: 2px; }
+.codex-markdown hr { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
+.codex-markdown-table { max-width: 100%; overflow: auto; margin: 10px 0; overscroll-behavior: contain; }
+.codex-markdown table { border-collapse: collapse; width: max-content; min-width: 100%; font-size: 12px; }
+.codex-markdown :is(th, td) { padding: 6px 8px; border: 1px solid #d5ddea; text-align: left; }
+.codex-markdown th { background: #e8edf6; }
+.codex-markdown-fallback { white-space: pre-wrap; }
+
+#editor .codex-markdown h3, #assist-content .codex-markdown h3 {font-size:24px}
+#editor .codex-markdown h4, #assist-content .codex-markdown h4 {font-size:21px}
+#editor .codex-markdown h5, #assist-content .codex-markdown h5 {font-size:18px}
+#assist-content .codex-markdown p {white-space:normal}
+
+.visual-editor {margin-top:16px; min-width:0}
+.visual-editor .toastui-editor-defaultUI {border-radius:8px; overflow:visible}
+.visual-editor .toastui-editor-defaultUI:focus-within {border-color:#64748b}
+.visual-editor .toastui-editor-defaultUI-toolbar {height:auto; flex-wrap:wrap; border-radius:8px 8px 0 0}
+.visual-editor .toastui-editor-ww-container {max-height:70vh; overflow:auto}
+.visual-editor .toastui-editor-contents {font:16px/1.7 system-ui; padding:20px}
+.visual-editor .toastui-editor-contents table {display:block; max-width:100%; overflow:auto}
+.visual-editor .toastui-editor-popup {max-width:calc(100vw - 64px)}
+.visual-editor .toastui-editor-contents pre {overflow:auto}
+
+.visual-editor .toastui-editor-toolbar-group {height:auto; display:flex; flex-wrap:wrap}
+.visual-editor .toastui-editor-defaultUI-toolbar button {min-height:32px; padding:0; border-radius:0}
+.visual-editor .toastui-editor-toolbar {height:auto}
+@media(max-width:600px) {
+  .visual-editor .toastui-editor-popup {
+    position:fixed; left:16px!important; right:16px!important; top:25vh!important;
+    transform:none!important; margin:0!important; width:auto!important; max-width:none;
+    max-height:65vh; overflow:auto;
+  }
+  .visual-editor .toastui-editor-popup-body {min-width:0; padding:16px}
+  .visual-editor .toastui-editor-popup input {width:100%; box-sizing:border-box}
+}
