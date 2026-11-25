@@ -26,7 +26,15 @@
   function same(a,b){return JSON.stringify(a.sources||{})===JSON.stringify(b.sources||{})&&a.title===b.title&&fields.every(([k])=>a.sections[k]===b.sections[k]);}
   function controls(){ $('compose-doc').disabled=!!saving||conflicted||blocked;$('add-chat').disabled=!!saving||conflicted||blocked;$('save').disabled=(!dirty&&!!doc?.revision)||!!saving||conflicted||blocked;$('publish').disabled=!!saving||conflicted||blocked;$('conflict').hidden=!conflicted;$('save-status').textContent=doc?(saving?'Сохранение…':dirty?'Есть несохранённые изменения':doc.revision?'Все изменения сохранены':'Новый документ · ещё не сохранён'):''; }
   function cache(){if(!doc||release)return;try{if(dirty)localStorage.setItem(draftKey(),JSON.stringify({...value(),revision:doc.revision}));else localStorage.removeItem(draftKey());}catch{error('Браузер не сохранил резервную копию. Сохраните документ на сервер перед закрытием.');}}
-  function changed(){const insert=$('dataset-insert');if(insert)insert.hidden=!!$('section-dataset').value.trim();dirty=!same(value(),doc);cache();controls();}
+  function changed() {
+    for (const key of ['dataset', 'metric_validation']) {
+      const insert = $(key + '-insert');
+      if (insert) insert.hidden = !!$('section-' + key).value.trim();
+    }
+    dirty = !same(value(), doc);
+    cache();
+    controls();
+  }
   const datasetOutline = [
     ['ETL', 'Что означает один пример? Из каких источников, за какой период и по каким ключам собирается выборка? Где и в каком формате она хранится, как часто обновляется?'],
     ['Фильтрация', 'Какие примеры включаем или исключаем? Как обрабатываем пропуски, дубли, шум и редкие случаи? Что проверяем вручную?'],
@@ -40,22 +48,25 @@
     const list = document.createElement('dl');
     for (const [heading, question] of datasetOutline) list.append(node('dt', heading), node('dd', question));
     help.append(list);
+    guide.append(help, structureButton(input, datasetOutline));
+    return guide;
+  }
+  function structureButton(input, outline) {
     const insert = node('button', 'Вставить структуру');
     insert.type = 'button';
-    insert.id = 'dataset-insert';
+    insert.id = input.id.replace('section-', '') + '-insert';
     insert.hidden = !!input.value.trim();
     insert.onclick = () => {
       if (input.value.trim()) return;
-      input.value = datasetOutline.map(([heading]) => heading + '\n').join('\n');
+      input.value = outline.map(([heading]) => heading + '\n').join('\n');
       input.dispatchEvent(new Event('input', {bubbles:true}));
       input.focus();
-      const start = datasetOutline[0][0].length + 1;
+      const start = outline[0][0].length + 1;
       input.setSelectionRange(start, start);
     };
-    guide.append(help, insert);
-    return guide;
+    return insert;
   }
-  function metricsGuide() {
+  function metricsGuide(input) {
     const help = node('details', '', 'metrics-guide');
     help.append(node('summary', 'Памятка — функция потерь, офлайн- и онлайн-метрики'));
     const list = document.createElement('dl');
@@ -66,7 +77,9 @@
     ];
     for (const [heading, text] of items) list.append(node('dt', heading), node('dd', text));
     help.append(list, node('p', 'Для каждой метрики задайте определение или формулу, единицу измерения и направление улучшения. Объясните связь с бизнес-целью и способ её проверки. Рост кликов может сопровождаться отсутствием роста покупок — проверку этой гипотезы стоит зафиксировать в документе.'));
-    return help;
+    const guide = node('div', '', 'dataset-guide');
+    guide.append(help, structureButton(input, items));
+    return guide;
   }
   function renderSections(parent, data, editable) {
     parent.replaceChildren();
@@ -79,7 +92,7 @@
         input.value = data[key] ?? '';
         input.addEventListener('input', changed);
         section.append(title);
-        if (key === 'metric_validation') section.append(metricsGuide());
+        if (key === 'metric_validation') section.append(metricsGuide(input));
         if (key === 'dataset') {
           input.placeholder = 'ETL · Фильтрация · Генерация признаков · Разметка';
           section.append(datasetGuide(input));

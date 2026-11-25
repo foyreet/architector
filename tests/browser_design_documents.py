@@ -42,7 +42,7 @@ def main():
             expect(page.locator('#sections .doc-section > label').nth(2)).to_have_text('3. Метрики')
             dataset = page.get_by_label('4. Датасет', exact=True)
             expect(page.locator('#sections .doc-section > label').nth(4)).to_have_text('5. Решение, альтернативы и обучение')
-            insert = page.get_by_role('button', name='Вставить структуру')
+            insert = page.locator('#dataset-insert')
             insert.click()
             assert dataset.input_value().split() == ['ETL', 'Фильтрация', 'Генерация', 'признаков', 'Разметка']
             expect(insert).to_be_hidden()
