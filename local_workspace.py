@@ -52,6 +52,8 @@ class Community:
                 db.execute('CREATE TABLE IF NOT EXISTS design_documents(id TEXT PRIMARY KEY, owner TEXT NOT NULL, title TEXT NOT NULL, sections TEXT NOT NULL, revision INTEGER NOT NULL, updated REAL NOT NULL, source_release TEXT)')
                 if 'sources' not in {r['name'] for r in db.execute('PRAGMA table_info(design_documents)')}:
                     db.execute("ALTER TABLE design_documents ADD COLUMN sources TEXT NOT NULL DEFAULT '{}'")
+                if 'task_links' not in {r['name'] for r in db.execute('PRAGMA table_info(design_documents)')}:
+                    db.execute("ALTER TABLE design_documents ADD COLUMN task_links TEXT NOT NULL DEFAULT '{}'")
                 if 'problem_tree' not in {r['name'] for r in db.execute('PRAGMA table_info(design_documents)')}:
                     db.execute("ALTER TABLE design_documents ADD COLUMN problem_tree TEXT NOT NULL DEFAULT '[]'")
                 if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='problem_spaces'").fetchone():

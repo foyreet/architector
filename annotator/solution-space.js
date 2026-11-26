@@ -5,16 +5,22 @@
   function page(path, treeId) {
     const url = new URL(path, location.origin);
     if (params.has('project')) url.searchParams.set('project', params.get('project'));
+    if (path !== '/architecture.html' && (!treeId || !params.get('tree') || treeId === params.get('tree'))) {
+      for (const key of ['tree', 'metric', 'doc', 'draft']) {
+        if (params.has(key)) url.searchParams.set(key, params.get(key));
+      }
+    }
     if (treeId) url.searchParams.set('id', treeId);
     return url;
   }
-  $('back').href = id ? page('/problem-space.html', id) : page('/architecture.html');
-  $('back').textContent = id ? '← К дереву вопросов' : '← К схеме';
+  $('back').href = page('/architecture.html');
   $('switch-tree').hidden = !id;
   $('switch-tree').href = page('/solution-space.html');
   const labels = {title:'Кейс', validation:'Критерий готовности', rationale:'Почему это нужно', approach:'Возможный подход',
     tradeoffs:'Ограничения и компромиссы', assumptions:'Предположения', business_query:'Запрос по бизнес-задаче', query:'Запрос по технической задаче'};
   const status = text => { $('status').textContent = text; };
+  // Messages about building cases stay next to the button that starts it.
+  const generateNote = text => { $('generate-status').textContent = text; };
   let source, working, proposal, version, dirty = false, generation = 0, busy = false;
   function element(tag, text) {
     const item = document.createElement(tag);
@@ -25,11 +31,14 @@
     const response = await fetch('/api/solution-spaces/' + action, {method:'POST',
       headers:{'Content-Type':'application/json','X-Architect-Request':'1'}, body: JSON.stringify({id, ...data})});
     const result = await response.json();
-    if (!response.ok) throw Error(result.error || 'Ошибка запроса');
+    if (!response.ok) throw Object.assign(Error(result.error || 'Ошибка запроса'), {status: response.status});
     return result;
   }
   function controls() {
     $('generate').disabled = busy || !source?.answers.length;
+    // Once cases exist, regeneration is a secondary action and saving becomes the primary one.
+    $('generate').classList.toggle('primary', !working);
+    $('save').hidden = !working;
     $('save').disabled = busy || !dirty;
     $('workspace').inert = busy;
     $('stale').textContent = working && source.revision !== working.source.revision ?
@@ -50,11 +59,16 @@
       box.append(block);
     }
   }
+  const searchKeys = ['business_query', 'query'];
   function cards(container, plan, editable) {
     container.replaceChildren();
     for (const item of plan.options) {
       const card = document.createElement('article');
-      if (editable) card.id = 'case-' + (container.children.length + 1);
+      const number = container.children.length + 1;
+      if (editable) card.id = 'case-' + number;
+      const search = document.createElement('section');
+      search.className = 'case-search';
+      search.append(element('h4', 'Поиск аналогов'));
       for (const [key, label] of Object.entries(labels)) {
         if (!editable) {
           if (item[key]) card.append(element(key === 'title' ? 'h3' : 'strong', key === 'title' ? item[key] : label));
@@ -62,9 +76,19 @@
           continue;
         }
         const field = element('label', label), input = document.createElement('textarea');
-        input.rows = ['approach','rationale','tradeoffs'].includes(key) ? 3 : 2;
-        input.value = item[key]; input.oninput = () => { item[key] = input.value; mark(); };
-        field.append(input); card.append(field);
+        if (key === 'title') {
+          const name = element('span', label + ' ' + number), badge = element('span', String(number));
+          name.className = 'visually-hidden';
+          badge.className = 'step-number';
+          badge.setAttribute('aria-hidden', 'true');
+          field.className = 'case-title';
+          field.replaceChildren(name, badge);
+          input.rows = 1;
+        } else input.rows = ['approach','rationale','tradeoffs'].includes(key) ? 3 : 2;
+        input.value = item[key]; input.placeholder = 'Не заполнено';
+        input.oninput = () => { item[key] = input.value; mark(); };
+        field.append(input);
+        (searchKeys.includes(key) ? search : card).append(field);
       }
       const refs = document.createElement('details');
       refs.append(element('summary','На каких ответах основан кейс'));
@@ -76,6 +100,7 @@
       if (editable) {
         const find = element('button','Найти аналоги в интернете'), note = element('p','');
         const sources = document.createElement('div'); sources.className = 'sources';
+        note.className = 'search-note';
         note.setAttribute('role','status');
         find.onclick = async () => {
           busy = true; controls(); note.textContent = 'Ищем внедрения, разборы неудач, статьи и реализации…';
@@ -91,7 +116,10 @@
           } catch (e) { note.textContent = e.message; }
           finally { busy = false; controls(); }
         };
-        card.append(element('p','В поисковые сервисы будут отправлены два запроса выше.'),find,note,sources);
+        const hint = element('p','В поисковые сервисы будут отправлены два запроса выше.');
+        hint.className = 'search-hint';
+        search.append(hint, find, note, sources);
+        card.append(search);
         showSources(sources,item.sources);
       }
       container.append(card);
@@ -105,21 +133,21 @@
     hidePreview();
     const token = generation;
     busy = true; controls(); $('cancel').hidden = false;
-    status('Модель разбирает ответы на кейсы…');
+    generateNote('Модель разбирает ответы на кейсы…');
     try {
       const result = await api('generate');
       if (token !== generation) return;
       proposal = result; cards($('proposals'), proposal, false); $('preview').hidden = false;
-      status(working ? 'Принятые предложения заменят текущие кейсы. Сохранение отдельной кнопкой.' : 'Проверьте кейсы и их связь с ответами.');
-    } catch (e) { if (token === generation) status(e.message); }
+      generateNote(working ? 'Принятые предложения заменят текущие кейсы. Сохранение отдельной кнопкой.' : 'Проверьте кейсы и их связь с ответами.');
+    } catch (e) { if (token === generation) generateNote(e.message); }
     finally { if (token === generation) { busy = false; $('cancel').hidden = true; controls(); } }
   };
-  $('cancel').onclick = $('discard').onclick = () => { hidePreview(); status('Предложение отменено.'); };
+  $('cancel').onclick = $('discard').onclick = () => { hidePreview(); generateNote('Предложение отменено.'); };
   $('apply').onclick = () => {
     if (!proposal || busy) return;
     if (working && !confirm('Заменить текущие кейсы и их подборки источников предложенными?')) return;
     working = proposal; source = proposal.source; hidePreview(); cards($('options'), working, true);
-    $('workspace').hidden = false; status('Кейсы приняты. Можно искать аналоги и сохранять изменения.'); mark();
+    $('workspace').hidden = false; generateNote('Кейсы приняты. Можно искать аналоги и сохранять изменения.'); mark();
   };
   $('save').onclick = async () => {
     busy = true; controls();
@@ -137,7 +165,7 @@
     $('title').textContent = source.title; $('problem').textContent = source.problem;
     for (const a of source.answers) $('answers').append(element('strong', a.path.join(' → ')),element('p', a.answer));
     if (working) { cards($('options'), working, true); $('workspace').hidden = false; }
-    if (!source.answers.length) status('Запишите хотя бы один ответ в дереве, чтобы построить кейсы.');
+    if (!source.answers.length) generateNote('Запишите хотя бы один ответ в дереве, чтобы построить кейсы.');
     controls();
     if (/^#case-\d+$/.test(location.hash)) {
       if (params.has('version') && String(version) !== params.get('version')) status('Подборка кейсов изменилась. Открыта текущая версия.');
@@ -165,5 +193,12 @@
       list.append(link);
     }
   }
-  (id ? start() : library()).catch(e => status(e.message));
+  // A step link may point at a tree that exists only as an unsaved draft: offer the saved ones instead.
+  async function fallback(error) {
+    if (error.status !== 404) throw error;
+    $('switch-tree').hidden = true;
+    await library();
+    status('Это дерево ещё не сохранено. Выберите сохранённое дерево или вернитесь к вопросам.');
+  }
+  (id ? start().catch(fallback) : library()).catch(e => status(e.message));
 })();
