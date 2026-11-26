@@ -5,8 +5,8 @@ import uuid
 
 from block_contracts import ContractError
 
-SECTIONS = ('problem', 'target', 'metric_validation', 'dataset', 'model_training')
-LABELS = ('Проблема и текущий процесс', 'Цели, таргет и антицели', 'Метрики', 'Датасет', 'Решение, альтернативы и обучение')
+SECTIONS = ('problem', 'target', 'metric_validation', 'dataset', 'validation', 'model_training')
+LABELS = ('Проблема и текущий процесс', 'Цели, таргет и антицели', 'Метрики', 'Датасет', 'Валидация', 'Решение, альтернативы и обучение')
 KIND = 'design_document'
 FORMAT = 'architect.design-document'
 
@@ -19,11 +19,12 @@ def identity(value):
     return value
 
 
-def normalize_sections(sections, *, previous_dataset=''):
+def normalize_sections(sections, *, previous=None):
     if not isinstance(sections, dict):
         raise ContractError('Проверьте состав разделов документа.')
-    # Documents saved before the dataset section contain the other five keys.
-    sections = {'dataset': previous_dataset, **sections}
+    # Older documents and clients may omit sections introduced later.
+    previous = previous or {}
+    sections = {'dataset': previous.get('dataset', ''), 'validation': previous.get('validation', ''), **sections}
     features = sections.pop('data_features', '')
     if not isinstance(features, str):
         raise ContractError('Каждый раздел должен содержать текст.')
@@ -38,11 +39,11 @@ def normalize_sections(sections, *, previous_dataset=''):
     return {key: sections[key] for key in SECTIONS}
 
 
-def payload(body, *, previous_dataset=''):
+def payload(body, *, previous=None):
     title = body.get('title')
     if not isinstance(title, str) or not title.strip():
         raise ContractError('Введите название документа.')
-    return title.strip(), normalize_sections(body.get('sections'), previous_dataset=previous_dataset)
+    return title.strip(), normalize_sections(body.get('sections'), previous=previous)
 
 
 def sources(value):
@@ -147,14 +148,15 @@ def request(hub, user, body, action):
             return {'deleted': row['id']}
         if action == 'save':
             previous = normalize_sections(json.loads(row['sections']))
-            name, sections = payload(body, previous_dataset=previous['dataset'])
+            name, sections = payload(body, previous=previous)
             revision = body.get('revision')
             if type(revision) is not int: raise ContractError('Укажите версию документа.')
             # A retry after a lost response must not create another revision.
             previous_sources = json.loads(row['sources'])
             refs = sources(body.get('sources', previous_sources))
-            if 'dataset' not in body['sections'] and 'dataset' in previous_sources:
-                refs = {**refs, 'dataset': previous_sources['dataset']}
+            for key in ('dataset', 'validation'):
+                if key not in body['sections'] and key in previous_sources:
+                    refs = {**refs, key: previous_sources[key]}
             same = refs == previous_sources and name == row['title'] and sections == previous
             if revision == row['revision']-1 and same: return {'document': public(row)}
             if revision != row['revision']:

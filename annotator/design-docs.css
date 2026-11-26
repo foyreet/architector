@@ -23,6 +23,12 @@
 .dataset-guide summary, .metrics-guide summary {cursor:pointer; padding:8px 0}
 .dataset-guide dt, .metrics-guide dt {font-weight:600}
 .dataset-guide dd, .metrics-guide dd {margin:4px 0 12px}
+.validation-guide {display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start}
+.validation-guide details {grid-area:1/1}
+.validation-guide button {grid-area:1/2}
+@media(max-width:600px) {
+  .validation-guide {display:flex; flex-direction:column; align-items:flex-start}
+}
 #section-dataset {min-height:225px}
 
 #editor {max-width:1240px}

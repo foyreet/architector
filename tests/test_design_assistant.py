@@ -90,6 +90,21 @@ class DesignAssistantTests(unittest.TestCase):
         model.assert_not_called()
 
     @patch('design_assistant.standalone_answer')
+    def test_validation_proposal_and_review(self, model):
+        self.body['sections']['dataset'] = 'Заказы одного клиента за несколько недель'
+        text = 'Сравниваем модели на новых клиентах'
+        model.return_value = json.dumps({'validation': {'text': text, 'answers': [1], 'cases': [2]}})
+        proposal = docs.request(self.hub, LOCAL_USER, self.body, 'compose')['proposals']['validation']
+        context = json.loads(model.call_args.args[1])
+        self.assertEqual(context['document']['sections']['dataset'], self.body['sections']['dataset'])
+        self.assertEqual(proposal['source']['cases'][0]['id'], 2)
+        self.body['sections']['validation'] = proposal['text']
+        comment = {'section': 'validation', 'quote': text, 'reason': 'Возможное пересечение клиентов',
+                   'question': 'Каким ключом закрепляем клиента за выборкой?'}
+        model.return_value = json.dumps([comment])
+        self.assertEqual(docs.request(self.hub, LOCAL_USER, self.body, 'review')['comments'], [comment])
+
+    @patch('design_assistant.standalone_answer')
     def test_review_checks_quote_against_current_text(self, model):
         self.body['sections']['problem'] = 'Излишки по утрам'
         comment = {'section': 'problem', 'quote': 'Излишки', 'reason': 'Неизвестен масштаб', 'question': 'Каковы потери?'}

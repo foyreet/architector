@@ -27,7 +27,7 @@
   function controls(){ $('compose-doc').disabled=!!saving||conflicted||blocked;$('add-chat').disabled=!!saving||conflicted||blocked;$('save').disabled=(!dirty&&!!doc?.revision)||!!saving||conflicted||blocked;$('publish').disabled=!!saving||conflicted||blocked;$('conflict').hidden=!conflicted;$('save-status').textContent=doc?(saving?'Сохранение…':dirty?'Есть несохранённые изменения':doc.revision?'Все изменения сохранены':'Новый документ · ещё не сохранён'):''; }
   function cache(){if(!doc||release)return;try{if(dirty)localStorage.setItem(draftKey(),JSON.stringify({...value(),revision:doc.revision}));else localStorage.removeItem(draftKey());}catch{error('Браузер не сохранил резервную копию. Сохраните документ на сервер перед закрытием.');}}
   function changed() {
-    for (const key of ['dataset', 'metric_validation']) {
+    for (const key of ['dataset', 'metric_validation', 'validation']) {
       const insert = $(key + '-insert');
       if (insert) insert.hidden = !!$('section-' + key).value.trim();
     }
@@ -42,14 +42,40 @@
     ['Генерация признаков', 'Из каких исходных полей и метаданных вычисляем признаки или эмбеддинги? Какие преобразования и окна используем? Что известно на момент прогноза?'],
     ['Разметка', 'Какая метка нужна и откуда она берётся? Если её ставит человек, как описаны классы, спорные примеры и проверка качества?']
   ];
-  function datasetGuide(input) {
+  const validationOutline = [
+    ['Сценарий применения', 'Кому и когда выдаём прогноз? Что известно к этому моменту и когда появится метка? Что будет новым для модели: период, клиент или объект?'],
+    ['Разбиение и защита от утечек', 'По какой единице делим данные? Где могут пересечься пользователи, дубли или близкие примеры? Для прогноза во времени укажите горизонт, задержку данных и нужный зазор.'],
+    ['Выбор модели и финальная проверка', 'Где выбираем признаки, порог и гиперпараметры? Какие данные оставляем для независимой оценки? Сравните модель с базовым решением на одних примерах и укажите, как оцените неопределённость разницы.'],
+    ['Обновление выборок', 'Куда попадут новые наблюдения? Когда сдвигаем окно, сохраняем доли или используем фиксированный эталонный набор? Как воспроизведём сравнение версий?']
+  ];
+  const validationMethods = [
+    ['Отложенная выборка (holdout)', 'Разделите данные один раз, если примеров достаточно или обучение дорого. Зафиксируйте независимый тест до подбора модели.'],
+    ['Перекрёстная проверка (K-fold)', 'По очереди используйте каждую из K частей для оценки, остальные — для обучения. Для независимых наблюдений сравните результаты по частям.'],
+    ['Стратифицированное разбиение', 'Сохраняйте доли классов в каждой части holdout или K-fold, когда редкий класс может выпасть. Сначала учтите зависимость по группам и времени.'],
+    ['Групповое разбиение', 'Для прогноза на новых клиентах или объектах помещайте все записи одной группы в одну часть. Подходит и для holdout, и для K-fold.'],
+    ['Повторная перекрёстная проверка', 'Повторите K-fold с разными разбиениями, чтобы увидеть, насколько сравнение зависит от состава выборок. Учитывайте стоимость повторного обучения.'],
+    ['По одному объекту (leave-one-out)', 'Предельный случай K-fold: на каждом шаге оставьте один объект для проверки. На малых наборах это осуществимо, но оценка может сильно колебаться.'],
+    ['Временная проверка', 'Для прогноза будущего обучайтесь на прошлом. Проверяйте на следующем периоде, при необходимости сдвигайте окно или расширяйте историю. Согласуйте горизонт и задержку меток с рабочим процессом.'],
+    ['Вложенная проверка (nested validation)', 'Во внутреннем разбиении выбирайте модель и её настройки. На внешних частях оцените всю процедуру выбора. Оба уровня могут учитывать группы или время.'],
+    ['Проверка сдвига данных (adversarial validation)', 'Попробуйте предсказать, из какого набора взят пример. Высокая различимость подскажет, где искать сдвиг распределения. Качество целевой модели измерьте отдельно.']
+  ];
+  function guideList(items) {
+    const list = document.createElement('dl');
+    for (const [heading, text] of items) list.append(node('dt', heading), node('dd', text));
+    return list;
+  }
+  function outlineGuide(input, title, outline, methods) {
     const guide = node('div', '', 'dataset-guide');
     const help = document.createElement('details');
-    help.append(node('summary', 'Что описать в каждом подразделе'));
-    const list = document.createElement('dl');
-    for (const [heading, question] of datasetOutline) list.append(node('dt', heading), node('dd', question));
-    help.append(list);
-    guide.append(help, structureButton(input, datasetOutline));
+    help.append(node('summary', title), guideList(outline));
+    if (methods) help.append(node('h3', 'Виды валидации'), guideList(methods));
+    const insert = structureButton(input, outline);
+    if (methods) {
+      guide.classList.add('validation-guide');
+      guide.append(insert, help);
+    } else {
+      guide.append(help, insert);
+    }
     return guide;
   }
   function structureButton(input, outline) {
@@ -172,7 +198,10 @@
         if (key === 'metric_validation') section.append(metricsGuide(input));
         if (key === 'dataset') {
           input.placeholder = 'ETL · Фильтрация · Генерация признаков · Разметка';
-          section.append(datasetGuide(input));
+          section.append(outlineGuide(input, 'Что описать в каждом подразделе', datasetOutline));
+        }
+        if (key === 'validation') {
+          section.append(outlineGuide(input, 'Памятка — как выбрать схему валидации', validationOutline, validationMethods));
         }
         section.append(...sectionEditor(input, key));
         title.onclick = () => sectionViews.get(key).editor.focus();
@@ -203,9 +232,11 @@
     doc=document;release=null;dirty=false;conflicted=false;blocked=false;let content=document;
     error();message();
     if(restore){try{const draft=JSON.parse(localStorage.getItem(draftKey())||'null');
-      if(draft?.sections && !Object.hasOwn(draft.sections,'dataset')) {
-        draft.sections.dataset=document.sections.dataset;
-        if(document.sources?.dataset) draft.sources={...draft.sources,dataset:document.sources.dataset};
+      for (const key of ['dataset', 'validation']) {
+        if (draft?.sections && !Object.hasOwn(draft.sections, key)) {
+          draft.sections[key] = document.sections[key];
+          if (document.sources?.[key]) draft.sources = {...draft.sources, [key]: document.sources[key]};
+        }
       }
       if(typeof draft?.sections?.data_features === 'string') {
         const addition='Генерация признаков (из прежнего раздела)\n'+draft.sections.data_features;
