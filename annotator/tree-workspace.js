@@ -32,6 +32,16 @@
     catch { status('Черновик не помещается в браузере. Нажмите «Сохранить».'); return; }
     status(conflict ? 'Есть другая версия дерева' : 'Есть изменения');
   }
+  function syncNavigation() {
+    window.designFlow.treeOpened(metrics ? 'metric' : 'tree', id);
+    const context = window.designFlow.url(metrics ? 'metrics' : 'problems');
+    for (const key of ['tree', 'metric', 'doc', 'draft']) {
+      if (context.searchParams.has(key)) url.searchParams.set(key, context.searchParams.get(key));
+      else url.searchParams.delete(key);
+    }
+    history.replaceState(null, '', url);
+    localStorage.setItem(last, id);
+  }
   function openTree(record, draft) {
     id = record.id;
     revision = record.revision;
@@ -45,8 +55,7 @@
     status(conflict ? 'Дерево изменилось в другой вкладке' : dirty ? 'Восстановлен черновик' : revision ? 'Сохранено' : '');
     url.searchParams.delete('new');
     url.searchParams.set('id', id);
-    history.replaceState(null, '', url);
-    localStorage.setItem(last, id);
+    syncNavigation();
   }
   const fresh = () => ({id: crypto.randomUUID(), title: 'Новое дерево', [goalKey]: '', [nodesKey]: [], revision: 0});
   async function restore(treeId) {
@@ -87,8 +96,8 @@
   }
   function openTreeAfterSave(dest, version) {
     id = dest; revision = version; dirty = conflict = false;
-    url.searchParams.set('id', id); history.replaceState(null, '', url);
-    localStorage.setItem(last, id);
+    url.searchParams.set('id', id);
+    syncNavigation();
     $('save').textContent = 'Сохранить';
     status('Сохранено');
   }
@@ -97,10 +106,7 @@
     if (!id || saving) return;
     if (conflict) { status('Сначала сохраните свою версию дерева как копию.'); return; }
     if ((dirty || !revision) && !await save()) return;
-    const next = new URL('/solution-space.html', location.origin);
-    next.searchParams.set('id', id);
-    if (project) next.searchParams.set('project', project);
-    location.href = next;
+    location.href = window.designFlow.url('solutions');
   };
   $('title').oninput = $('formulation').oninput = () => { tree.updateOrigin(); changed(); };
   $('library').onclick = async () => {

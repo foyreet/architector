@@ -78,6 +78,24 @@ class Documents(unittest.TestCase):
         self.assertEqual(docs.normalize_sections(normalized), normalized)
         self.assertEqual(docs.normalize_sections({**normalized, 'data_features': 'История покупок'}), normalized)
 
+    def test_task_links_roundtrip_legacy_save_and_revision(self):
+        links = {'tree_id':str(uuid.uuid4()), 'metric_tree_id':str(uuid.uuid4()), 'case_version':2, 'cases':[2]}
+        self.save(task_links=links)
+        original = self.doc.copy()
+        legacy = {k:v for k,v in original.items() if k != 'task_links'}
+        saved = self.call('save', {**legacy, 'title':'Другая формулировка'})['document']
+        self.assertEqual(saved['task_links'], links)
+        with self.assertRaises(ContractError):
+            self.call('save', {**original, 'task_links':{}})
+        package = self.call('export', saved)['package']
+        imported = self.call('import', {'id':str(uuid.uuid4()), 'package':package})['document']
+        self.assertEqual(imported['task_links'], links)
+        with self.assertRaises(ContractError):
+            self.call('save', {**saved, 'task_links':{'cases':[1], 'case_version':2}})
+        cleared = self.call('save', {**saved, 'task_links':{}})['document']
+        self.assertFalse(cleared['task_links'])
+        self.assertEqual(cleared['sections'], saved['sections'])
+
     def test_large_document_roundtrip(self):
         sections = {key: 'Ж' * 40000 for key in docs.SECTIONS}
         self.save(title='Д' * 161, sections=sections)

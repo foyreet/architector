@@ -82,3 +82,69 @@
   .visual-editor .toastui-editor-popup-body {min-width:0; padding:16px}
   .visual-editor .toastui-editor-popup input {width:100%; box-sizing:border-box}
 }
+
+/* Steps of the design document: problems, solutions, metrics, document. */
+.visually-hidden{position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+.design-flow ol{display:flex;align-items:center;gap:4px;margin:0;padding:0;list-style:none}
+.design-flow li{display:flex;align-items:center;gap:4px}
+.design-flow li+li::before{content:'';width:14px;height:1px;background:#bdc9df}
+.design-flow a,.design-flow button,.design-flow [aria-current]{display:flex;align-items:center;gap:8px;min-height:40px;padding:6px 10px;border:0;border-radius:8px;background:transparent;color:#536680;font-size:14px;white-space:nowrap;text-decoration:none}
+.design-flow a:hover,.design-flow button:hover{background:#edf2ff;color:#26324b}
+.design-flow button:disabled{opacity:.6}
+.design-flow [aria-current]{color:#26324b;font-weight:650}
+.step-number{display:inline-grid;place-items:center;width:22px;height:22px;flex:none;border:1px solid #bdc9df;border-radius:50%;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;background:white;color:#536680}
+.design-flow [aria-current] .step-number{border-color:#285bef;background:#285bef;color:white}
+#back-schema,#back{white-space:nowrap}
+@media(max-width:700px){
+  header:has(.design-flow){flex-wrap:wrap;row-gap:2px}
+  header .design-flow{order:3;flex:1 1 100%}
+  header #account{display:none}
+  .design-flow{max-width:100%;overflow-x:auto;scrollbar-width:none}
+  .design-flow a,.design-flow button,.design-flow [aria-current]{padding:6px;font-size:13px;gap:6px}
+  .design-flow li+li::before{width:6px}
+  .design-flow ol{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0}
+  .design-flow li{justify-content:center;min-width:0}
+  .design-flow li+li::before{display:none}
+  .design-flow :is(a,button,[aria-current]){width:100%;flex-direction:column;justify-content:flex-start;gap:2px;white-space:normal;text-align:center;line-height:1.15}
+  .design-flow .step-label{overflow-wrap:anywhere}
+}
+@media (pointer:coarse){
+  .design-flow a,.design-flow button,.design-flow [aria-current]{min-height:44px}
+}
+
+/* Document list: actions grouped on the right of the heading. */
+.list-heading{justify-content:flex-start}
+.list-heading h1{margin-right:auto}
+#documents{margin-top:24px}
+#documents>.muted{max-width:60ch}
+
+/* Editor: outline column and a readable text column. */
+main#editor{max-width:1120px;display:grid;grid-template-columns:200px minmax(0,1fr);column-gap:40px}
+main#editor>*{grid-column:2}
+main#editor>.editor-toolbar{grid-column:1/-1}
+main#editor>#doc-outline{grid-column:1;grid-row:2/span 40;align-self:start;position:sticky;top:92px;font-size:14px}
+#doc-outline:empty{display:none}
+.outline-count{margin:6px 0 8px 10px;color:#536680;font-size:13px;font-variant-numeric:tabular-nums}
+#doc-outline ol{display:grid;gap:2px;margin:0;padding:0;list-style:none}
+#doc-outline a{display:flex;align-items:baseline;gap:10px;min-height:0;padding:7px 10px;border-radius:8px;color:#3b4a63;line-height:1.35}
+@media (pointer:coarse){#doc-outline a{min-height:44px;align-items:center}}
+#doc-outline a:hover{background:#edf2ff;color:#26324b}
+#doc-outline a::before{content:'';box-sizing:border-box;width:8px;height:8px;flex:none;border:1.5px solid #9fb1cc;border-radius:50%;transform:translateY(-1px)}
+#doc-outline a.filled::before{background:#2e8a63;border-color:#2e8a63}
+.doc-section{scroll-margin-top:84px}
+
+#doc-assist{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 24px;margin:0 0 8px;padding:16px 20px;background:#edf3ff;border:1px solid #c9d7f5;border-radius:12px}
+#doc-assist .assist-text{flex:1 1 320px}
+#doc-assist strong{display:block;font-size:15px}
+#doc-assist p{margin:4px 0 0;color:#3b4a63;font-size:14px;max-width:62ch}
+#doc-assist #compose-doc{border-color:#285bef;color:#1f47b8;font-weight:600}
+#doc-assist #source-update{flex-basis:100%;margin:0;color:#865410}
+
+@media(max-width:1099px){
+  main#editor{display:block}
+  main#editor>#doc-outline{position:static;margin:0 0 4px}
+  #doc-outline ol{display:flex;flex-wrap:wrap;gap:4px 6px}
+  #doc-outline a{padding:5px 10px;border:1px solid #d7dfec;background:white}
+  .outline-count{display:none}
+}
+@media(max-width:600px){.doc-section{scroll-margin-top:156px}}

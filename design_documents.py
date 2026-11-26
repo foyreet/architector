@@ -46,6 +46,20 @@ def payload(body, *, previous=None):
     return title.strip(), normalize_sections(body.get('sections'), previous=previous)
 
 
+def task_links(value):
+    if not isinstance(value, dict) or value.keys() - {'tree_id', 'metric_tree_id', 'case_version', 'cases'}:
+        raise ContractError('Некорректные связи этапов задачи.')
+    result = {key: identity(value[key]) for key in ('tree_id', 'metric_tree_id') if key in value}
+    if 'cases' in value or 'case_version' in value:
+        cases = value.get('cases')
+        version = value.get('case_version')
+        if ('tree_id' not in result or type(version) is not int or version < 0
+                or not isinstance(cases, list) or any(type(i) is not int or i < 1 for i in cases)):
+            raise ContractError('Проверьте привязку кейсов к дереву проблем.')
+        result.update(case_version=version, cases=list(dict.fromkeys(cases)))
+    return result
+
+
 def sources(value):
     if not isinstance(value, dict) or value.keys() - (set(SECTIONS) | {'data_features'}):
         raise ContractError('Некорректные ссылки на источники.')
@@ -89,11 +103,11 @@ def owned(db, user, doc_id):
 
 def public(row):
     return {'id': row['id'], 'title': row['title'], 'sections': normalize_sections(json.loads(row['sections'])),
-            'sources': json.loads(row['sources']), 'revision': row['revision'], 'updated': row['updated'], 'source_release': row['source_release']}
+            'task_links': json.loads(row['task_links']), 'sources': json.loads(row['sources']), 'revision': row['revision'], 'updated': row['updated'], 'source_release': row['source_release']}
 
 
 def snapshot(row):
-    return {'format': FORMAT, 'version': 1, 'title': row['title'], 'sections': normalize_sections(json.loads(row['sections'])), 'sources': json.loads(row['sources'])}
+    return {'format': FORMAT, 'version': 1, 'task_links': json.loads(row['task_links']), 'title': row['title'], 'sections': normalize_sections(json.loads(row['sections'])), 'sources': json.loads(row['sources'])}
 
 
 def request(hub, user, body, action):
@@ -132,7 +146,9 @@ def request(hub, user, body, action):
             db.execute('INSERT INTO design_documents(id,owner,title,sections,revision,updated,source_release,problem_tree) VALUES(?,?,?,?,?,?,?,?)',
                        (doc_id, user['id'], name, json.dumps(sections, ensure_ascii=False), 1, time.time(), source, json.dumps(tree, ensure_ascii=False)))
             refs = sources((package if action == 'import' else body).get('sources', {}))
-            db.execute('UPDATE design_documents SET sources=? WHERE id=?', (json.dumps(refs, ensure_ascii=False), doc_id))
+            links = task_links((package if action == 'import' else body).get('task_links', {}))
+            db.execute('UPDATE design_documents SET sources=?, task_links=? WHERE id=?',
+                       (json.dumps(refs, ensure_ascii=False), json.dumps(links), doc_id))
             if tree:
                 db.execute('INSERT INTO problem_spaces(id,owner,title,problem,tree,revision,updated) VALUES(?,?,?,?,?,?,?)',
                            (doc_id, user['id'], name, sections['problem'], json.dumps(tree, ensure_ascii=False), 1, time.time()))
@@ -157,13 +173,15 @@ def request(hub, user, body, action):
             for key in ('dataset', 'validation'):
                 if key not in body['sections'] and key in previous_sources:
                     refs = {**refs, key: previous_sources[key]}
-            same = refs == previous_sources and name == row['title'] and sections == previous
+            previous_links = json.loads(row['task_links'])
+            links = task_links(body.get('task_links', previous_links))
+            same = links == previous_links and refs == previous_sources and name == row['title'] and sections == previous
             if revision == row['revision']-1 and same: return {'document': public(row)}
             if revision != row['revision']:
                 raise ContractError('Документ изменён в другой вкладке. Сохраните свой вариант отдельно или загрузите сохранённую версию.', 409)
             if not same:
-                db.execute('UPDATE design_documents SET title=?,sections=?,sources=?,revision=revision+1,updated=? WHERE id=?',
-                           (name, json.dumps(sections, ensure_ascii=False), json.dumps(refs, ensure_ascii=False), time.time(), row['id']))
+                db.execute('UPDATE design_documents SET title=?,sections=?,sources=?,task_links=?,revision=revision+1,updated=? WHERE id=?',
+                           (name, json.dumps(sections, ensure_ascii=False), json.dumps(refs, ensure_ascii=False), json.dumps(links), time.time(), row['id']))
             return {'document': public(owned(db, user, row['id']))}
         if action == 'export': return {'package': snapshot(row)}
         raise ContractError('Маршрут документа не найден.', 404)

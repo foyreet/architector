@@ -21,10 +21,14 @@
     let r;try{r=await fetch('/api/'+(community === true ? 'community/' : typeof community === 'string' ? community + '/' : 'design-documents/')+action,{method:'POST',headers:{'Content-Type':'application/json','X-Architect-Request':'1',...(account?{'X-Architect-Account':account.id}:{})},body:JSON.stringify(body)});}catch{throw Error('Не удалось связаться с сервером. Повторите попытку; введённый текст сохранён в редакторе.');}
     const data=await r.json();if(!r.ok){const e=Error(data.error||'Не удалось выполнить запрос.');e.status=r.status;throw e;}return data;
   }
-  const assistant = window.setupDesignAssistant({fields, api, read:value, changed, getId:()=>doc?.id});
-  function value(){return {sources:assistant.sources(),title:$('title').value,sections:Object.fromEntries(fields.map(([k])=>[k,$('section-'+k).value]))};}
-  function same(a,b){return JSON.stringify(a.sources||{})===JSON.stringify(b.sources||{})&&a.title===b.title&&fields.every(([k])=>a.sections[k]===b.sections[k]);}
-  function controls(){ $('compose-doc').disabled=!!saving||conflicted||blocked;$('add-chat').disabled=!!saving||conflicted||blocked;$('save').disabled=(!dirty&&!!doc?.revision)||!!saving||conflicted||blocked;$('publish').disabled=!!saving||conflicted||blocked;$('conflict').hidden=!conflicted;$('save-status').textContent=doc?(saving?'Сохранение…':dirty?'Есть несохранённые изменения':doc.revision?'Все изменения сохранены':'Новый документ · ещё не сохранён'):''; }
+  const assistant = window.setupDesignAssistant({fields, api, read:value, changed, getId:()=>doc?.id, linksChanged:syncSteps});
+  function syncSteps(links) {
+    $('link-task').textContent = links.tree_id || links.metric_tree_id ? 'Изменить связи задачи' : 'Связать этапы задачи';
+    window.designFlow.documentOpened(doc?.id, Boolean(doc && !doc.revision), links);
+  }
+  function value(){return {task_links:assistant.taskLinks(),sources:assistant.sources(),title:$('title').value,sections:Object.fromEntries(fields.map(([k])=>[k,$('section-'+k).value]))};}
+  function same(a,b){return JSON.stringify(a.task_links||{})===JSON.stringify(b.task_links||{})&&JSON.stringify(a.sources||{})===JSON.stringify(b.sources||{})&&a.title===b.title&&fields.every(([k])=>a.sections[k]===b.sections[k]);}
+  function controls(){ $('link-task').disabled=$('compose-doc').disabled=!!saving||conflicted||blocked;$('add-chat').disabled=!!saving||conflicted||blocked;$('save').disabled=(!dirty&&!!doc?.revision)||!!saving||conflicted||blocked;$('publish').disabled=!!saving||conflicted||blocked;$('conflict').hidden=!conflicted;$('save-status').textContent=doc?(saving?'Сохранение…':dirty?'Есть несохранённые изменения':doc.revision?'Все изменения сохранены':'Новый документ · ещё не сохранён'):''; }
   function cache(){if(!doc||release)return;try{if(dirty)localStorage.setItem(draftKey(),JSON.stringify({...value(),revision:doc.revision}));else localStorage.removeItem(draftKey());}catch{error('Браузер не сохранил резервную копию. Сохраните документ на сервер перед закрытием.');}}
   function changed() {
     for (const key of ['dataset', 'metric_validation', 'validation']) {
@@ -32,6 +36,7 @@
       if (insert) insert.hidden = !!$('section-' + key).value.trim();
     }
     refreshSectionViews();
+    refreshOutline(key => $('section-' + key).value);
     dirty = !same(value(), doc);
     cache();
     controls();
@@ -95,6 +100,40 @@
     return guide;
   }
   const sectionViews = new Map();
+  // Section outline: shows which parts of the document are filled and jumps to them.
+  function renderOutline(read, editable) {
+    const outline = $('doc-outline'), list = document.createElement('ol');
+    outline.replaceChildren(node('p', '', 'outline-count'), list);
+    for (const [key, label] of fields) {
+      const link = node('a', label);
+      link.href = '#doc-section-' + key;
+      link.dataset.key = key;
+      link.append(node('span', '', 'visually-hidden'));
+      link.onclick = event => {
+        event.preventDefault();
+        // The editor's own focus() scrolls to the caret and cancels the smooth scroll.
+        if (editable) sectionViews.get(key)?.editable.focus({preventScroll: true});
+        const smooth = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+        document.getElementById('doc-section-' + key).scrollIntoView({block: 'start', behavior: smooth ? 'smooth' : 'auto'});
+      };
+      const item = node('li', '');
+      item.append(link);
+      list.append(item);
+    }
+    refreshOutline(read);
+  }
+  function refreshOutline(read) {
+    const links = [...$('doc-outline').querySelectorAll('a')];
+    let filled = 0;
+    for (const link of links) {
+      const done = !!String(read(link.dataset.key) || '').trim();
+      filled += done;
+      link.classList.toggle('filled', done);
+      link.lastChild.textContent = done ? ', заполнено' : ', пусто';
+    }
+    const count = $('doc-outline').querySelector('.outline-count');
+    if (count) count.textContent = 'Заполнено: ' + filled + ' из ' + links.length;
+  }
   function refreshSectionViews() {
     for (const view of sectionViews.values()) view.refresh();
   }
@@ -117,7 +156,7 @@
     let syncing = true;
     const editor = new toastui.Editor({
       el: host, initialValue: input.value, initialEditType: 'wysiwyg',
-      hideModeSwitch: true, height: 'auto', minHeight: '320px',
+      hideModeSwitch: true, height: 'auto', minHeight: '240px',
       language: 'ru-RU', usageStatistics: false, autofocus: false,
       toolbarItems: [['heading', 'bold', 'italic', 'strike'], ['quote', 'ul', 'ol', 'task'],
         ['table', 'link'], ['code', 'codeblock']],
@@ -154,7 +193,7 @@
       input.dispatchEvent(new Event('input', {bubbles:true}));
     });
     let rendered = input.value;
-    sectionViews.set(key, {editor, refresh() {
+    sectionViews.set(key, {editor, editable, refresh() {
       if (rendered === input.value || editor.getMarkdown() === input.value) {
         rendered = input.value;
         return;
@@ -175,6 +214,7 @@
     parent.replaceChildren();
     fields.forEach(([key, label], index) => {
       const section = node('section', '', 'doc-section');
+      section.id = 'doc-section-' + key;
       if (editable) {
         const title = node('label', (index + 1) + '. ' + label);
         title.id = 'label-' + key;
@@ -199,12 +239,13 @@
       parent.append(section);
     });
     if (editable) requestAnimationFrame(refreshSectionViews);
+    renderOutline(key => editable ? $('section-' + key).value : data[key], editable);
   }
   function updateURL(values){const url=new URL(location.href);for(const k of ['id','release','new','view'])url.searchParams.delete(k);for(const [k,v]of Object.entries(values))url.searchParams.set(k,v);history.replaceState(null,'',url);}
   async function save(){
     if(saving)return saving;if(!dirty&&doc.revision)return true;if(conflicted||blocked)return false;
     const sent=value();if(!sent.title.trim()){error('Введите название документа.');$('title').focus();return false;}
-    saving=(async()=>{try{const result=await api(doc.revision?'save':'create',{id:doc.id,revision:doc.revision,...sent});doc=result.document;updateURL({id:doc.id});dirty=!same(value(),doc);cache();error();message('Документ сохранён.');return true;}
+    saving=(async()=>{try{const result=await api(doc.revision?'save':'create',{id:doc.id,revision:doc.revision,...sent});doc=result.document;syncSteps(assistant.taskLinks());updateURL({id:doc.id});dirty=!same(value(),doc);cache();error();message('Документ сохранён.');return true;}
       catch(e){if(e.status===409&&e.message.includes('другой вкладке'))conflicted=true;else if(e.status===401||e.status===404||e.status===409)blocked=true;error(e.message);return false;}
       finally{saving=null;controls();}})();controls();return saving;
   }
@@ -232,27 +273,28 @@
           draft.sections.dataset=(draft.sections.dataset+'\n\n'+addition).replace(/^\n+/, '');
         delete draft.sections.data_features;
       }
+      if (draft && !Object.hasOwn(draft,'task_links')) draft.task_links=document.task_links || {};
       if(draft&&typeof draft.title==='string'&&fields.every(([k])=>typeof draft.sections?.[k]==='string')){
       if(same(draft,document))localStorage.removeItem(draftKey());else{content=draft;dirty=true;conflicted=draft.revision!==document.revision;message('Восстановлены несохранённые изменения из этого браузера.');}
     }}catch{error('Не удалось прочитать локальный черновик.');}}
     $('auth').hidden=true;$('list').hidden=true;$('editor').hidden=false;$('title-label').hidden=false;$('title').hidden=false;$('title').value=content.title;$('read-title').hidden=true;
     $('save').hidden=false;$('publish').hidden=false;$('copy').hidden=true;$('publication-info').hidden=!doc.source_release;
     $('publication-info').textContent=doc.source_release?'Личная копия публикации. Ваши изменения не затрагивают оригинал.':'';
-    renderSections($('sections'),content.sections,true);$('doc-assist').hidden=false;assistant.load(content.sources);updateURL(doc.revision?{id:doc.id}:{new:doc.id});$('back-list').textContent='← Мои документы';controls();window.scrollTo(0,0);
+    renderSections($('sections'),content.sections,true);$('doc-assist').hidden=false;assistant.load(content.sources,content.task_links);syncSteps(assistant.taskLinks());updateURL(doc.revision?{id:doc.id}:{new:doc.id});$('back-list').textContent='← Мои документы';controls();window.scrollTo(0,0);
   }
   async function open(id){const result=await api('get',{id});openEditor(result.document);}
   function retryId(kind){const k='architect.design-pending.'+account.id+'.'+kind;let id;try{id=sessionStorage.getItem(k);}catch{}id ||= crypto.randomUUID();try{sessionStorage.setItem(k,id);}catch{}return {id,clear(){try{sessionStorage.removeItem(k);}catch{}}};}
-  async function create(id=crypto.randomUUID()){
-    openEditor({id,title:'Новый дизайн-документ',sections:Object.fromEntries(fields.map(([k])=>[k,''])),revision:0});$('title').focus();$('title').select();
+  async function create(id=crypto.randomUUID(), taskLinks={}){
+    openEditor({id,task_links:taskLinks,title:'Новый дизайн-документ',sections:Object.fromEntries(fields.map(([k])=>[k,''])),revision:0});$('title').focus();$('title').select();
   }
   async function list(next='mine'){
     if(!await leaveEditor())return;const result=next==='mine'?await api('list'):await api('catalog',{kind:'design_document',search:$('search').value},true);
     discardDraft();
-    mode=next;doc=null;release=null;dirty=false;error();message();$('auth').hidden=true;$('editor').hidden=true;$('list').hidden=false;$('search-form').hidden=mode!=='catalog';
+    mode=next;doc=null;release=null;syncSteps({});dirty=false;error();message();$('auth').hidden=true;$('editor').hidden=true;$('list').hidden=false;$('search-form').hidden=mode!=='catalog';
     $('mine').setAttribute('aria-current',mode==='mine'?'page':'false');$('catalog').setAttribute('aria-current',mode==='catalog'?'page':'false');
     updateURL({view:mode});$('documents').replaceChildren();
     const rows=mode==='mine'?result.documents:result.releases;
-    if(!rows.length)$('documents').append(node('p',mode==='mine'?'У вас пока нет дизайн-документов.':$('search').value?'По этому запросу документов нет.':'В сообществе пока нет опубликованных дизайн-документов.','muted'));
+    if(!rows.length)$('documents').append(node('p',mode==='mine'?'У вас пока нет дизайн-документов. Создайте пустой документ или начните с шага «Проблемы»: черновик соберётся из деревьев.':$('search').value?'По этому запросу документов нет.':'В сообществе пока нет опубликованных дизайн-документов.','muted'));
     for(const row of rows){const item=node('div','','document-item'),button=node('button','','document-row');button.append(node('strong',row.title||row.name));if(mode==='catalog')button.append(node('small',`@${row.username} · версия ${row.number}`));button.onclick=()=>task(()=>mode==='mine'?open(row.id):openRelease(row.id));item.append(button);
       if(mode==='mine'){const remove=node('button','Удалить','delete-document');remove.setAttribute('aria-label','Удалить документ «'+row.title+'»');remove.onclick=()=>task(async()=>{
         if(!confirm('Удалить документ «'+row.title+'»? Это действие нельзя отменить.'))return;
@@ -293,7 +335,14 @@
   window.addEventListener('beforeunload',e=>{if(dirty){cache();e.preventDefault();e.returnValue='';}});
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'&&doc){e.preventDefault();task(save);}});
   async function start(){const session=await api('session',{},true);account=session.user;$('register').hidden=session.registration_open===false||!session.enabled;if(!account){$('auth').hidden=false;return;}$('account').textContent='На этом компьютере';
-    if(query.has('release'))await openRelease(query.get('release'));else if(query.has('id'))await open(query.get('id'));else if(query.has('new'))await create(/^[a-f0-9-]{36}$/.test(query.get('new'))?query.get('new'):undefined);else await list(query.get('view')==='catalog'?'catalog':'mine');}
+    if(query.has('release'))await openRelease(query.get('release'));else if(query.has('id'))await open(query.get('id'));else if(query.has('new')){
+      const links = {};
+      for (const [param,key] of [['tree','tree_id'],['metric','metric_tree_id']]) {
+        const id = query.get(param);
+        if (/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(id)) links[key] = id;
+      }
+      await create(/^[a-f0-9-]{36}$/.test(query.get('new'))?query.get('new'):undefined, links);
+    }else await list(query.get('view')==='catalog'?'catalog':'mine');}
   async function login(register){try{await api(register?'register':'login',{username:$('username').value,password:$('password').value},true);$('password').value='';await start();}catch(e){message(e.message);}}
   $('login-form').onsubmit=e=>{e.preventDefault();login(false);};$('register').onclick=()=>{if($('login-form').reportValidity())login(true);};
   start().catch(e=>{message(e.message);if(account){$('list').hidden=false;$('documents').append(node('p','Можно открыть свои документы или создать новый.','muted'));}});
