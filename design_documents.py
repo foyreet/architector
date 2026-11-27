@@ -118,10 +118,14 @@ def tree_nodes(encoded):
         pending.extend(node['children'])
 
 
+def standalone_id(owner, kind, key):
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f'architector/task/{owner}/{kind}/{key}'))
+
+
 def document_overview(db, owner):
     db.execute('BEGIN')
     problems = {}
-    for row in db.execute("""SELECT p.id, p.title, p.updated, p.tree,
+    for row in db.execute("""SELECT p.id, p.title, p.updated, p.tree, p.revision, coalesce(s.version, 0) AS case_version,
                                     coalesce(json_array_length(s.content, '$.options'), 0) AS cases
                              FROM problem_spaces p LEFT JOIN solution_spaces s ON s.tree_id=p.id
                              WHERE p.owner=?""", (owner,)):
@@ -130,12 +134,13 @@ def document_overview(db, owner):
             questions += 1
             answered += bool(node['answer'].strip())
         problems[row['id']] = dict(id=row['id'], title=row['title'], updated=row['updated'],
-                                   answered=answered, questions=questions, cases=row['cases'])
+                                   answered=answered, questions=questions, cases=row['cases'],
+                                   revision=row['revision'], case_version=row['case_version'])
 
     metrics = {}
-    for row in db.execute('SELECT id,title,updated,tree FROM metric_trees WHERE owner=?', (owner,)):
+    for row in db.execute('SELECT id,title,updated,tree,revision FROM metric_trees WHERE owner=?', (owner,)):
         metrics[row['id']] = dict(id=row['id'], title=row['title'], updated=row['updated'],
-                                  count=sum(1 for _ in tree_nodes(row['tree'])))
+                                  count=sum(1 for _ in tree_nodes(row['tree'])), revision=row['revision'])
 
     documents, used_problems, used_metrics = [], set(), set()
     for row in db.execute("""SELECT id,title,revision,updated,sections,task_links FROM design_documents
@@ -162,20 +167,79 @@ def document_overview(db, owner):
             used_problems.add(draft['tree_id'])
             used_metrics.add(draft['metric_tree_id'])
 
-    def standalone_id(kind, key):
-        return str(uuid.uuid5(uuid.NAMESPACE_URL, f'architector/task/{owner}/{kind}/{key}'))
+    for row in db.execute('SELECT kind,tree_id FROM dismissed_tree_tasks WHERE owner=?', (owner,)):
+        (used_problems if row['kind'] == 'problem' else used_metrics).add(row['tree_id'])
 
     for kind, collection, used in [('problem', problems, used_problems), ('metric', metrics, used_metrics)]:
         for key, member in collection.items():
             if key not in used:
-                unlinked.append({'draft_id': standalone_id(kind, key), 'title': member['title'],
+                unlinked.append({'draft_id': standalone_id(owner, kind, key), 'title': member['title'],
                                  'updated': member['updated'], kind: member})
     unlinked.sort(key=lambda row: row['updated'], reverse=True)
     return {'documents': documents, 'unlinked': unlinked}
 
 
+def delete_draft_task(db, owner, body):
+    task_id = identity(body.get('id'))
+    members = body.get('members')
+    if not isinstance(members, dict) or not members or members.keys() - {'problem', 'metric'}:
+        raise ContractError('Укажите сохранённые деревья задачи.')
+    db.execute('BEGIN IMMEDIATE')
+    changed = 'Задача изменилась. Обновите список перед удалением.'
+    if db.execute('SELECT 1 FROM design_documents WHERE owner=? AND id=?', (owner, task_id)).fetchone():
+        raise ContractError(changed, 409)
+    draft = db.execute('SELECT * FROM design_task_drafts WHERE owner=? AND id=?', (owner, task_id)).fetchone()
+    removed = {}
+    for kind, table, key in [('problem', 'problem_spaces', 'tree_id'), ('metric', 'metric_trees', 'metric_tree_id')]:
+        if kind not in members:
+            if draft and draft[key]:
+                raise ContractError(changed, 409)
+            continue
+        member = members[kind]
+        if not isinstance(member, dict) or type(member.get('revision')) is not int:
+            raise ContractError('Укажите версию дерева задачи.')
+        tree_id = identity(member.get('id'))
+        if draft:
+            if draft[key] != tree_id:
+                raise ContractError(changed, 409)
+        elif len(members) != 1 or standalone_id(owner, kind, tree_id) != task_id:
+            raise ContractError('Задача не найдена.', 404)
+        row = db.execute(f'SELECT revision FROM {table} WHERE owner=? AND id=?', (owner, tree_id)).fetchone()
+        if not row or row['revision'] != member.get('revision'):
+            raise ContractError(changed, 409)
+        # A saved document or another task can use the same tree and its cases.
+        shared = db.execute(f"""SELECT 1 FROM design_task_drafts WHERE owner=? AND id<>? AND {key}=?
+                                UNION ALL SELECT 1 FROM design_documents WHERE owner=? AND json_extract(task_links, '$.{key}')=?
+                                LIMIT 1""", (owner, task_id, tree_id, owner, tree_id)).fetchone()
+        if shared:
+            if not draft:
+                raise ContractError(changed, 409)
+            continue
+        # Section sources have their own links, even after the task's selected trees change.
+        source_path = '$.tree_id' if kind == 'problem' else '$.metric_tree.id'
+        cited = db.execute('''SELECT 1 FROM design_documents d, json_each(d.sources) ref
+                              WHERE d.owner=? AND json_extract(ref.value, ?)=? LIMIT 1''',
+                           (owner, source_path, tree_id)).fetchone()
+        if cited:
+            db.execute('INSERT OR IGNORE INTO dismissed_tree_tasks(owner,kind,tree_id) VALUES(?,?,?)',
+                       (owner, kind, tree_id))
+            continue
+        if kind == 'problem':
+            cases = db.execute('SELECT version FROM solution_spaces WHERE tree_id=?', (tree_id,)).fetchone()
+            if (cases['version'] if cases else 0) != member.get('case_version'):
+                raise ContractError(changed, 409)
+            db.execute('DELETE FROM solution_spaces WHERE tree_id=?', (tree_id,))
+        db.execute(f'DELETE FROM {table} WHERE owner=? AND id=?', (owner, tree_id))
+        removed[kind] = tree_id
+    db.execute('DELETE FROM design_task_drafts WHERE owner=? AND id=?', (owner, task_id))
+    return {'deleted': task_id, 'removed_trees': removed}
+
+
 def request(hub, user, body, action):
     if user is None: raise ContractError('Войдите в аккаунт Архитектора, чтобы работать с документами.', 401)
+    if action == 'delete-draft':
+        with hub.db() as db:
+            return delete_draft_task(db, user['id'], body)
     if action in ('method', 'save-method', 'compose', 'review'):
         from design_assistant import request as assist
         return assist(hub, user, body, action)

@@ -337,22 +337,37 @@
     item.refreshVisit = resume;
     heading.append(title);
     item.append(heading);
-    if (row.id) {
-      const remove = node('button', 'Удалить', 'delete-document');
-      remove.setAttribute('aria-label', 'Удалить документ «' + row.title + '»');
-      remove.onclick = () => task(async () => {
-        if (!confirm('Удалить документ «' + row.title + '»? Это действие нельзя отменить.')) return;
-        remove.disabled = true;
+    const remove = node('button', 'Удалить', 'delete-document');
+    const label = (row.id ? 'Удалить документ «' : 'Удалить задачу «') + row.title + '»';
+    remove.setAttribute('aria-label', label);
+    remove.onclick = () => task(async () => {
+      const details = row.id ? 'Это действие нельзя отменить.' :
+        'Деревья и кейсы, которые используются только в этой задаче, будут удалены.';
+      if (!confirm(label + '? ' + details)) return;
+      remove.disabled = true;
+      const index = [...item.parentElement.children].indexOf(item);
+      try {
+        const members = {};
+        if (problem) members.problem = {id:problem.id, revision:problem.revision, case_version:problem.case_version};
+        if (metric) members.metric = {id:metric.id, revision:metric.revision};
+        const result = row.id ? await api('delete', {id:row.id, revision:row.revision}) :
+          await api('delete-draft', {id:row.draft_id, members});
         try {
-          await api('delete', {id:row.id, revision:row.revision});
-          try { localStorage.removeItem('architect.design-document.' + account.id + '.' + row.id); } catch {}
-          await list();
-          message('Документ удалён.');
-          $('create').focus();
-        } finally { remove.disabled = false; }
-      });
-      item.append(remove);
-    }
+          localStorage.removeItem('architect.design-document.' + account.id + '.' + result.deleted);
+          localStorage.removeItem(window.designFlow.historyPrefix + result.deleted);
+          for (const [kind, id] of Object.entries(result.removed_trees || {})) {
+            const prefix = kind === 'problem' ? 'architect.problem-space' : 'architect.metric-tree';
+            localStorage.removeItem(prefix + '.draft.' + id);
+            if (localStorage.getItem(prefix + '.last') === id) localStorage.removeItem(prefix + '.last');
+          }
+        } catch {}
+        await list();
+        message(row.id ? 'Документ удалён.' : 'Задача удалена.');
+        const links = $('documents').querySelectorAll('.document-row');
+        (links[Math.min(index, links.length - 1)] || $('create')).focus();
+      } finally { remove.disabled = false; }
+    });
+    item.append(remove);
 
     const steps = node('ol', '', 'task-steps');
     steps.setAttribute('aria-label', 'Этапы задачи «' + row.title + '»');

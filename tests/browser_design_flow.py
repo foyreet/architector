@@ -355,6 +355,22 @@ def main():
                         page.locator('#save-method').click()
                         expect(page.locator('#method-dialog')).to_be_hidden()
                         page.goto(origin + '/design-docs.html?project=' + project)
+                    # Delete one of two standalone tasks with the same title, by its own card.
+                    twins = [str(uuid.uuid4()) for _ in range(2)]
+                    for twin in twins:
+                        api('problem-spaces/save', {'id':twin, 'title':'Новое дерево', 'revision':0, 'problem_tree':[]})
+                    page.reload()
+                    cards = [page.locator('.task-row').filter(has=page.locator(f'.task-step[href*="{twin}"]')) for twin in twins]
+                    remove = cards[0].get_by_role('button', name='Удалить задачу «Новое дерево»')
+                    page.once('dialog', lambda dialog: dialog.dismiss())
+                    remove.click()
+                    expect(remove).to_be_visible()
+                    page.once('dialog', lambda dialog: dialog.accept())
+                    remove.click()
+                    expect(page.locator('#message')).to_have_text('Задача удалена.')
+                    page.reload()
+                    expect(cards[1]).to_be_visible()
+                    expect(cards[0]).to_have_count(0)
                     assert not errors, errors
                     print(width, 'PASS design flow', flush=True)
                     context.close()
