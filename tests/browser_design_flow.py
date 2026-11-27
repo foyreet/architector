@@ -1,6 +1,7 @@
 """Steps between problem, solution, metric trees and the design document with isolated data."""
 from pathlib import Path
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -170,6 +171,37 @@ def main():
                         page.wait_for_url('**/design-docs.html**' if step == 'document' else
                             '**/' + {'metrics':'metric-tree','problems':'problem-space','solutions':'solution-space'}[step] + '.html**')
                         assert parse_qs(urlsplit(page.url).query)['id'] == [identity]
+                    # The overview opens the same four stages, with the actual saved counts.
+                    page.locator('#back-list').click()
+                    saved = page.locator('#documents .task-row').filter(
+                        has=page.locator(f'a[href*="{document_id}"]'))
+                    expect(saved.locator('.task-step')).to_have_count(4)
+                    expect(saved.locator('.task-step').nth(0)).to_contain_text('1 из 2 ответов')
+                    expect(saved.locator('.task-step').nth(1)).to_contain_text('1 кейс')
+                    expect(saved.locator('.task-step').nth(2)).to_contain_text('0 показателей')
+                    expect(saved.locator('.task-step').nth(3)).to_contain_text('2 из 6 разделов')
+                    expect(page.locator('#design-flow')).to_be_hidden()
+                    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+                    saved.locator('.task-step').nth(1).click()
+                    expect(page.locator('#title')).to_have_text('Дерево шагов ' + str(width))
+
+                    # A standalone metric becomes part of a task only after its document is saved.
+                    standalone = str(uuid.uuid4())
+                    api('metric-trees/save', {'id':standalone, 'title':'Отдельная метрика', 'goal':'Рост', 'metrics':[], 'revision':0})
+                    page.goto(origin + '/design-docs.html?project=' + project)
+                    orphan = page.locator('#unlinked .task-row').filter(has_text='Отдельная метрика')
+                    orphan.get_by_role('link', name='Документ не создан').click()
+                    expect(page.locator('#design-flow a[data-step=metrics]')).to_have_attribute(
+                        'href', re.compile(standalone))
+                    page.reload()
+                    page.locator('#save').click()
+                    expect(page.locator('#save-status')).to_have_text('Все изменения сохранены')
+                    new_id = parse_qs(urlsplit(page.url).query)['id'][0]
+                    assert api('design-documents/get', {'id':new_id})['document']['task_links'] == {'metric_tree_id':standalone}
+                    page.locator('#back-list').click()
+                    expect(orphan).to_have_count(0)
+                    assert project in page.locator('#back-schema').get_attribute('href')
+                    assert not errors, errors
                     print(width, 'PASS design flow', flush=True)
                     context.close()
                 browser.close()

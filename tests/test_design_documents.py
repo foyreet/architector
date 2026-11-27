@@ -37,6 +37,31 @@ class Documents(unittest.TestCase):
         self.save(sections={k:'Текст\n😀' if k=='problem' else '' for k in docs.SECTIONS})
         self.hub=community.Community(self.temp.name)
         self.assertEqual(self.call('get',self.doc)['document'],self.doc)
+    def test_progress_uses_owned_saved_trees_and_keeps_shared_tasks_separate(self):
+        from problem_spaces import request as problem_request
+        tree_id = str(uuid.uuid4())
+        tree = {'id': tree_id, 'title': 'Задача', 'problem': '', 'revision': 0, 'problem_tree': [
+            {'question': 'Цель?', 'answer': 'Рост', 'children': [
+                {'question': 'Когда?', 'answer': '  ', 'children': []}]}]}
+        problem_request(self.hub, self.a, tree, 'save')
+        foreign = str(uuid.uuid4())
+        problem_request(self.hub, self.b, {**tree, 'id': foreign}, 'save')
+        def overview():
+            return self.call('list', {'include_progress': True})
+        self.assertEqual([row['problem']['id'] for row in overview()['unlinked']], [tree_id])
+        self.save(task_links={'tree_id': tree_id, 'metric_tree_id': str(uuid.uuid4())})
+        second = self.call('create', {'id': str(uuid.uuid4()), 'task_links': {'tree_id': tree_id}})
+        result = overview()
+        self.assertFalse(result['unlinked'])
+        self.assertEqual(len(result['documents']), 2)
+        for row in result['documents']:
+            self.assertEqual((row['problem']['answered'], row['problem']['questions']), (1, 2))
+            self.assertEqual(row['missing_metric'], row['id'] == self.doc['id'])
+        self.call('delete', second['document'])
+        self.assertFalse(overview()['unlinked'])
+        self.call('delete', self.doc)
+        self.assertEqual([row['problem']['id'] for row in overview()['unlinked']], [tree_id])
+
     def test_validation(self):
         for changes in ({'title':''},{'sections':{}},{'sections':{k:0 for k in docs.SECTIONS}}):
             with self.subTest(changes=list(changes)),self.assertRaises(ContractError):self.call('save',{**self.doc,**changes})
