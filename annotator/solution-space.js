@@ -168,7 +168,7 @@
     window.designFlow.remember('solutions');
     $('editor').hidden = false;
     source = data.source; version = data.version; working = data.saved;
-    $('title').textContent = source.title; $('problem').textContent = source.problem;
+    $('title').textContent = taskTitle || source.title; $('problem').textContent = source.problem;
     for (const a of source.answers) $('answers').append(element('strong', a.path.join(' → ')),element('p', a.answer));
     if (working) { cards($('options'), working, true); $('workspace').hidden = false; }
     if (!source.answers.length) generateNote('Запишите хотя бы один ответ в дереве, чтобы построить кейсы.');
@@ -222,5 +222,15 @@
     await library();
     status('Это дерево ещё не сохранено. Выберите сохранённое дерево или вернитесь к вопросам.');
   }
-  (id ? start().catch(fallback) : library()).catch(e => status(e.message));
+  let taskTitle;
+  async function openStage() {
+    taskTitle = await window.designFlow.taskTitle();
+    if (taskTitle) {
+      $('title').textContent = taskTitle;
+      document.title = taskTitle + ' · ' + document.title;
+    }
+    if (id) await start().catch(fallback);
+    else await library();
+  }
+  openStage().catch(e => status(e.message));
 })();

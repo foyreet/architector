@@ -28,6 +28,15 @@ window.designFlow = (() => {
     if (task.doc && !task.draft && !id && step !== 'document') next.searchParams.set('attach', '1');
     return next;
   }
+  async function taskTitle(task = state) {
+    if (!task.doc) return '';
+    const response = await fetch('/api/design-documents/task-title', {method:'POST',
+      headers:{'Content-Type':'application/json', 'X-Architect-Request':'1'},
+      body:JSON.stringify({id:task.doc, tree_id:task.tree, metric_tree_id:task.metric})});
+    const result = await response.json();
+    if (!response.ok) throw Error(result.error || 'Не удалось загрузить название задачи.');
+    return result.title || '';
+  }
   function refresh() {
     for (const a of nav.querySelectorAll('a[data-step]')) a.href = url(a.dataset.step);
   }
@@ -85,5 +94,5 @@ window.designFlow = (() => {
     settings.href = target;
   }
   refresh();
-  return {url, treeOpened, documentOpened, lastVisit, remember, historyPrefix};
+  return {url, taskTitle, treeOpened, documentOpened, lastVisit, remember, historyPrefix};
 })();

@@ -41,11 +41,20 @@ def main():
                     # Problem tree: the empty canvas explains the method, answers are counted.
                     page.goto(origin + '/design-docs.html?project=' + project)
                     page.locator('#create').click()
+                    page.locator('#task-name').fill('   ')
+                    page.locator('#task-name').press('Enter')
+                    expect(page.locator('#create-task-dialog')).to_be_visible()
+                    page.keyboard.press('Escape')
+                    expect(page.locator('#create')).to_be_focused()
+                    page.locator('#create').click()
+                    page.locator('#task-name').fill('Дерево шагов ' + str(width))
+                    page.locator('#task-name').press('Enter')
                     page.wait_for_url('**/problem-space.html**')
                     task_id = parse_qs(urlsplit(page.url).query)['doc'][0]
                     expect(page.locator('#design-flow [aria-current=step]')).to_have_text('1Проблемы')
                     expect(page.locator('.tree-empty')).to_contain_text('Общие вопросы')
-                    page.locator('#title').fill('Дерево шагов ' + str(width))
+                    expect(page.locator('#title')).to_be_hidden()
+                    expect(page.locator('#tree-origin')).to_contain_text('Дерево шагов ' + str(width))
                     page.locator('#add-root').click()
                     expect(page.locator('.tree-empty')).to_have_count(0)
                     page.get_by_label('Вопрос', exact=True).fill('Зачем бизнесу прогноз?')
@@ -133,7 +142,8 @@ def main():
 
                     # All four steps belong to this new task. Save a metric while leaving step three.
                     page.locator('#design-flow a[data-step=metrics]').click()
-                    page.locator('#title').fill('Метрики задачи ' + str(width))
+                    expect(page.locator('#title')).to_be_hidden()
+                    expect(page.locator('#tree-origin')).to_contain_text('Дерево шагов ' + str(width))
                     page.locator('#add-root').click()
                     metric_id = parse_qs(urlsplit(page.url).query)['id'][0]
                     page.locator('#design-flow a[data-step=document]').click()
@@ -150,6 +160,7 @@ def main():
                     expect(progress.locator('.task-step').nth(0)).to_have_attribute('href', re.compile(tree))
                     expect(progress.locator('.document-row')).to_have_attribute('href', re.compile('design-docs.html'))
                     hub.close()
+                    expect(page.locator('#title')).to_have_value('Дерево шагов ' + str(width))
                     page.locator('#title').fill('Документ с первого этапа')
                     page.locator('#save').click()
                     expect(page.locator('#save-status')).to_have_text('Все изменения сохранены')
@@ -256,7 +267,7 @@ def main():
                     expect(page.locator('#design-flow')).to_be_hidden()
                     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
                     saved.locator('.task-step').nth(1).click()
-                    expect(page.locator('#title')).to_have_text('Дерево шагов ' + str(width))
+                    expect(page.locator('#title')).to_have_text('Новый дизайн-документ')
 
                     # A saved document with no links opens its own stages instead of the document editor.
                     sections = api('design-documents/get', {'id':document_id})['document']['sections']
@@ -278,19 +289,19 @@ def main():
                     page.goto(hub_url)
                     row.locator('.task-step').nth(1).click()
                     page.get_by_role('button', name=re.compile('Дерево шагов ' + str(width))).click()
-                    expect(page.locator('#title')).to_have_text('Дерево шагов ' + str(width))
+                    expect(page.locator('#title')).to_have_text(blank['title'])
                     page.goto(hub_url)
                     row.locator('.task-step').nth(0).click()
-                    expect(page.locator('#title')).to_have_value('Дерево шагов ' + str(width))
+                    expect(page.locator('#title')).to_have_value(blank['title'])
                     page.goto(hub_url)
                     row.locator('.task-step').nth(2).click()
-                    page.locator('#title').fill('Метрики этого документа')
+                    expect(page.locator('#tree-origin')).to_contain_text(blank['title'])
                     page.locator('#save').click()
                     expect(page.locator('#status')).to_have_text('Сохранено')
                     new_metric = parse_qs(urlsplit(page.url).query)['id'][0]
                     page.goto(hub_url)
                     row.locator('.task-step').nth(2).click()
-                    expect(page.locator('#title')).to_have_value('Метрики этого документа')
+                    expect(page.locator('#title')).to_have_value(blank['title'])
                     saved_doc = api('design-documents/get', blank)['document']
                     assert saved_doc['task_links'] == {'metric_tree_id':new_metric, 'tree_id':tree}
                     assert saved_doc['sections'] == blank['sections']
@@ -298,12 +309,12 @@ def main():
                     # The two tasks share a problem tree and resume at different stages.
                     page.goto(hub_url)
                     saved.locator('.document-row').click()
-                    expect(page.locator('#title')).to_have_text('Дерево шагов ' + str(width))
+                    expect(page.locator('#title')).to_have_text('Новый дизайн-документ')
                     assert parse_qs(urlsplit(page.url).query)['doc'] == [document_id]
                     page.goto(hub_url)
                     page.reload()
                     row.locator('.document-row').click()
-                    expect(page.locator('#title')).to_have_value('Метрики этого документа')
+                    expect(page.locator('#title')).to_have_value(blank['title'])
                     assert parse_qs(urlsplit(page.url).query)['doc'] == [blank['id']]
 
                     # A standalone metric becomes part of a task only after its document is saved.

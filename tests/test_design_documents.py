@@ -121,6 +121,24 @@ class Documents(unittest.TestCase):
         self.assertFalse(self.call('list', {'include_progress': True})['unlinked'])
         self.assertEqual(problem(self.hub, self.a, {'id': tree}, 'get')['title'], 'Источник')
 
+    def test_named_task_exists_before_its_stages(self):
+        task_id = str(uuid.uuid4())
+        with self.assertRaises(ContractError):
+            self.call('create-task', {'id': task_id, 'title': '  '})
+        task = {'id': task_id, 'title': '  Прогноз продаж  '}
+        for _ in range(2):
+            self.assertEqual(self.call('create-task', task)['title'], 'Прогноз продаж')
+        row, = self.call('list', {'include_progress': True})['unlinked']
+        self.assertEqual((row['draft_id'], row['title'], row['problem'], row['metric']),
+                         (task_id, 'Прогноз продаж', None, None))
+        self.assertIsNone(self.call('task-title', task, self.b)['title'])
+        self.assertEqual(self.call('task-title', task)['title'], row['title'])
+        document = self.call('create', {'id': task_id})['document']
+        self.assertEqual(document['title'], row['title'])
+        self.call('save', {**document, 'title': 'Обновлённое имя'})
+        self.assertEqual(self.call('task-title', task)['title'], 'Обновлённое имя')
+        self.assertFalse(self.call('list', {'include_progress': True})['unlinked'])
+
     def test_validation(self):
         for changes in ({'title':''},{'sections':{}},{'sections':{k:0 for k in docs.SECTIONS}}):
             with self.subTest(changes=list(changes)),self.assertRaises(ContractError):self.call('save',{**self.doc,**changes})

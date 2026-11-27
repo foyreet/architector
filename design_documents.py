@@ -161,9 +161,10 @@ def document_overview(db, owner):
         problem = problems.get(draft['tree_id'])
         metric = metrics.get(draft['metric_tree_id'])
         members = [member for member in (problem, metric) if member]
-        if members:
-            unlinked.append(dict(draft_id=draft['id'], title=members[0]['title'],
-                                 updated=max(member['updated'] for member in members), problem=problem, metric=metric))
+        if draft['title'] or members:
+            unlinked.append(dict(draft_id=draft['id'], title=draft['title'] or members[0]['title'],
+                                 updated=max((m['updated'] for m in members), default=draft['created']),
+                                 problem=problem, metric=metric))
             used_problems.add(draft['tree_id'])
             used_metrics.add(draft['metric_tree_id'])
 
@@ -182,13 +183,15 @@ def document_overview(db, owner):
 def delete_draft_task(db, owner, body):
     task_id = identity(body.get('id'))
     members = body.get('members')
-    if not isinstance(members, dict) or not members or members.keys() - {'problem', 'metric'}:
+    if not isinstance(members, dict) or members.keys() - {'problem', 'metric'}:
         raise ContractError('Укажите сохранённые деревья задачи.')
     db.execute('BEGIN IMMEDIATE')
     changed = 'Задача изменилась. Обновите список перед удалением.'
     if db.execute('SELECT 1 FROM design_documents WHERE owner=? AND id=?', (owner, task_id)).fetchone():
         raise ContractError(changed, 409)
     draft = db.execute('SELECT * FROM design_task_drafts WHERE owner=? AND id=?', (owner, task_id)).fetchone()
+    if not members and not draft:
+        raise ContractError('Задача не найдена.', 404)
     removed = {}
     for kind, table, key in [('problem', 'problem_spaces', 'tree_id'), ('metric', 'metric_trees', 'metric_tree_id')]:
         if kind not in members:
@@ -237,6 +240,29 @@ def delete_draft_task(db, owner, body):
 
 def request(hub, user, body, action):
     if user is None: raise ContractError('Войдите в аккаунт Архитектора, чтобы работать с документами.', 401)
+    if action in ('create-task', 'task-title'):
+        owner, task_id = user['id'], identity(body.get('id'))
+        with hub.db() as db:
+            db.execute('BEGIN IMMEDIATE' if action == 'create-task' else 'BEGIN')
+            document = db.execute('SELECT title FROM design_documents WHERE owner=? AND id=?', (owner, task_id)).fetchone()
+            if document:
+                return {'title': document['title']}
+            if action == 'create-task':
+                title = body.get('title')
+                if not isinstance(title, str) or not title.strip():
+                    raise ContractError('Введите название задачи.')
+                db.execute('INSERT INTO design_task_drafts(owner,id,title,created) VALUES(?,?,?,?) ON CONFLICT(owner,id) DO NOTHING',
+                           (owner, task_id, title.strip(), time.time()))
+            draft = db.execute('SELECT * FROM design_task_drafts WHERE owner=? AND id=?', (owner, task_id)).fetchone()
+            if draft and draft['title']:
+                return {'title': draft['title']}
+            for kind, table, key in [('problem', 'problem_spaces', 'tree_id'), ('metric', 'metric_trees', 'metric_tree_id')]:
+                tree = draft[key] if draft else body.get(key)
+                if tree and (draft or standalone_id(owner, kind, tree) == task_id):
+                    source = db.execute(f'SELECT title FROM {table} WHERE owner=? AND id=?', (owner, tree)).fetchone()
+                    if source:
+                        return {'title': source['title']}
+            return {'title': None}
     if action == 'delete-draft':
         with hub.db() as db:
             return delete_draft_task(db, user['id'], body)
@@ -271,13 +297,15 @@ def request(hub, user, body, action):
                 if previous['owner'] != user['id'] or previous['source_release'] != source:
                     raise ContractError('Идентификатор документа уже используется.', 409)
                 return {'document': public(previous)}
+            draft = db.execute('SELECT * FROM design_task_drafts WHERE owner=? AND id=?', (user['id'], doc_id)).fetchone()
+            if action == 'create' and 'title' not in body and draft and draft['title']:
+                name = draft['title']
             from problem_spaces import problem_tree
             tree = problem_tree((package if action == 'import' else body).get('problem_tree', []))
             db.execute('INSERT INTO design_documents(id,owner,title,sections,revision,updated,source_release,problem_tree) VALUES(?,?,?,?,?,?,?,?)',
                        (doc_id, user['id'], name, json.dumps(sections, ensure_ascii=False), 1, time.time(), source, json.dumps(tree, ensure_ascii=False)))
             refs = sources((package if action == 'import' else body).get('sources', {}))
             links = task_links((package if action == 'import' else body).get('task_links', {}))
-            draft = db.execute('SELECT * FROM design_task_drafts WHERE owner=? AND id=?', (user['id'], doc_id)).fetchone()
             if draft:
                 initial = task_links(body.get('initial_task_links', {}))
                 for key in ('tree_id', 'metric_tree_id'):

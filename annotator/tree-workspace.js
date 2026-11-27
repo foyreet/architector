@@ -9,6 +9,8 @@
   const url = new URL(location.href);
   const project = url.searchParams.get('project');
   if (project) $('back-schema').href += '?project=' + encodeURIComponent(project);
+  const stageTitle = document.title;
+  let taskTitle, resourceTitle;
   let id, revision, dirty = false, saving = false, conflict = false;
   const key = () => space + '.draft.' + id;
   const status = message => { $('status').textContent = message; };
@@ -52,9 +54,9 @@
     revision = record.revision;
     conflict = !!draft && draft.revision !== revision;
     const data = draft || record;
-    $('title').value = data.title;
+    resourceTitle = record.title;
     $('formulation').value = data[goalKey];
-    tree.load(data[nodesKey]);
+
     dirty = !!draft;
     $('save').textContent = conflict ? 'Сохранить копию' : 'Сохранить';
     status(conflict ? 'Дерево изменилось в другой вкладке' : dirty ? 'Восстановлен черновик' : revision ? 'Сохранено' : '');
@@ -62,6 +64,13 @@
     url.searchParams.delete('new');
     url.searchParams.set('id', id);
     syncNavigation();
+    const inTask = url.searchParams.has('doc');
+    $('tree-name-label').hidden = inTask;
+    $('root-task-title').textContent = inTask ? taskTitle : '';
+    $('root-task-title').hidden = !inTask || !taskTitle;
+    $('title').value = (inTask && taskTitle) || data.title;
+    document.title = inTask && taskTitle ? taskTitle + ' · ' + stageTitle : stageTitle;
+    tree.load(data[nodesKey]);
   }
   const fresh = () => ({id: crypto.randomUUID(), title: 'Новое дерево', [goalKey]: '', [nodesKey]: [], revision: 0});
   async function restore(treeId) {
@@ -88,7 +97,8 @@
     $('save').disabled = $('library').disabled = true;
     const previousKey = key();
     const dest = conflict ? crypto.randomUUID() : id;
-    const sent = JSON.stringify(value());
+    const current = value();
+    const sent = JSON.stringify(current);
     const attach = {};
     if (url.searchParams.has('attach')) attach.doc = url.searchParams.get('doc');
     if (url.searchParams.has('draft') && !conflict) {
@@ -98,8 +108,10 @@
     try {
       const result = attach.doc && !dirty && revision
         ? await api('attach', {id:dest, ...attach})
-        : await api('save', {...JSON.parse(sent), id:dest, revision:conflict ? 0 : revision, ...attach});
+        : await api('save', {...current, title:revision && url.searchParams.has('doc') ? resourceTitle : current.title,
+          id:dest, revision:conflict ? 0 : revision, ...attach});
       url.searchParams.delete('attach');
+      if (!revision || !url.searchParams.has('doc')) resourceTitle = current.title;
       openTreeAfterSave(dest, result.revision);
       localStorage.removeItem(previousKey);
       if (sent !== JSON.stringify(value())) changed();
@@ -195,5 +207,9 @@
   document.body.inert = true;
   const oldNew = url.searchParams.get('new');
   const initial = url.searchParams.get('id') || (oldNew ? oldNew === '1' ? null : oldNew : localStorage.getItem(last));
-  restore(initial).catch(error => { status(error.message); }).finally(() => { document.body.inert = false; });
+  async function start() {
+    taskTitle = await window.designFlow.taskTitle();
+    await restore(initial);
+  }
+  start().catch(error => { status(error.message); }).finally(() => { document.body.inert = false; });
 })();

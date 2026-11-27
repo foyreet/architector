@@ -264,6 +264,7 @@
       const initial = doc.revision ? {} : {initial_task_links:doc.task_links || {}};
       const result = await api(doc.revision?'save':'create', {id:doc.id, revision:doc.revision, ...initial, ...sent});
       doc = result.document;
+      document.title = doc.title + ' · Дизайн-документ';
       if (JSON.stringify(assistant.taskLinks()) === JSON.stringify(sent.task_links) &&
           JSON.stringify(sent.task_links) !== JSON.stringify(doc.task_links)) assistant.load(assistant.sources(), doc.task_links);
       syncSteps(assistant.taskLinks());updateURL({id:doc.id});dirty=!same(value(),doc);cache();error();message('Документ сохранён.');return true;}
@@ -298,7 +299,7 @@
       if(draft&&typeof draft.title==='string'&&fields.every(([k])=>typeof draft.sections?.[k]==='string')){
       if(same(draft,document))localStorage.removeItem(draftKey());else{content=draft;dirty=true;conflicted=draft.revision!==document.revision;message('Восстановлены несохранённые изменения из этого браузера.');}
     }}catch{error('Не удалось прочитать локальный черновик.');}}
-    window.document.title = 'Дизайн-документ · Архитектор';
+    window.document.title = content.title + ' · Дизайн-документ';
     $('design-flow').hidden=false;
     $('auth').hidden=true;$('list').hidden=true;$('editor').hidden=false;$('title-label').hidden=false;$('title').hidden=false;$('title').value=content.title;$('read-title').hidden=true;
     $('save').hidden=false;$('publish').hidden=false;$('copy').hidden=true;$('publication-info').hidden=!doc.source_release;
@@ -308,13 +309,14 @@
   async function open(id){const result=await api('get',{id});openEditor(result.document);}
   function retryId(kind){const k='architect.design-pending.'+account.id+'.'+kind;let id;try{id=sessionStorage.getItem(k);}catch{}id ||= crypto.randomUUID();try{sessionStorage.setItem(k,id);}catch{}return {id,clear(){try{sessionStorage.removeItem(k);}catch{}}};}
   async function create(id=crypto.randomUUID(), taskLinks={}){
-    let title = 'Новый дизайн-документ';
+    let title = await window.designFlow.taskTitle({doc:id, tree:taskLinks.tree_id, metric:taskLinks.metric_tree_id});
     const source = taskLinks.tree_id || taskLinks.metric_tree_id;
-    if (source) {
+    if (!title && source) {
       try { title = (await api('get', {id:source}, taskLinks.tree_id ? 'problem-spaces' : 'metric-trees')).title; }
       catch (error) { if (error.status !== 404) throw error; }
     }
-    openEditor({id,task_links:taskLinks,title,sections:Object.fromEntries(fields.map(([k])=>[k,''])),revision:0});$('title').focus();$('title').select();
+    openEditor({id,task_links:taskLinks,title:title || 'Новый дизайн-документ',sections:Object.fromEntries(fields.map(([k])=>[k,''])),revision:0});
+    if (!title) { $('title').focus(); $('title').select(); }
   }
   const pluralRules = new Intl.PluralRules('ru');
   function quantity(count, one, few, many) {
@@ -446,9 +448,40 @@
     location.href='/architecture.html?project='+encodeURIComponent(selected)+'&chat=1';
   });
   $('title').addEventListener('input',changed);
-  $('save').onclick=()=>task(save);$('create').onclick=()=>{
-    location.assign(window.designFlow.url('problems', {doc:crypto.randomUUID(), draft:true}));
-  };$('mine').onclick=()=>task(()=>list('mine'));$('catalog').onclick=()=>task(()=>list('catalog'));
+  $('save').onclick=()=>task(save);
+  let newTaskId;
+  $('create').onclick = () => {
+    newTaskId = crypto.randomUUID();
+    $('create-task-form').reset();
+    $('task-name').setCustomValidity('');
+    $('create-task-error').hidden = true;
+    $('create-task-dialog').showModal();
+  };
+  $('task-name').oninput = () => $('task-name').setCustomValidity('');
+  $('cancel-task').onclick = () => $('create-task-dialog').close();
+  $('create-task-dialog').oncancel = event => { if ($('submit-task').disabled) event.preventDefault(); };
+  $('create-task-form').onsubmit = async event => {
+    event.preventDefault();
+    if ($('submit-task').disabled) return;
+    const input = $('task-name');
+    const title = input.value.trim();
+    if (!title) {
+      input.setCustomValidity('Введите название задачи.');
+      input.reportValidity();
+      return;
+    }
+    $('submit-task').disabled = $('cancel-task').disabled = input.readOnly = true;
+    try {
+      await api('create-task', {id:newTaskId, title});
+      location.assign(window.designFlow.url('problems', {doc:newTaskId, draft:true}));
+    } catch (err) {
+      $('create-task-error').textContent = err.message;
+      $('create-task-error').hidden = false;
+    } finally {
+      $('submit-task').disabled = $('cancel-task').disabled = input.readOnly = false;
+    }
+  };
+  $('mine').onclick=()=>task(()=>list('mine'));$('catalog').onclick=()=>task(()=>list('catalog'));
   $('search-form').onsubmit=e=>{e.preventDefault();task(()=>list('catalog'));};$('back-list').onclick=()=>task(()=>list(release?'catalog':'mine'));
   $('back-schema').onclick=e=>{if(!doc||(!dirty&&!saving))return;e.preventDefault();task(async()=>{if(await leaveEditor()){discardDraft();location.href=$('back-schema').href;}});};
   $('copy').onclick=()=>task(async()=>{const attempt=retryId('copy.'+release.id),r=await api('copy',{id:attempt.id,release_id:release.id});attempt.clear();openEditor(r.document);message('Документ сохранён в списке задач.');});

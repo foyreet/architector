@@ -53,6 +53,11 @@ class Community:
                 db.execute('''CREATE TABLE IF NOT EXISTS design_task_drafts(
                     owner TEXT NOT NULL, id TEXT NOT NULL, tree_id TEXT, metric_tree_id TEXT,
                     PRIMARY KEY(owner,id))''')
+                draft_columns = {r['name'] for r in db.execute('PRAGMA table_info(design_task_drafts)')}
+                if 'title' not in draft_columns:
+                    db.execute('ALTER TABLE design_task_drafts ADD COLUMN title TEXT')
+                if 'created' not in draft_columns:
+                    db.execute('ALTER TABLE design_task_drafts ADD COLUMN created REAL')
                 db.execute('''CREATE TABLE IF NOT EXISTS dismissed_tree_tasks(
                     owner TEXT NOT NULL, kind TEXT NOT NULL, tree_id TEXT NOT NULL,
                     PRIMARY KEY(owner,kind,tree_id))''')

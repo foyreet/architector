@@ -194,3 +194,7 @@ a.task-step:hover {text-decoration:underline; color:#2054c7}
   .method-actions button {padding-inline:10px}
 }
 #method-kind {font:inherit; padding:8px; margin:6px 0 12px; border:1px solid #bdc9df; border-radius:8px; background:white; color:inherit}
+
+#create-task-dialog {width:min(420px,calc(100vw - 32px))}
+#create-task-dialog h2 {margin-top:0}
+#create-task-dialog .actions {justify-content:flex-end;margin-top:16px}

@@ -5,9 +5,6 @@
 .space-page header #save{flex:none}
 
 .space-actions{display:flex;align-items:center;gap:8px;padding:8px 12px;flex-wrap:wrap;background:#f6f8fc;border-bottom:1px solid #d7dfec}
-.space-page #title{width:clamp(180px,22vw,340px);max-width:min(440px,40vw);min-height:44px;margin:0;padding:8px 10px;font-size:16px;font-weight:650;border-color:transparent;background:transparent;text-overflow:ellipsis}
-.space-page #title:hover{border-color:#d7dfec;background:white}
-.space-page #title:focus{border-color:#285bef;background:white}
 .space-divider{width:1px;align-self:stretch;margin:6px 4px;background:#d7dfec}
 #tree-progress{margin-left:auto;color:#536680;font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
 
@@ -111,7 +108,6 @@
   .space-page header #status{max-width:none;flex:1 1 0}
   .design-flow{order:3;flex:1 1 100%}
   .space-actions{gap:6px;padding:6px 8px}
-  .space-page #title{flex:1 1 100%;width:auto;max-width:none}
   .space-divider{display:none}
   #tree-progress{margin-left:0}
   .space-actions button{font-size:13px;padding:6px 10px}
@@ -122,7 +118,8 @@
   #tree-map:has(.tree-empty){flex-direction:column;align-items:flex-start;gap:16px}
   .tree-empty{width:min(340px,calc(100vw - 48px));margin-left:0}
 }
-@supports (field-sizing:content){.space-page #title{width:auto;min-width:160px;field-sizing:content}}
 
 .method-heading {display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px}
 #tree-ai .method-heading h2 {margin:0}
+
+#root-task-title {margin-top:0; overflow-wrap:anywhere}
