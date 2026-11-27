@@ -47,7 +47,7 @@ window.WorkspaceNavigation = (() => {
   }
   $('schema-tab').onclick = () => { if (leave()) $('viewport').focus({preventScroll: true}); };
   // Give an experiment with unsaved notes the same protection on all navigation paths.
-  const destinations = new Set(['design-documents-open', 'board-open', 'connections', 'learning', 'community', 'publish-project', 'propose-project', 'run-pipeline', 'debug-pipeline', 'new-diagram', 'import', 'experiment-wizard-open', 'project-catalog', 'welcome-experiment']);
+  const destinations = new Set(['board-open', 'connections', 'learning', 'community', 'publish-project', 'propose-project', 'run-pipeline', 'debug-pipeline', 'new-diagram', 'import', 'experiment-wizard-open', 'project-catalog', 'welcome-experiment']);
   document.addEventListener('click', event => {
     if (destinations.has(event.target.closest('button')?.id) && !leave()) {
       event.preventDefault(); event.stopImmediatePropagation();
@@ -102,7 +102,7 @@ window.WorkspaceNavigation = (() => {
     if (event.key === 'Escape') { event.stopPropagation(); menu.open = false; menu.querySelector('summary').focus(); }
   });
   $('new-diagram').addEventListener('click', () => { if (matchMedia('(max-width:760px)').matches) collapse(true); });
-  for (const id of ['connections', 'learning', 'community', 'codex-chat-open', 'board-open', 'design-documents-open']) {
+  for (const id of ['connections', 'learning', 'community', 'codex-chat-open', 'board-open']) {
     $(id).addEventListener('click', () => { $(id).classList.add('nav-active'); if (matchMedia('(max-width:760px)').matches) collapse(true); });
   }
   for (const dialog of document.querySelectorAll('dialog')) dialog.addEventListener('close', () => {

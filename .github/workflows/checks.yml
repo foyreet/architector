@@ -23,7 +23,6 @@ jobs:
       - run: python tests/browser_local.py
       - run: python tests/browser_ai_setup.py
       - run: python tests/browser_create_schema.py
-      - run: python tests/browser_design_flow.py
   native:
     strategy:
       fail-fast: false

@@ -17,7 +17,6 @@ import ai_connection as ai
 import architect_mcp as mcp
 import block_contracts as bc
 import codex_chat as chat
-import design_documents as docs
 import gpu_compute as gpu
 import local_workspace as local
 import project_store as ps
@@ -60,14 +59,8 @@ class LocalTests(unittest.TestCase):
         self.assertEqual(rpc('tools/list',Origin='https://outside.invalid')[0],403)
         result=rpc('tools/call',{'name':'architect_list_projects','arguments':{}})[1]
         self.assertFalse(result.get('error'));self.assertFalse(result['result'].get('isError'))
-    def test_documents_export_import_no_auth_and_board(self):
-        identity=str(uuid.uuid4());code,r=self.post('/api/design-documents/create',{'id':identity});self.assertEqual(code,200)
-        doc=r['document'];sections={k:'Мой раздел '+k for k in docs.SECTIONS}
-        code,r=self.post('/api/design-documents/save',{**doc,'title':'Задача','sections':sections});self.assertEqual(code,200)
-        package=self.post('/api/design-documents/export',{'id':identity})[1]['package']
-        copied=self.post('/api/design-documents/import',{'id':str(uuid.uuid4()),'package':package})[1]['document']
-        self.assertNotEqual(copied['id'],identity);self.assertEqual(copied['sections'],sections)
-        self.assertEqual(self.post('/api/design-documents/publish',{'id':identity})[0],404)
+    def test_separate_design_service_and_local_board(self):
+        self.assertEqual(self.post('/api/design-documents/list')[0],404)
         code,board=self.post('/api/boards/create',{'title':'Локальная доска'});self.assertEqual(code,200)
         self.assertEqual(self.post('/api/boards/get',{'board_id':board['id']})[0],200)
         self.assertEqual(self.post('/api/boards/share',{'board_id':board['id']})[0],404)

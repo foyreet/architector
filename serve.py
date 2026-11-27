@@ -25,10 +25,6 @@ import project_store
 import subgraphs
 import local_workspace as community
 import whiteboard
-import solution_spaces
-import problem_spaces
-import metric_trees
-import design_documents
 import app_config
 import architect_mcp
 import codex_chat
@@ -53,28 +49,11 @@ ASSETS = {
     '/ai-connection.js': ('ai-connection.js', 'text/javascript'),
     '/design-chat.js': ('design-chat.js', 'text/javascript'),
     '/design-chat.css': ('design-chat.css', 'text/css'),
-    '/design-docs.html': ('design-docs.html', 'text/html'),
-    '/solution-space.html': ('solution-space.html', 'text/html'),
-    '/solution-space.js': ('solution-space.js', 'text/javascript'),
-    '/solution-space.css': ('solution-space.css', 'text/css'),
-    '/metric-tree.html': ('metric-tree.html', 'text/html'),
-    '/problem-space.html': ('problem-space.html', 'text/html'),
-    '/problem-space.css': ('problem-space.css', 'text/css'),
-    '/method-editor.js': ('method-editor.js', 'text/javascript'),
-    '/tree-workspace.js': ('tree-workspace.js', 'text/javascript'),
-    '/design-flow.js': ('design-flow.js', 'text/javascript'),
-    '/problem-space.js': ('problem-space.js', 'text/javascript'),
-    '/design-docs.js': ('design-docs.js', 'text/javascript'),
-    '/design-assistant.js': ('design-assistant.js', 'text/javascript'),
-    '/design-docs.css': ('design-docs.css', 'text/css'),
     '/board.html': ('board.html', 'text/html'),
     '/board.js': ('board.js', 'text/javascript'),
     '/board.css': ('board.css', 'text/css'),
     '/board-pdf.js': ('board-pdf.js', 'text/javascript'),
     '/vendor/marked-18.1.1.js': ('vendor/marked-18.1.1.js', 'text/javascript'),
-    '/vendor/toastui-editor-3.2.2.js': ('vendor/toastui-editor-3.2.2.js', 'text/javascript'),
-    '/vendor/toastui-editor-3.2.2.css': ('vendor/toastui-editor-3.2.2.css', 'text/css'),
-    '/vendor/toastui-editor-ru.js': ('vendor/toastui-editor-ru.js', 'text/javascript'),
     '/chat-markdown.js': ('chat-markdown.js', 'text/javascript'),
     '/codex-chat.js': ('codex-chat.js', 'text/javascript'),
     '/codex-chat.css': ('codex-chat.css', 'text/css'),
@@ -265,7 +244,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def page_navigation(self):
         """A link on another site may open the static page itself; the API stays same-origin."""
-        return (self.command == 'GET' and urlsplit(self.path).path in ('/', '/architecture.html', '/board.html', '/design-docs.html', '/problem-space.html', '/solution-space.html', '/metric-tree.html') and
+        return (self.command == 'GET' and urlsplit(self.path).path in ('/', '/architecture.html', '/board.html') and
                 self.headers.get('Sec-Fetch-Mode') == 'navigate' and self.headers.get('Sec-Fetch-Dest') == 'document')
 
     def send_json(self, value, status=200):
@@ -299,7 +278,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             self.local_request()
             path = urlsplit(self.path).path
-            if not path.startswith(('/api/community/', '/api/metric-trees/', '/api/boards/', '/api/solution-spaces/', '/api/problem-spaces/', '/api/design-documents/')) and path not in ('/api/codex/config', '/api/codex/configure', '/api/codex/test', '/api/local/info', '/api/codex/status', '/api/codex/login', '/api/codex/logout', '/api/codex/history', '/api/codex/send', '/api/codex/clear', '/api/codex/proposal', '/api/codex/models', '/api/codex/upload', '/api/codex/remove-attachment', '/api/codex/design-get', '/api/codex/design-attach', '/api/codex/design-update', '/api/codex/design-remove', '/api/openrouter/chat', '/api/openrouter/models',
+            if not path.startswith(('/api/community/', '/api/boards/')) and path not in ('/api/codex/config', '/api/codex/configure', '/api/codex/test', '/api/local/info', '/api/codex/status', '/api/codex/login', '/api/codex/logout', '/api/codex/history', '/api/codex/send', '/api/codex/clear', '/api/codex/proposal', '/api/codex/models', '/api/codex/upload', '/api/codex/remove-attachment', '/api/codex/design-get', '/api/codex/design-remove', '/api/openrouter/chat', '/api/openrouter/models',
                             '/api/kaggle/download', '/api/kaggle/files', '/api/kaggle/preview',
                             '/api/huggingface/info', '/api/huggingface/download', '/api/huggingface/status',
                             '/api/series/preview', '/api/series/start', '/api/series/list', '/api/series/get', '/api/series/cancel', '/api/series/resume',
@@ -344,18 +323,6 @@ class Handler(BaseHTTPRequestHandler):
                 raise ApiError('Каталог сообщества и аккаунты отсутствуют в локальной версии.', 404)
             if path.startswith(('/api/practice/', '/api/models/', '/api/gpu/')) or path in ('/api/projects/tutorial', '/api/code/examples'):
                 raise ApiError('Эта функция отсутствует в локальной версии.', 404)
-            if path.startswith('/api/solution-spaces/'):
-                self.send_json(solution_spaces.request(hub, user, body, path.rsplit('/', 1)[1]))
-                return
-            if path.startswith('/api/metric-trees/'):
-                self.send_json(metric_trees.request(hub, user, body, path.rsplit('/', 1)[1]))
-                return
-            if path.startswith('/api/problem-spaces/'):
-                self.send_json(problem_spaces.request(hub, user, body, path.rsplit('/', 1)[1]))
-                return
-            if path.startswith('/api/design-documents/'):
-                self.send_json(design_documents.request(hub, user, body, path.rsplit('/', 1)[1]))
-                return
             if path.startswith('/api/boards/'):
                 self.send_json(whiteboard.request(hub, user, body, path.rsplit('/', 1)[1]))
                 return

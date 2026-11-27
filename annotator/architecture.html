@@ -40,7 +40,6 @@
     <span class="sidebar-caption sidebar-label">РАБОЧЕЕ ПРОСТРАНСТВО</span>
     <nav id="sidebar-navigation" aria-label="Основные разделы">
       <button id="new-diagram" title="Создать схему" aria-label="Создать схему"><span class="nav-icon" aria-hidden="true">+</span><span class="sidebar-label">Создать схему</span></button>
-      <button id="design-documents-open" title="Задачи" aria-label="Задачи"><span class="nav-icon" aria-hidden="true">▤</span><span class="sidebar-label">Задачи</span></button>
       <button id="codex-chat-open" title="AI Chat" aria-expanded="false" aria-controls="codex-chat"><span class="nav-icon" aria-hidden="true">◌</span><span class="sidebar-label">AI Chat</span></button>
       <button id="board-open" title="Доска"><span class="nav-icon" aria-hidden="true">▱</span><span class="sidebar-label">Доска</span></button>
       <details id="workspace-tools" class="workspace-tools"><summary title="Инструменты: проекты, блоки и подключения" aria-label="Инструменты"><span class="nav-icon" aria-hidden="true">⚙</span><span class="sidebar-label">Инструменты</span></summary>
@@ -275,8 +274,7 @@
       <p id="codex-upload-status" class="muted" role="status" hidden></p>
       <input id="codex-file" type="file" hidden multiple accept=".pdf,.docx,.odt,.pptx,.xlsx,.rtf,.txt,.md,.markdown,.csv,.tsv,.json,.yaml,.yml,.xml,.html,.htm,.log,.py,.js,.ts,.css,.sql">
       </div>
-      <div id="codex-design" hidden><span id="codex-design-title"></span><span id="codex-design-state"></span><div class="codex-design-actions"><button id="codex-design-read" type="button">Прочитать</button><button id="codex-design-update" type="button">Обновить</button><button id="codex-design-remove" type="button">Убрать</button></div></div>
-      <div id="codex-attach-menu" hidden><button id="codex-attach-file" type="button">Файл с устройства</button><button id="codex-attach-design" type="button">Мои дизайн-документы</button></div>
+      <div id="codex-design" hidden><span id="codex-design-title"></span><span id="codex-design-state"></span><div class="codex-design-actions"><button id="codex-design-read" type="button">Прочитать</button><button id="codex-design-remove" type="button">Убрать</button></div></div>
       <div id="codex-attachments" aria-live="polite"></div>
       <label for="codex-message" class="sr-only">Сообщение AI</label><textarea id="codex-message" rows="3" placeholder="Опишите схему или задайте вопрос…"></textarea>
       <div class="codex-send-row"><span class="muted">Используется ваше подключение</span><button id="codex-attach" type="button" aria-label="Прикрепить документ" title="Прикрепить документ · PDF, DOCX, ODT, PPTX, XLSX, RTF и текстовые файлы"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m8 13 6-6a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7l9-9a7 7 0 0 1 10 10l-8 8"/></svg></button><button id="codex-voice" type="button" aria-label="Начать диктовку" aria-pressed="false" title="Голосовой ввод через браузер">🎙 Голос</button><button id="codex-send" class="primary" type="submit" aria-label="Отправить сообщение" disabled>Отправить</button></div>
