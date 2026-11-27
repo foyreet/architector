@@ -250,6 +250,43 @@ def main():
                     saved.locator('.task-step').nth(1).click()
                     expect(page.locator('#title')).to_have_text('Дерево шагов ' + str(width))
 
+                    # A saved document with no links opens its own stages instead of the document editor.
+                    sections = api('design-documents/get', {'id':document_id})['document']['sections']
+                    blank = api('design-documents/create', {'id':str(uuid.uuid4()), 'title':'Без связей ' + str(width),
+                                                            'sections':sections})['document']
+                    hub_url = origin + '/design-docs.html?project=' + project
+                    row = page.locator('#documents .task-row').filter(has_text=blank['title'])
+                    for index, path in enumerate(('problem-space', 'solution-space', 'metric-tree', 'design-docs')):
+                        page.goto(hub_url)
+                        row.locator('.task-step').nth(index).click()
+                        page.wait_for_url('**/' + path + '.html**')
+                        params = parse_qs(urlsplit(page.url).query)
+                        assert params['project'] == [project]
+                        if index != 3:
+                            assert params['doc'] == [blank['id']]
+                        else:
+                            expect(page.locator('#title')).to_have_value(blank['title'])
+                    assert api('design-documents/get', blank)['document']['task_links'] == {}
+                    page.goto(hub_url)
+                    row.locator('.task-step').nth(1).click()
+                    page.get_by_role('button', name=re.compile('Дерево шагов ' + str(width))).click()
+                    expect(page.locator('#title')).to_have_text('Дерево шагов ' + str(width))
+                    page.goto(hub_url)
+                    row.locator('.task-step').nth(0).click()
+                    expect(page.locator('#title')).to_have_value('Дерево шагов ' + str(width))
+                    page.goto(hub_url)
+                    row.locator('.task-step').nth(2).click()
+                    page.locator('#title').fill('Метрики этого документа')
+                    page.locator('#save').click()
+                    expect(page.locator('#status')).to_have_text('Сохранено')
+                    new_metric = parse_qs(urlsplit(page.url).query)['id'][0]
+                    page.goto(hub_url)
+                    row.locator('.task-step').nth(2).click()
+                    expect(page.locator('#title')).to_have_value('Метрики этого документа')
+                    saved_doc = api('design-documents/get', blank)['document']
+                    assert saved_doc['task_links'] == {'metric_tree_id':new_metric, 'tree_id':tree}
+                    assert saved_doc['sections'] == blank['sections']
+
                     # A standalone metric becomes part of a task only after its document is saved.
                     standalone = str(uuid.uuid4())
                     api('metric-trees/save', {'id':standalone, 'title':'Отдельная метрика', 'goal':'Рост', 'metrics':[], 'revision':0})

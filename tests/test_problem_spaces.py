@@ -39,6 +39,33 @@ class Spaces(unittest.TestCase):
             self.assertEqual(len(api('list')['trees']), 1)
             self.assertEqual(design_documents.request(hub, LOCAL_USER, {}, 'list')['documents'], [])
 
+    def test_saving_a_stage_only_fills_a_vacant_document_link(self):
+        with tempfile.TemporaryDirectory() as root:
+            hub = Community(root)
+            doc_id, tree_id, another = (str(uuid.uuid4()) for _ in range(3))
+            doc = design_documents.request(hub, LOCAL_USER, {'id': doc_id}, 'create')['document']
+            body = {'id': tree_id, 'doc': doc_id, 'revision': 0, 'title': 'Задача', 'problem_tree': []}
+            def saved():
+                return design_documents.request(hub, LOCAL_USER, {'id': doc_id}, 'get')['document']
+
+            with self.assertRaises(ContractError):
+                problem_spaces.request(hub, {'id': 'other'}, body, 'save')
+            with self.assertRaises(ContractError):
+                problem_spaces.request(hub, LOCAL_USER, {**body, 'revision': 9}, 'save')
+            self.assertEqual(saved(), doc)
+            problem_spaces.request(hub, LOCAL_USER, body, 'save')
+            linked = saved()
+            self.assertEqual(linked['task_links'], {'tree_id': tree_id})
+            self.assertEqual(linked['sections'], doc['sections'])
+            problem_spaces.request(hub, LOCAL_USER, body, 'save')
+            problem_spaces.request(hub, LOCAL_USER, body, 'attach')
+            self.assertEqual(saved(), linked)
+            with self.assertRaises(ContractError) as err:
+                problem_spaces.request(hub, LOCAL_USER, {**body, 'id': another}, 'save')
+            self.assertEqual(err.exception.status, 412)
+            self.assertEqual(saved(), linked)
+            self.assertEqual([t['id'] for t in problem_spaces.request(hub, LOCAL_USER, {}, 'list')['trees']], [tree_id])
+
     def test_question_proposals_use_tree_context_only(self):
         with tempfile.TemporaryDirectory() as root:
             hub = Community(root)

@@ -355,13 +355,7 @@
     function addStep(key, label, status, available, active) {
       const li = node('li', '');
       const link = node(available || row.id ? 'a' : 'span', '', 'task-step');
-      if (available) link.href = stepUrl(key);
-      else if (row.id) {
-        const url = stepUrl('document');
-        url.searchParams.set('link', '1');
-        link.href = url;
-        link.title = 'Выбрать связанные деревья';
-      }
+      if (available || row.id) link.href = stepUrl(key);
       const number = node('span', steps.children.length + 1, 'step-number');
       number.setAttribute('aria-hidden', 'true');
       if (active) number.classList.add('started');
@@ -463,6 +457,9 @@
     }else await list(query.get('view')==='catalog'?'catalog':'mine');}
   async function login(register){try{await api(register?'register':'login',{username:$('username').value,password:$('password').value},true);$('password').value='';await start();}catch(e){message(e.message);}}
   $('login-form').onsubmit=e=>{e.preventDefault();login(false);};$('register').onclick=()=>{if($('login-form').reportValidity())login(true);};
+  window.addEventListener('pageshow', event => {
+    if (event.persisted && account && mode === 'mine' && !$('list').hidden) task(() => list('mine'));
+  });
   start().catch(e=>{message(e.message);if(account){$('list').hidden=false;$('documents').append(node('p','Можно открыть свои документы или создать новый.','muted'));}});
 })();
 

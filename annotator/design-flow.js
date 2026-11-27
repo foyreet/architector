@@ -25,14 +25,15 @@ window.designFlow = (() => {
     if (id) next.searchParams.set(step === 'document' && task.draft ? 'new' : 'id', id);
     else if (step === 'document' && (task.tree || task.metric)) next.searchParams.set('new', '1');
     else if ((step === 'metrics' || step === 'problems') && (task.tree || task.metric || task.doc)) next.searchParams.set('new', '1');
+    if (task.doc && !task.draft && !id && step !== 'document') next.searchParams.set('attach', '1');
     return next;
   }
   function refresh() {
     for (const a of nav.querySelectorAll('a[data-step]')) a.href = url(a.dataset.step);
   }
-  function treeOpened(key, id) {
+  function treeOpened(key, id, choosingForDocument = false) {
     // Opening another tree from the library starts a different context.
-    if (state[key] && state[key] !== id) {
+    if (!choosingForDocument && state[key] && state[key] !== id) {
       state.doc = null;
       state.draft = false;
       state[key === 'tree' ? 'metric' : 'tree'] = null;

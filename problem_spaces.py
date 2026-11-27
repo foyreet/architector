@@ -4,7 +4,7 @@ import time
 
 import tree_methods
 from block_contracts import ContractError
-from design_documents import identity
+from design_documents import identity, owned
 
 
 def problem_tree(nodes, depth=1):
@@ -105,6 +105,25 @@ def request(hub, user, body, action):
     return stored_tree(hub, user, body, action, metrics=False)
 
 
+def attach_stage(db, user, doc_id, tree_id, metrics):
+    # Called in the same write transaction as the tree save.
+    doc = owned(db, user, doc_id)
+    links = json.loads(doc['task_links'])
+    key = 'metric_tree_id' if metrics else 'tree_id'
+    previous = links.get(key)
+    if previous == tree_id:
+        return
+    table = 'metric_trees' if metrics else 'problem_spaces'
+    if previous and db.execute(f'SELECT 1 FROM {table} WHERE id=? AND owner=?', (previous, user['id'])).fetchone():
+        raise ContractError('К документу уже привязано другое дерево. Откройте этап заново из списка документов.', 412)
+    links[key] = tree_id
+    if not metrics:
+        links.pop('cases', None)
+        links.pop('case_version', None)
+    db.execute('UPDATE design_documents SET task_links=?,revision=revision+1,updated=? WHERE id=?',
+               (json.dumps(links), time.time(), doc_id))
+
+
 def stored_tree(hub, user, body, action, *, metrics):
     table = 'metric_trees' if metrics else 'problem_spaces'
     nodes_key = 'metrics' if metrics else 'problem_tree'
@@ -123,6 +142,11 @@ def stored_tree(hub, user, body, action, *, metrics):
                 raise ContractError('Дерево не найдено.', 404)
             return {'id': tree_id, 'title': row['title'], goal_key: row['problem'],
                     nodes_key: json.loads(row['tree']), 'revision': row['revision']}
+        if action == 'attach':
+            if not row:
+                raise ContractError('Дерево не найдено.', 404)
+            attach_stage(db, user, body.get('doc'), tree_id, metrics)
+            return {'revision': row['revision']}
         if action != 'save':
             raise ContractError('Маршрут дерева не найден.', 404)
         if metrics:
@@ -133,6 +157,8 @@ def stored_tree(hub, user, body, action, *, metrics):
         revision = body.get('revision')
         if type(revision) is not int or revision < 0:
             raise ContractError('Некорректная версия дерева.')
+        if 'doc' in body:
+            attach_stage(db, user, body['doc'], tree_id, metrics)
         if row and revision == row['revision'] - 1 and row['title'] == value['title'] and row['problem'] == value[goal_key] and json.loads(row['tree']) == value[nodes_key]:
             return {'revision': row['revision']}
         if revision != (row['revision'] if row else 0):

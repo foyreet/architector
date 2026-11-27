@@ -27,8 +27,8 @@
     item.textContent = text;
     return item;
   }
-  async function api(action, data = {}) {
-    const response = await fetch('/api/solution-spaces/' + action, {method:'POST',
+  async function api(action, data = {}, resource = 'solution-spaces') {
+    const response = await fetch('/api/' + resource + '/' + action, {method:'POST',
       headers:{'Content-Type':'application/json','X-Architect-Request':'1'}, body: JSON.stringify({id, ...data})});
     const result = await response.json();
     if (!response.ok) throw Object.assign(Error(result.error || 'Ошибка запроса'), {status: response.status});
@@ -183,17 +183,30 @@
     const {trees} = await api('list');
     status('');
     const list = $('tree-list');
-    if (!trees.length) {
+    const attachDoc = params.has('attach') && !params.has('draft') && params.get('doc');
+    if (!trees.length || attachDoc) {
       const create = element('a', 'Создать дерево проблем');
       const url = page('/problem-space.html');
       url.searchParams.set('new', '1');
+      if (attachDoc) url.searchParams.set('attach', '1');
       create.href = url;
-      list.append(element('p', 'Пока нет сохранённых деревьев.'), create);
+      list.append(element('p', attachDoc ? 'Для этой задачи выберите сохранённое дерево проблем или создайте новое.' :
+        'Пока нет сохранённых деревьев.'), create);
     }
     for (const tree of trees) {
-      const link = document.createElement('a');
+      const link = document.createElement(attachDoc ? 'button' : 'a');
       link.className = 'document-row';
-      link.href = page('/solution-space.html', tree.id);
+      const target = page('/solution-space.html', tree.id);
+      if (attachDoc) {
+        link.onclick = async () => {
+          if (list.inert) return;
+          list.inert = true;
+          try {
+            await api('attach', {doc:attachDoc, id:tree.id}, 'problem-spaces');
+            location.assign(target);
+          } catch (error) { status(error.message); list.inert = false; }
+        };
+      } else link.href = target;
       link.append(element('strong', tree.title), element('small', tree.has_cases ? 'Есть сохранённые кейсы' : 'Кейсы ещё не созданы'));
       list.append(link);
     }

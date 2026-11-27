@@ -38,7 +38,7 @@
     status(conflict ? 'Есть другая версия дерева' : 'Есть изменения');
   }
   function syncNavigation() {
-    window.designFlow.treeOpened(metrics ? 'metric' : 'tree', id);
+    window.designFlow.treeOpened(metrics ? 'metric' : 'tree', id, url.searchParams.has('attach'));
     const context = window.designFlow.url(metrics ? 'metrics' : 'problems');
     for (const key of ['tree', 'metric', 'doc', 'draft']) {
       if (context.searchParams.has(key)) url.searchParams.set(key, context.searchParams.get(key));
@@ -58,6 +58,7 @@
     dirty = !!draft;
     $('save').textContent = conflict ? 'Сохранить копию' : 'Сохранить';
     status(conflict ? 'Дерево изменилось в другой вкладке' : dirty ? 'Восстановлен черновик' : revision ? 'Сохранено' : '');
+    if (!dirty && url.searchParams.has('attach')) status('При сохранении дерево будет связано с этим документом.');
     url.searchParams.delete('new');
     url.searchParams.set('id', id);
     syncNavigation();
@@ -88,8 +89,12 @@
     const previousKey = key();
     const dest = conflict ? crypto.randomUUID() : id;
     const sent = JSON.stringify(value());
+    const attach = url.searchParams.has('attach') ? {doc:url.searchParams.get('doc')} : {};
     try {
-      const result = await api('save', {...JSON.parse(sent), id: dest, revision: conflict ? 0 : revision});
+      const result = attach.doc && !dirty && revision
+        ? await api('attach', {id:dest, ...attach})
+        : await api('save', {...JSON.parse(sent), id:dest, revision:conflict ? 0 : revision, ...attach});
+      url.searchParams.delete('attach');
       openTreeAfterSave(dest, result.revision);
       localStorage.removeItem(previousKey);
       if (sent !== JSON.stringify(value())) changed();
@@ -110,16 +115,16 @@
   if ($('solutions')) $('solutions').onclick = async () => {
     if (!id || saving) return;
     if (conflict) { status('Сначала сохраните свою версию дерева как копию.'); return; }
-    if ((dirty || !revision) && !await save()) return;
+    if ((dirty || !revision || url.searchParams.has('attach')) && !await save()) return;
     location.href = window.designFlow.url('solutions');
   };
   $('design-flow').addEventListener('click', async event => {
     const link = event.target.closest('a[data-step]');
-    if (!link || !url.searchParams.has('draft') || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (!link || !(url.searchParams.has('draft') || url.searchParams.has('attach')) || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
     if (saving) return;
     if (conflict) { status('Сначала сохраните свою версию дерева как копию.'); return; }
-    if (dirty && !await save()) return;
+    if ((dirty || (revision && url.searchParams.has('attach'))) && !await save()) return;
     const target = new URL(link.href);
     // A skipped, untouched stage has no saved tree to attach.
     if (!revision) target.searchParams.delete(metrics ? 'metric' : 'tree');
