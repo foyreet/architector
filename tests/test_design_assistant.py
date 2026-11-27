@@ -5,6 +5,7 @@ import uuid
 from unittest.mock import patch
 
 from block_contracts import ContractError
+import design_assistant as assistant
 import design_documents as docs
 import metric_trees
 import problem_spaces
@@ -27,6 +28,33 @@ class DesignAssistantTests(unittest.TestCase):
             'id': self.tree, 'source_revision': 1, 'version': 0, 'options': options}, 'save')
         self.body = {'tree_id': self.tree, 'cases': [2], 'version': 1, 'revision': 1,
                      'title': 'Черновик', 'sections': dict.fromkeys(docs.SECTIONS, '')}
+
+    @patch('design_assistant.standalone_answer')
+    def test_document_methods_are_independent_and_keep_the_response_contracts(self, model):
+        def api(action, body=None):
+            return docs.request(self.hub, LOCAL_USER, body or {}, action)
+
+        defaults = api('method')
+        custom = {'compose': 'Начинай с текущего процесса.', 'review': 'Проверь цену ошибки.'}
+        api('save-method', {'changes': {key: {'previous': defaults[key]['text'], 'text': text}
+                                        for key, text in custom.items()}})
+        model.assert_not_called()
+        self.body['sections']['target'] = 'Сократить потери'
+        inputs = {'compose': {'target': {'text':'Цель', 'answers':[1], 'cases':[2]}},
+                  'review': [{'section':'target', 'quote':'потери', 'reason':'Уточнить', 'question':'Сколько?'}]}
+        for action, other, contract in [('compose', 'review', assistant.DRAFT_CONTRACT),
+                                        ('review', 'compose', assistant.REVIEW_CONTRACT)]:
+            model.return_value = json.dumps(inputs[action])
+            api(action, self.body)
+            instruction = model.call_args.args[2]
+            self.assertIn(custom[action], instruction)
+            self.assertNotIn(custom[other], instruction)
+            self.assertTrue(instruction.endswith(contract))
+            self.assertNotIn('JSON', defaults[action]['text'])
+        api('save-method', {'changes': {'compose': {'previous': custom['compose'], 'text': None}}})
+        self.assertEqual(api('method')['compose'], defaults['compose'])
+        self.assertEqual(api('method')['review']['text'], custom['review'])
+        self.assertFalse(api('list')['documents'])
 
     @patch('design_assistant.standalone_answer')
     def test_preview_uses_selected_case_and_persists_refs_only_on_save(self, model):

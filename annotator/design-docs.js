@@ -36,6 +36,11 @@
     let r;try{r=await fetch('/api/'+(community === true ? 'community/' : typeof community === 'string' ? community + '/' : 'design-documents/')+action,{method:'POST',headers:{'Content-Type':'application/json','X-Architect-Request':'1',...(account?{'X-Architect-Account':account.id}:{})},body:JSON.stringify(body)});}catch{throw Error('Не удалось связаться с сервером. Повторите попытку; введённый текст сохранён в редакторе.');}
     const data=await r.json();if(!r.ok){const e=Error(data.error||'Не удалось выполнить запрос.');e.status=r.status;throw e;}return data;
   }
+  window.setupMethodEditor({
+    first:'compose',
+    load:() => api('method'),
+    save:changes => api('save-method', {changes})
+  });
   const assistant = window.setupDesignAssistant({fields, api, read:value, changed, getId:()=>doc?.id, linksChanged:syncSteps});
   function syncSteps(links) {
     $('link-task').textContent = links.tree_id || links.metric_tree_id ? 'Изменить связи задачи' : 'Связать этапы задачи';

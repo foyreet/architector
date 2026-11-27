@@ -161,7 +161,7 @@ def document_overview(db, owner):
 
 def request(hub, user, body, action):
     if user is None: raise ContractError('Войдите в аккаунт Архитектора, чтобы работать с документами.', 401)
-    if action in ('compose', 'review'):
+    if action in ('method', 'save-method', 'compose', 'review'):
         from design_assistant import request as assist
         return assist(hub, user, body, action)
     if action == 'suggest-questions':
