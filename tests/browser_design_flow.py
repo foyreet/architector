@@ -259,7 +259,13 @@ def main():
                     page.locator('#back-list').click()
                     saved = page.locator('#documents .task-row').filter(
                         has=page.locator(f'a[href*="{document_id}"]'))
-                    expect(saved.locator('.task-step')).to_have_count(4)
+                    steps = saved.locator('.task-step')
+                    expect(steps).to_have_count(4)
+                    positions = steps.evaluate_all('links => links.map(link => Math.round(link.getBoundingClientRect().top))')
+                    if width > 760:
+                        assert len(set(positions)) == 1, positions
+                    else:
+                        assert positions[0] == positions[1] < positions[2] == positions[3], positions
                     expect(saved.locator('.task-step').nth(0)).to_contain_text('1 из 2 ответов')
                     expect(saved.locator('.task-step').nth(1)).to_contain_text('1 кейс')
                     expect(saved.locator('.task-step').nth(2)).to_contain_text('0 показателей')
