@@ -171,8 +171,10 @@ window.problemSpace = function (changed, suggest, metrics = false) {
       $('tree-all').focus();
     });
     focusBranch.className = 'link-button';
-    const remove = button(metrics ? 'Удалить метрику' : 'Удалить вопрос', () => {
-      if (!confirm(metrics ? 'Удалить метрику вместе со всей ветвью?' : 'Удалить этот вопрос вместе с его ответом и уточнениями?')) return;
+    const removeLabel = item.children.length
+      ? (metrics ? 'Удалить ветвь метрик' : 'Удалить ветвь вопросов')
+      : (metrics ? 'Удалить метрику' : 'Удалить вопрос');
+    const remove = button(removeLabel, () => {
       siblings.splice(siblings.indexOf(item), 1);
       load(roots);
       changed();

@@ -161,13 +161,13 @@ def document_overview(db, owner):
 
 def request(hub, user, body, action):
     if user is None: raise ContractError('Войдите в аккаунт Архитектора, чтобы работать с документами.', 401)
-    if action in ('compose', 'review'):
+    if action in ('method', 'save-method', 'compose', 'review'):
         from design_assistant import request as assist
         return assist(hub, user, body, action)
     if action == 'suggest-questions':
         from problem_spaces import suggest_questions
         title, sections = payload(body)
-        return suggest_questions(hub.root, body, {'title': title, 'sections': sections})
+        return suggest_questions(hub, user, body, {'title': title, 'sections': sections})
     if action == 'list':
         with hub.db() as db:
             if body.get('include_progress') is True:

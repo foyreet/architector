@@ -794,15 +794,6 @@
       location.href = url;
     } catch (error) { toast(error.message); }
   }
-  function openSpace(path) {
-    const url = new URL(path, location.origin);
-    if (activeProject) url.searchParams.set('project', activeProject.meta.id);
-    if (unsaved || selected) window.open(url, '_blank', 'noopener');
-    else location.href = url;
-  }
-  $('problem-space-open').onclick = () => openSpace('/problem-space.html');
-  $('metric-tree-open').onclick = () => openSpace('/metric-tree.html');
-  $('solution-space-open').onclick = () => openSpace('/solution-space.html');
   $('design-documents-open').onclick = () => openDesignDocuments();
 
   $('board-open').onclick = async () => {

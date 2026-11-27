@@ -123,3 +123,6 @@
   .tree-empty{width:min(340px,calc(100vw - 48px));margin-left:0}
 }
 @supports (field-sizing:content){.space-page #title{width:auto;min-width:160px;field-sizing:content}}
+
+.method-heading {display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px}
+#tree-ai .method-heading h2 {margin:0}

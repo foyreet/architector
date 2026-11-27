@@ -60,6 +60,7 @@ ASSETS = {
     '/metric-tree.html': ('metric-tree.html', 'text/html'),
     '/problem-space.html': ('problem-space.html', 'text/html'),
     '/problem-space.css': ('problem-space.css', 'text/css'),
+    '/method-editor.js': ('method-editor.js', 'text/javascript'),
     '/tree-workspace.js': ('tree-workspace.js', 'text/javascript'),
     '/design-flow.js': ('design-flow.js', 'text/javascript'),
     '/problem-space.js': ('problem-space.js', 'text/javascript'),

@@ -39,7 +39,10 @@ def main():
                     page.on('pageerror', lambda error: errors.append(str(error)))
 
                     # Problem tree: the empty canvas explains the method, answers are counted.
-                    page.goto(origin + '/problem-space.html?new=1&project=' + project)
+                    page.goto(origin + '/design-docs.html?project=' + project)
+                    page.locator('#create').click()
+                    page.wait_for_url('**/problem-space.html**')
+                    task_id = parse_qs(urlsplit(page.url).query)['doc'][0]
                     expect(page.locator('#design-flow [aria-current=step]')).to_have_text('1Проблемы')
                     expect(page.locator('.tree-empty')).to_contain_text('Общие вопросы')
                     page.locator('#title').fill('Дерево шагов ' + str(width))
@@ -72,6 +75,16 @@ def main():
                     if width == 390:
                         for label in page.locator('#design-flow .step-label').all():
                             assert label.bounding_box()['width'] > 10
+                    # Playwright dismisses unexpected confirm dialogs: one click must remove the whole branch.
+                    page.get_by_label('Вопрос', exact=True).fill('Временная ветвь')
+                    page.get_by_role('button', name='Добавить уточнение').click()
+                    page.get_by_label('Ответ', exact=True).fill('Временный ответ')
+                    page.locator('#question-editor').get_by_role('button', name='Закрыть').click()
+                    page.get_by_role('button', name='Временная ветвь', exact=True).click()
+                    page.get_by_role('button', name='Удалить ветвь вопросов').click()
+                    expect(page.locator('.branch-row')).to_have_count(1)
+                    expect(page.locator('#tree-progress')).to_have_text('Отвечено: 1 из 1')
+                    page.locator('#add-root').click()
                     # The solutions step saves the tree first and keeps the project.
                     page.locator('#solutions').click()
                     page.wait_for_url('**/solution-space.html**')
@@ -83,6 +96,59 @@ def main():
                     tree = parse_qs(urlsplit(page.url).query)['id'][0]
                     assert project in page.locator('#tree-ai-settings').get_attribute('href')
                     assert tree in page.locator('#design-flow a[data-step=problems]').get_attribute('href')
+
+                    # Independent solution methods keep their drafts when switching actions.
+                    method_button = page.get_by_role('button', name='Методика', exact=True)
+                    method_button.click()
+                    field = page.get_by_label('Инструкция для модели')
+                    kind = page.get_by_label('Действие', exact=True)
+                    expect(field).to_be_enabled()
+                    case_default = field.input_value()
+                    field.fill('Кейсы ' + str(width))
+                    kind.select_option('research')
+                    field.fill('Источники ' + str(width))
+                    kind.select_option('cases')
+                    expect(field).to_have_value('Кейсы ' + str(width))
+                    page.locator('#save-method').click()
+                    expect(method_button).to_be_focused()
+                    page.reload()
+                    method_button.click()
+                    expect(field).to_have_value('Кейсы ' + str(width))
+                    page.locator('#default-method').click()
+                    page.keyboard.press('Escape')
+                    method_button.click()
+                    expect(field).to_have_value('Кейсы ' + str(width))
+                    page.locator('#default-method').click()
+                    kind.select_option('research')
+                    expect(field).to_have_value('Источники ' + str(width))
+                    page.locator('#save-method').click()
+                    expect(method_button).to_be_focused()
+                    method_button.click()
+                    expect(field).to_have_value(case_default)
+                    kind.select_option('research')
+                    expect(field).to_have_value('Источники ' + str(width))
+                    page.locator('#default-method').click()
+                    page.locator('#save-method').click()
+                    expect(method_button).to_be_focused()
+
+                    # All four steps belong to this new task. Save a metric while leaving step three.
+                    page.locator('#design-flow a[data-step=metrics]').click()
+                    page.locator('#title').fill('Метрики задачи ' + str(width))
+                    page.locator('#add-root').click()
+                    metric_id = parse_qs(urlsplit(page.url).query)['id'][0]
+                    page.locator('#design-flow a[data-step=document]').click()
+                    expect(page.locator('#save-status')).to_contain_text('ещё не сохранён')
+                    draft_url = page.url
+                    draft_params = parse_qs(urlsplit(draft_url).query)
+                    assert draft_params['new'] == [task_id] and draft_params['tree'] == [tree]
+                    assert draft_params['metric'] == [metric_id] and draft_params['project'] == [project]
+                    page.locator('#title').fill('Документ с первого этапа')
+                    page.locator('#save').click()
+                    expect(page.locator('#save-status')).to_have_text('Все изменения сохранены')
+                    page.goto(draft_url)
+                    expect(page.locator('#title')).to_have_value('Документ с первого этапа')
+                    expect(page.locator('#save-status')).to_have_text('Все изменения сохранены')
+                    assert parse_qs(urlsplit(page.url).query)['id'] == [task_id]
 
                     # An unsaved tree id falls back to the saved trees.
                     page.goto(origin + '/solution-space.html?id=00000000-0000-4000-8000-000000000000')
@@ -98,7 +164,6 @@ def main():
                     role.fill('онлайн')
                     expect(page.locator('.branch-row')).to_have_attribute('data-role', 'online')
                     expect(page.locator('#tree-progress')).to_have_text('С определением: 0 из 1')
-                    page.once('dialog', lambda d: d.accept())
                     page.get_by_role('button', name='Удалить метрику').click()
                     expect(page.locator('.branch-row')).to_have_count(0)
 
@@ -201,6 +266,35 @@ def main():
                     page.locator('#back-list').click()
                     expect(orphan).to_have_count(0)
                     assert project in page.locator('#back-schema').get_attribute('href')
+                    assert not errors, errors
+                    for stage in ['Пространство проблем', 'Иерархия метрик']:
+                        page.locator('#open-stage summary').click()
+                        page.get_by_role('link', name=stage, exact=True).click()
+                        page.locator('#tree-ai-open').click()
+                        page.locator('#tree-request').fill('Разберём задачу')
+                        edit = page.get_by_role('button', name='Методика', exact=True)
+                        edit.click()
+                        field = page.get_by_label('Инструкция для модели')
+                        expect(field).to_be_enabled()
+                        default = field.input_value()
+                        assert default and 'JSON' not in default
+                        instruction = 'Начни с практического примера'
+                        field.fill(instruction)
+                        page.locator('#save-method').click()
+                        expect(edit).to_be_focused()
+                        expect(page.locator('#tree-request')).to_have_value('Разберём задачу')
+                        edit.click()
+                        expect(field).to_have_value(instruction)
+                        page.locator('#default-method').click()
+                        expect(field).to_have_value(default)
+                        page.keyboard.press('Escape')
+                        expect(edit).to_be_focused()
+                        edit.click()
+                        expect(field).to_have_value(instruction)
+                        page.locator('#default-method').click()
+                        page.locator('#save-method').click()
+                        expect(page.locator('#method-dialog')).to_be_hidden()
+                        page.goto(origin + '/design-docs.html?project=' + project)
                     assert not errors, errors
                     print(width, 'PASS design flow', flush=True)
                     context.close()

@@ -12,6 +12,21 @@
   const fields = window.DesignChat.fields;
   const query=new URLSearchParams(location.search),project=query.get('project');
   if(/^[a-f0-9-]{36}$/.test(project||''))$('back-schema').href+='?project='+encodeURIComponent(project);
+  const stageMenu = $('open-stage');
+  for (const link of stageMenu.querySelectorAll('a')) {
+    const url = new URL(link.href);
+    if (project) url.searchParams.set('project', project);
+    link.href = url;
+  }
+  document.addEventListener('click', event => {
+    if (!stageMenu.contains(event.target) || event.target.closest('a')) stageMenu.open = false;
+  });
+  stageMenu.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      stageMenu.open = false;
+      stageMenu.querySelector('summary').focus();
+    }
+  });
   let account=null,doc=null,release=null,dirty=false,conflicted=false,blocked=false,saving=null,working=false,mode='mine',preview=null;
   const draftKey=()=>`architect.design-document.${account.id}.${doc.id}`;
   function node(tag,text,cls=''){const e=document.createElement(tag);e.textContent=text;e.className=cls;return e;}
@@ -21,6 +36,11 @@
     let r;try{r=await fetch('/api/'+(community === true ? 'community/' : typeof community === 'string' ? community + '/' : 'design-documents/')+action,{method:'POST',headers:{'Content-Type':'application/json','X-Architect-Request':'1',...(account?{'X-Architect-Account':account.id}:{})},body:JSON.stringify(body)});}catch{throw Error('Не удалось связаться с сервером. Повторите попытку; введённый текст сохранён в редакторе.');}
     const data=await r.json();if(!r.ok){const e=Error(data.error||'Не удалось выполнить запрос.');e.status=r.status;throw e;}return data;
   }
+  window.setupMethodEditor({
+    first:'compose',
+    load:() => api('method'),
+    save:changes => api('save-method', {changes})
+  });
   const assistant = window.setupDesignAssistant({fields, api, read:value, changed, getId:()=>doc?.id, linksChanged:syncSteps});
   function syncSteps(links) {
     $('link-task').textContent = links.tree_id || links.metric_tree_id ? 'Изменить связи задачи' : 'Связать этапы задачи';
@@ -408,7 +428,9 @@
     location.href='/architecture.html?project='+encodeURIComponent(selected)+'&chat=1';
   });
   $('title').addEventListener('input',changed);
-  $('save').onclick=()=>task(save);$('create').onclick=()=>task(()=>create());$('mine').onclick=()=>task(()=>list('mine'));$('catalog').onclick=()=>task(()=>list('catalog'));
+  $('save').onclick=()=>task(save);$('create').onclick=()=>{
+    location.assign(window.designFlow.url('problems', {doc:crypto.randomUUID(), draft:true}));
+  };$('mine').onclick=()=>task(()=>list('mine'));$('catalog').onclick=()=>task(()=>list('catalog'));
   $('search-form').onsubmit=e=>{e.preventDefault();task(()=>list('catalog'));};$('back-list').onclick=()=>task(()=>list(release?'catalog':'mine'));
   $('back-schema').onclick=e=>{if(!doc||(!dirty&&!saving))return;e.preventDefault();task(async()=>{if(await leaveEditor()){discardDraft();location.href=$('back-schema').href;}});};
   $('copy').onclick=()=>task(async()=>{const attempt=retryId('copy.'+release.id),r=await api('copy',{id:attempt.id,release_id:release.id});attempt.clear();openEditor(r.document);message('Документ сохранён в «Мои документы».');});
@@ -431,7 +453,13 @@
         const id = query.get(param);
         if (/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(id)) links[key] = id;
       }
-      await create(/^[a-f0-9-]{36}$/.test(query.get('new'))?query.get('new'):undefined, links);
+      const draftId = query.get('new');
+      if (/^[a-f0-9-]{36}$/.test(draftId)) {
+        // Another visit to step four may already have saved this task.
+        try { await open(draftId); return; }
+        catch (error) { if (error.status !== 404) throw error; }
+        await create(draftId, links);
+      } else await create(undefined, links);
     }else await list(query.get('view')==='catalog'?'catalog':'mine');}
   async function login(register){try{await api(register?'register':'login',{username:$('username').value,password:$('password').value},true);$('password').value='';await start();}catch(e){message(e.message);}}
   $('login-form').onsubmit=e=>{e.preventDefault();login(false);};$('register').onclick=()=>{if($('login-form').reportValidity())login(true);};

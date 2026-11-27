@@ -2,6 +2,7 @@
 import json
 import time
 
+import tree_methods
 from block_contracts import ContractError
 from design_documents import identity
 
@@ -18,7 +19,7 @@ def problem_tree(nodes, depth=1):
     return nodes
 
 
-QUESTION_INSTRUCTIONS = """Помоги исследовать задачу ML-проекта. Предложи новые вопросы на русском языке
+DEFAULT_METHOD = """Помоги исследовать задачу ML-проекта. Предложи новые вопросы на русском языке
 с учётом описания задачи, уже заданных вопросов и ответов. Выбирай следующий вопрос по тому,
 какое решение зависит от ответа. Ищи неоднозначные понятия и предположения, требующие проверки.
 
@@ -35,14 +36,16 @@ QUESTION_INSTRUCTIONS = """Помоги исследовать задачу ML-�
 
 Глубина узла определяет степень детализации вопроса. Этап обсуждения может быть любым
 на каждом уровне. Первый уровень собирает общий контекст,
-второй уточняет причины и детали ответов, третий раскрывает технические детали. Если указан путь
+второй уточняет причины и детали ответов, третий раскрывает технические детали. Ветви могут быть разной длины. Не повторяй вопросы."""
+
+RESPONSE_CONTRACT = """Если указан путь
 к узлу, предложи только его новые дочерние вопросы с учётом оставшейся глубины. Для пустого пути
-предложи новые ветви с первого уровня. Ветви могут быть разной длины. Не повторяй вопросы и не
-заполняй ответы за пользователя. Верни только JSON-массив объектов с полями question (текст)
+предложи новые ветви с первого уровня. Максимальная глубина дерева — три уровня. Не заполняй ответы за пользователя.
+Верни только непустой JSON-массив объектов с полями question (текст)
 и children (массив таких же объектов, у листа пустой). Индексы пути отсчитываются от нуля."""
 
 
-def suggest_questions(root, body, context):
+def suggest_questions(hub, user, body, context):
     from codex_chat import standalone_answer
 
     tree = problem_tree(body.get('problem_tree', []))
@@ -58,7 +61,8 @@ def suggest_questions(root, body, context):
         branch = branch[index]['children']
     prompt = json.dumps({**context, 'problem_tree': tree,
                          'path': path, 'request': request}, ensure_ascii=False)
-    reply = standalone_answer(root, prompt, QUESTION_INSTRUCTIONS)
+    instructions = tree_methods.instructions(hub, user, 'problems', DEFAULT_METHOD, RESPONSE_CONTRACT)
+    reply = standalone_answer(hub.root, prompt, instructions)
     def parse(items, depth):
         if not isinstance(items, list) or (items and depth > 3):
             raise ValueError()
@@ -93,9 +97,11 @@ def content(body):
 def request(hub, user, body, action):
     if not user:
         raise ContractError('Рабочее пространство недоступно.', 401)
+    if action in ('method', 'save-method'):
+        return tree_methods.method_settings(hub, user, 'problems', DEFAULT_METHOD, body if action == 'save-method' else None)
     if action == 'suggest-questions':
         value = content(body)
-        return suggest_questions(hub.root, body, {k: value[k] for k in ('title', 'problem')})
+        return suggest_questions(hub, user, body, {k: value[k] for k in ('title', 'problem')})
     return stored_tree(hub, user, body, action, metrics=False)
 
 

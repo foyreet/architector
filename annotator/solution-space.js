@@ -34,6 +34,11 @@
     if (!response.ok) throw Object.assign(Error(result.error || 'Ошибка запроса'), {status: response.status});
     return result;
   }
+  window.setupMethodEditor({
+    first:'cases',
+    load:() => api('method'),
+    save:changes => api('save-method', {changes})
+  });
   function controls() {
     $('generate').disabled = busy || !source?.answers.length;
     // Once cases exist, regeneration is a secondary action and saving becomes the primary one.

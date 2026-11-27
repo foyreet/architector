@@ -4,13 +4,21 @@
 <div class="problem-layout"><section class="tree-board" aria-label="Дерево вопросов">
 <div class="tree-controls"><button id="tree-smaller" aria-label="Уменьшить масштаб">−</button><output id="tree-scale" aria-label="Масштаб">100%</output><button id="tree-larger" aria-label="Увеличить масштаб">+</button><button id="tree-fit">Вписать дерево</button><button id="tree-all" hidden>Все ветви</button></div>
 <div id="tree-viewport" tabindex="0" aria-label="Полотно дерева"><div id="tree-map"><button id="tree-origin" type="button" aria-label="Редактировать формулировку проблемы"><span></span></button><div id="tree-branches" aria-label="Ветви вопросов"></div></div></div></section><section id="question-editor" aria-label="Редактирование вопроса"></section><section id="tree-ai" hidden aria-labelledby="tree-ai-title">
-<h2 id="tree-ai-title">Предложение AI</h2>
+<div class="method-heading"><h2 id="tree-ai-title">Предложение AI</h2><button id="edit-method" aria-haspopup="dialog">Методика</button></div>
 <label for="tree-request">Опишите задачу или укажите, что хотите уточнить</label><textarea id="tree-request" rows="3"></textarea>
 <label for="tree-target">Куда добавить вопросы</label><select id="tree-target"><option value="root">Новые общие вопросы</option><option value="branch">Уточнения к выбранному вопросу</option></select>
 <p class="muted">Модель получит ваш запрос, формулировку проблемы и текущее дерево. <a id="tree-ai-settings" href="/architecture.html?chat=1" target="_blank" rel="noopener">Настроить модель в AI Chat ↗</a></p>
 <div class="actions"><button id="tree-generate">Запросить вопросы</button><button id="tree-cancel">Отмена</button></div>
 <p id="tree-ai-status" role="status"></p><div id="tree-proposal" hidden><h3>Предложенные вопросы</h3><div id="tree-preview"></div><button id="tree-apply" class="primary">Добавить в дерево</button></div>
 </section></div></main>
+<dialog id="method-dialog" aria-labelledby="method-title">
+<h2 id="method-title">Методика вопросов</h2>
+<p id="method-scope">Действует для всех деревьев проблем на этом компьютере со следующего запроса к модели.</p>
+<label for="method-text">Инструкция для модели</label>
+<textarea id="method-text" aria-describedby="method-scope" rows="12"></textarea>
+<p id="method-message" role="status"></p>
+<div class="method-actions"><button id="default-method">Вернуть встроенную</button><button id="cancel-method">Отмена</button><button id="save-method" class="primary">Сохранить</button></div>
+</dialog>
 <dialog id="trees"><h2>Мои деревья</h2><div id="entries"></div><div class="actions"><button id="new">Новое дерево</button><button id="export">Экспорт JSON</button><button id="import">Импорт JSON</button><button data-close>Закрыть</button></div></dialog>
 <dialog id="root-editor"><label for="formulation">Формулировка проблемы</label><textarea id="formulation"></textarea><button data-close>Готово</button></dialog>
-<script src="/design-flow.js"></script><script src="/problem-space.js"></script><script src="/tree-workspace.js"></script></body></html>
+<script src="/method-editor.js"></script><script src="/design-flow.js"></script><script src="/problem-space.js"></script><script src="/tree-workspace.js"></script></body></html>

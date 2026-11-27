@@ -21,6 +21,11 @@
     if (!response.ok) throw Object.assign(Error(data.error || 'Ошибка запроса.'), {status: response.status});
     return data;
   }
+  window.setupMethodEditor({
+    first:'tree',
+    load:async () => ({tree:await api('method', {})}),
+    save:changes => api('save-method', changes.tree)
+  });
   const tree = window.problemSpace(changed, (request, path) =>
     api(metrics ? 'suggest' : 'suggest-questions', {...value(), request, path}), metrics);
   function value() {
@@ -108,6 +113,18 @@
     if ((dirty || !revision) && !await save()) return;
     location.href = window.designFlow.url('solutions');
   };
+  $('design-flow').addEventListener('click', async event => {
+    const link = event.target.closest('a[data-step]');
+    if (!link || !url.searchParams.has('draft') || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    if (saving) return;
+    if (conflict) { status('Сначала сохраните свою версию дерева как копию.'); return; }
+    if (dirty && !await save()) return;
+    const target = new URL(link.href);
+    // A skipped, untouched stage has no saved tree to attach.
+    if (!revision) target.searchParams.delete(metrics ? 'metric' : 'tree');
+    location.assign(target);
+  });
   $('title').oninput = $('formulation').oninput = () => { tree.updateOrigin(); changed(); };
   $('library').onclick = async () => {
     try {
@@ -160,7 +177,10 @@
   document.querySelectorAll('[data-close]').forEach(button => { button.onclick = () => button.closest('dialog').close(); });
   window.addEventListener('beforeunload', event => { if (dirty || saving) event.preventDefault(); });
   document.addEventListener('keydown', event => {
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') { event.preventDefault(); save(); }
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+      event.preventDefault();
+      save();
+    }
   });
   document.body.inert = true;
   const oldNew = url.searchParams.get('new');
