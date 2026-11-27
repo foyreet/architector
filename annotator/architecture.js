@@ -780,17 +780,16 @@
   $('delete-node').onclick = deleteNode;
   $('diagram-name').onchange = () => commit(() => { state.name = $('diagram-name').value.trim() || 'Новая схема'; });
   $('save').onclick = saveCurrentProject;
-  async function openDesignDocuments(create, releaseId) {
+  async function openDesignDocuments(releaseId) {
     if (selected && !saveNode()) return;
     try {
-      if (!activeProject && !runView) {
+      if (!activeProject && !runView && unsaved) {
         await saveCurrentProject();
         if (!activeProject) return;
       }
       await flushProject();
       const url = new URL('/design-docs.html', location.origin);
       if (activeProject) url.searchParams.set('project', activeProject.meta.id);
-      if (create) url.searchParams.set('new', '1');
       if (releaseId) url.searchParams.set('release', releaseId);
       location.href = url;
     } catch (error) { toast(error.message); }
@@ -804,7 +803,7 @@
   $('problem-space-open').onclick = () => openSpace('/problem-space.html');
   $('metric-tree-open').onclick = () => openSpace('/metric-tree.html');
   $('solution-space-open').onclick = () => openSpace('/solution-space.html');
-  $('design-document-create').onclick = () => openDesignDocuments(true);
+  $('design-documents-open').onclick = () => openDesignDocuments();
 
   $('board-open').onclick = async () => {
     if (selected && !saveNode()) return;
@@ -2315,7 +2314,7 @@
       }};
     }});
   community = window.Community({api, account, discussions,
-    openDesignDocument: releaseId => openDesignDocuments(false, releaseId),
+    openDesignDocument: openDesignDocuments,
     connectionStatus: provider => provider === 'kaggle' ? !!kaggleConnectionToken : provider === 'huggingface' ? !!hubToken : !!(openrouterKey || serverKey),
     setConnection: (provider, value) => {
       if (value && !/^[!-~]{1,2048}$/.test(value)) throw new Error('Токен должен содержать только печатные символы без пробелов.');

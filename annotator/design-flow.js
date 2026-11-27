@@ -15,16 +15,16 @@ window.designFlow = (() => {
     }
     state.tree = params.get('id');
   }
-  function url(step) {
+  function url(step, task = state) {
     const next = new URL(paths[step], location.origin);
-    for (const [key, value] of Object.entries({project, tree:state.tree, metric:state.metric, doc:state.doc})) {
+    for (const [key, value] of Object.entries({project, tree:task.tree, metric:task.metric, doc:task.doc})) {
       if (value) next.searchParams.set(key, value);
     }
-    if (state.doc && state.draft) next.searchParams.set('draft', '1');
-    const id = step === 'document' ? state.doc : step === 'metrics' ? state.metric : state.tree;
-    if (id) next.searchParams.set(step === 'document' && state.draft ? 'new' : 'id', id);
-    else if (step === 'document' && (state.tree || state.metric)) next.searchParams.set('new', '1');
-    else if ((step === 'metrics' || step === 'problems') && (state.tree || state.metric || state.doc)) next.searchParams.set('new', '1');
+    if (task.doc && task.draft) next.searchParams.set('draft', '1');
+    const id = step === 'document' ? task.doc : step === 'metrics' ? task.metric : task.tree;
+    if (id) next.searchParams.set(step === 'document' && task.draft ? 'new' : 'id', id);
+    else if (step === 'document' && (task.tree || task.metric)) next.searchParams.set('new', '1');
+    else if ((step === 'metrics' || step === 'problems') && (task.tree || task.metric || task.doc)) next.searchParams.set('new', '1');
     return next;
   }
   function refresh() {

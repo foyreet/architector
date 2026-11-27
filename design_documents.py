@@ -110,6 +110,55 @@ def snapshot(row):
     return {'format': FORMAT, 'version': 1, 'task_links': json.loads(row['task_links']), 'title': row['title'], 'sections': normalize_sections(json.loads(row['sections'])), 'sources': json.loads(row['sources'])}
 
 
+def tree_nodes(encoded):
+    pending = json.loads(encoded)
+    while pending:
+        node = pending.pop()
+        yield node
+        pending.extend(node['children'])
+
+
+def document_overview(db, owner):
+    db.execute('BEGIN')
+    problems = {}
+    for row in db.execute("""SELECT p.id, p.title, p.updated, p.tree,
+                                    coalesce(json_array_length(s.content, '$.options'), 0) AS cases
+                             FROM problem_spaces p LEFT JOIN solution_spaces s ON s.tree_id=p.id
+                             WHERE p.owner=?""", (owner,)):
+        answered = questions = 0
+        for node in tree_nodes(row['tree']):
+            questions += 1
+            answered += bool(node['answer'].strip())
+        problems[row['id']] = dict(id=row['id'], title=row['title'], updated=row['updated'],
+                                   answered=answered, questions=questions, cases=row['cases'])
+
+    metrics = {}
+    for row in db.execute('SELECT id,title,updated,tree FROM metric_trees WHERE owner=?', (owner,)):
+        metrics[row['id']] = dict(id=row['id'], title=row['title'], updated=row['updated'],
+                                  count=sum(1 for _ in tree_nodes(row['tree'])))
+
+    documents, used_problems, used_metrics = [], set(), set()
+    for row in db.execute("""SELECT id,title,revision,updated,sections,task_links FROM design_documents
+                             WHERE owner=? ORDER BY updated DESC, id""", (owner,)):
+        links = json.loads(row['task_links'])
+        tree, metric = links.get('tree_id'), links.get('metric_tree_id')
+        used_problems.add(tree)
+        used_metrics.add(metric)
+        sections = normalize_sections(json.loads(row['sections']))
+        documents.append(dict(id=row['id'], title=row['title'], revision=row['revision'], updated=row['updated'],
+                              problem=problems.get(tree), metric=metrics.get(metric),
+                              missing_problem=bool(tree and tree not in problems),
+                              missing_metric=bool(metric and metric not in metrics),
+                              filled=sum(bool(value.strip()) for value in sections.values())))
+
+    unlinked = [dict(title=p['title'], updated=p['updated'], problem=p) for key, p in problems.items()
+                if key not in used_problems]
+    unlinked.extend(dict(title=m['title'], updated=m['updated'], metric=m) for key, m in metrics.items()
+                    if key not in used_metrics)
+    unlinked.sort(key=lambda row: row['updated'], reverse=True)
+    return {'documents': documents, 'unlinked': unlinked}
+
+
 def request(hub, user, body, action):
     if user is None: raise ContractError('Войдите в аккаунт Архитектора, чтобы работать с документами.', 401)
     if action in ('compose', 'review'):
@@ -121,6 +170,8 @@ def request(hub, user, body, action):
         return suggest_questions(hub.root, body, {'title': title, 'sections': sections})
     if action == 'list':
         with hub.db() as db:
+            if body.get('include_progress') is True:
+                return document_overview(db, user['id'])
             rows = db.execute('SELECT id,title,updated,revision FROM design_documents WHERE owner=? ORDER BY updated DESC', (user['id'],))
             return {'documents': [dict(row) for row in rows]}
     if action in ('create', 'import'):

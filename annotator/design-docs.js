@@ -241,7 +241,17 @@
     if (editable) requestAnimationFrame(refreshSectionViews);
     renderOutline(key => editable ? $('section-' + key).value : data[key], editable);
   }
-  function updateURL(values){const url=new URL(location.href);for(const k of ['id','release','new','view'])url.searchParams.delete(k);for(const [k,v]of Object.entries(values))url.searchParams.set(k,v);history.replaceState(null,'',url);}
+  function updateURL(values) {
+    const url = new URL(location.pathname, location.origin);
+    if (project) url.searchParams.set('project', project);
+    if (values.new) {
+      const links = assistant.taskLinks();
+      if (links.tree_id) url.searchParams.set('tree', links.tree_id);
+      if (links.metric_tree_id) url.searchParams.set('metric', links.metric_tree_id);
+    }
+    for (const [key, value] of Object.entries(values)) url.searchParams.set(key, value);
+    history.replaceState(null, '', url);
+  }
   async function save(){
     if(saving)return saving;if(!dirty&&doc.revision)return true;if(conflicted||blocked)return false;
     const sent=value();if(!sent.title.trim()){error('Введите название документа.');$('title').focus();return false;}
@@ -277,6 +287,7 @@
       if(draft&&typeof draft.title==='string'&&fields.every(([k])=>typeof draft.sections?.[k]==='string')){
       if(same(draft,document))localStorage.removeItem(draftKey());else{content=draft;dirty=true;conflicted=draft.revision!==document.revision;message('Восстановлены несохранённые изменения из этого браузера.');}
     }}catch{error('Не удалось прочитать локальный черновик.');}}
+    $('design-flow').hidden=false;
     $('auth').hidden=true;$('list').hidden=true;$('editor').hidden=false;$('title-label').hidden=false;$('title').hidden=false;$('title').value=content.title;$('read-title').hidden=true;
     $('save').hidden=false;$('publish').hidden=false;$('copy').hidden=true;$('publication-info').hidden=!doc.source_release;
     $('publication-info').textContent=doc.source_release?'Личная копия публикации. Ваши изменения не затрагивают оригинал.':'';
@@ -287,24 +298,103 @@
   async function create(id=crypto.randomUUID(), taskLinks={}){
     openEditor({id,task_links:taskLinks,title:'Новый дизайн-документ',sections:Object.fromEntries(fields.map(([k])=>[k,''])),revision:0});$('title').focus();$('title').select();
   }
-  async function list(next='mine'){
-    if(!await leaveEditor())return;const result=next==='mine'?await api('list'):await api('catalog',{kind:'design_document',search:$('search').value},true);
+  const pluralRules = new Intl.PluralRules('ru');
+  function quantity(count, one, few, many) {
+    return count + ' ' + ({one, few}[pluralRules.select(count)] || many);
+  }
+
+  function taskRow(row) {
+    const {problem, metric} = row;
+    const context = {tree:problem?.id, metric:metric?.id, doc:row.id};
+    const stepUrl = step => window.designFlow.url(step, context);
+    const item = node('article', '', 'task-row');
+    const heading = node('h3', '');
+    const title = node('a', row.title, 'document-row');
+    title.href = stepUrl(row.id ? 'document' : problem ? 'problems' : 'metrics');
+    heading.append(title);
+    item.append(heading);
+    if (row.id) {
+      const remove = node('button', 'Удалить', 'delete-document');
+      remove.setAttribute('aria-label', 'Удалить документ «' + row.title + '»');
+      remove.onclick = () => task(async () => {
+        if (!confirm('Удалить документ «' + row.title + '»? Это действие нельзя отменить.')) return;
+        remove.disabled = true;
+        try {
+          await api('delete', {id:row.id, revision:row.revision});
+          try { localStorage.removeItem('architect.design-document.' + account.id + '.' + row.id); } catch {}
+          await list();
+          message('Документ удалён.');
+          $('create').focus();
+        } finally { remove.disabled = false; }
+      });
+      item.append(remove);
+    }
+
+    const steps = node('ol', '', 'task-steps');
+    steps.setAttribute('aria-label', 'Этапы задачи «' + row.title + '»');
+    function addStep(key, label, status, available, active) {
+      const li = node('li', '');
+      const link = node(available || row.id ? 'a' : 'span', '', 'task-step');
+      if (available) link.href = stepUrl(key);
+      else if (row.id) {
+        const url = stepUrl('document');
+        url.searchParams.set('link', '1');
+        link.href = url;
+        link.title = 'Выбрать связанные деревья';
+      }
+      const number = node('span', steps.children.length + 1, 'step-number');
+      number.setAttribute('aria-hidden', 'true');
+      if (active) number.classList.add('started');
+      link.append(number, node('span', label), node('span', status, 'step-status'));
+      li.append(link);
+      steps.append(li);
+    }
+    addStep('problems', 'Проблемы', problem ? problem.answered + ' из ' + quantity(problem.questions, 'ответа', 'ответов', 'ответов') :
+      row.missing_problem ? 'дерево недоступно' : 'нет дерева', !!problem, !!problem);
+    addStep('solutions', 'Решения', problem?.cases ? quantity(problem.cases, 'кейс', 'кейса', 'кейсов') : 'нет кейсов', !!problem, !!problem?.cases);
+    addStep('metrics', 'Метрики', metric ? quantity(metric.count, 'показатель', 'показателя', 'показателей') :
+      row.missing_metric ? 'дерево недоступно' : 'не выбраны', !!metric, !!metric);
+    addStep('document', 'Документ', row.id ? row.filled + ' из ' + quantity(fields.length, 'раздела', 'разделов', 'разделов') : 'не создан', true, !!row.filled);
+    item.append(steps);
+    return item;
+  }
+
+  async function list(next='mine') {
+    if (!await leaveEditor()) return;
+    const mine = next === 'mine';
+    const result = mine ? await api('list', {include_progress:true}) :
+      await api('catalog', {kind:'design_document', search:$('search').value}, true);
     discardDraft();
-    mode=next;doc=null;release=null;syncSteps({});dirty=false;error();message();$('auth').hidden=true;$('editor').hidden=true;$('list').hidden=false;$('search-form').hidden=mode!=='catalog';
-    $('mine').setAttribute('aria-current',mode==='mine'?'page':'false');$('catalog').setAttribute('aria-current',mode==='catalog'?'page':'false');
-    updateURL({view:mode});$('documents').replaceChildren();
-    const rows=mode==='mine'?result.documents:result.releases;
-    if(!rows.length)$('documents').append(node('p',mode==='mine'?'У вас пока нет дизайн-документов. Создайте пустой документ или начните с шага «Проблемы»: черновик соберётся из деревьев.':$('search').value?'По этому запросу документов нет.':'В сообществе пока нет опубликованных дизайн-документов.','muted'));
-    for(const row of rows){const item=node('div','','document-item'),button=node('button','','document-row');button.append(node('strong',row.title||row.name));if(mode==='catalog')button.append(node('small',`@${row.username} · версия ${row.number}`));button.onclick=()=>task(()=>mode==='mine'?open(row.id):openRelease(row.id));item.append(button);
-      if(mode==='mine'){const remove=node('button','Удалить','delete-document');remove.setAttribute('aria-label','Удалить документ «'+row.title+'»');remove.onclick=()=>task(async()=>{
-        if(!confirm('Удалить документ «'+row.title+'»? Это действие нельзя отменить.'))return;
-        remove.disabled=true;try{await api('delete',{id:row.id,revision:row.revision});try{localStorage.removeItem(`architect.design-document.${account.id}.${row.id}`);}catch{}await list('mine');message('Документ удалён.');$('create').focus();}finally{remove.disabled=false;}
-      });item.append(remove);}$('documents').append(item);}
+    mode=next;doc=null;release=null;syncSteps({});dirty=false;error();message();
+    $('auth').hidden=true;$('editor').hidden=true;$('list').hidden=false;$('search-form').hidden=mine;
+    $('design-flow').hidden=true;
+    $('mine').setAttribute('aria-current',mine?'page':'false');$('catalog').setAttribute('aria-current',mine?'false':'page');
+    updateURL({view:mode});
+    const documents = $('documents');
+    documents.replaceChildren();
+    const trees = result.unlinked || [];
+    $('unlinked').hidden = !trees.length;
+    $('unlinked-trees').replaceChildren();
+    for (const tree of trees) $('unlinked-trees').append(taskRow(tree));
+    if (mine) {
+      for (const row of result.documents) documents.append(taskRow(row));
+      if (!result.documents.length) documents.append(node('p', 'Сохранённых дизайн-документов пока нет.', 'muted'));
+    } else {
+      for (const row of result.releases) {
+        const button = node('button', '', 'document-row');
+        button.append(node('strong', row.name), node('small', '@' + row.username + ' · версия ' + row.number));
+        button.onclick = () => task(() => openRelease(row.id));
+        documents.append(button);
+      }
+      if (!result.releases.length) documents.append(node('p', $('search').value ? 'По этому запросу документов нет.' :
+        'В сообществе пока нет опубликованных дизайн-документов.', 'muted'));
+    }
     window.scrollTo(0,0);
   }
   async function openRelease(id){
     const result=await api('release',{release_id:id},true);if(result.kind!=='design_document')throw Error('Это не публикация дизайн-документа.');
     release=result;doc=null;dirty=false;conflicted=false;blocked=false;error();message();
+    $('design-flow').hidden=false;
     $('auth').hidden=true;$('list').hidden=true;$('editor').hidden=false;$('title-label').hidden=true;$('title').hidden=true;$('read-title').hidden=false;$('read-title').textContent=result.name;
     $('save').hidden=true;$('publish').hidden=true;$('copy').hidden=false;$('publication-info').hidden=false;$('publication-info').textContent=`@${result.username} · версия ${result.number} · Опубликованный документ`;
     $('doc-assist').hidden=true;renderSections($('sections'),result.package.sections,false);updateURL({release:id});$('back-list').textContent='← Каталог сообщества';controls();window.scrollTo(0,0);
@@ -335,7 +425,7 @@
   window.addEventListener('beforeunload',e=>{if(dirty){cache();e.preventDefault();e.returnValue='';}});
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'&&doc){e.preventDefault();task(save);}});
   async function start(){const session=await api('session',{},true);account=session.user;$('register').hidden=session.registration_open===false||!session.enabled;if(!account){$('auth').hidden=false;return;}$('account').textContent='На этом компьютере';
-    if(query.has('release'))await openRelease(query.get('release'));else if(query.has('id'))await open(query.get('id'));else if(query.has('new')){
+    if(query.has('release'))await openRelease(query.get('release'));else if(query.has('id')){await open(query.get('id'));if(query.has('link'))$('link-task').click();}else if(query.has('new')){
       const links = {};
       for (const [param,key] of [['tree','tree_id'],['metric','metric_tree_id']]) {
         const id = query.get(param);
