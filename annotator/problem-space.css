@@ -5,7 +5,6 @@
 .space-page header #save{flex:none}
 
 .space-actions{display:flex;align-items:center;gap:8px;padding:8px 12px;flex-wrap:wrap;background:#f6f8fc;border-bottom:1px solid #d7dfec}
-.space-divider{width:1px;align-self:stretch;margin:6px 4px;background:#d7dfec}
 #tree-progress{margin-left:auto;color:#536680;font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
 
 #space{position:relative;display:flex;flex-direction:column;flex:1;min-height:0;max-width:none;width:100%;margin:0;padding:0}
@@ -100,15 +99,12 @@
 #tree-request{min-height:0}
 #tree-preview{overflow-wrap:anywhere}
 
-#entries{display:grid;gap:6px;margin:14px 0}
-#entries button{text-align:left}
 
 @media(max-width:700px){
   .space-page header{gap:4px 8px;padding:4px 8px}
   .space-page header #status{max-width:none;flex:1 1 0}
   .design-flow{order:3;flex:1 1 100%}
   .space-actions{gap:6px;padding:6px 8px}
-  .space-divider{display:none}
   #tree-progress{margin-left:0}
   .space-actions button{font-size:13px;padding:6px 10px}
   #space .problem-layout:is(:has(#question-editor:not(:empty):not([hidden])),:has(#tree-ai:not([hidden]))){grid-template-columns:minmax(0,1fr)}

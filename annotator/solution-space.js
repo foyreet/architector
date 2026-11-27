@@ -14,8 +14,6 @@
     return url;
   }
   $('back').href = page('/architecture.html');
-  $('switch-tree').hidden = !id;
-  $('switch-tree').href = page('/solution-space.html');
   const labels = {title:'Кейс', validation:'Критерий готовности', rationale:'Почему это нужно', approach:'Возможный подход',
     tradeoffs:'Ограничения и компромиссы', assumptions:'Предположения', business_query:'Запрос по бизнес-задаче', query:'Запрос по технической задаче'};
   const status = text => { $('status').textContent = text; };
@@ -218,7 +216,6 @@
   // A step link may point at a tree that exists only as an unsaved draft: offer the saved ones instead.
   async function fallback(error) {
     if (error.status !== 404) throw error;
-    $('switch-tree').hidden = true;
     await library();
     status('Это дерево ещё не сохранено. Выберите сохранённое дерево или вернитесь к вопросам.');
   }

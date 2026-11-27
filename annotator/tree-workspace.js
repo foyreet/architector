@@ -94,7 +94,7 @@
     if (saving || !id) return;
     saving = true;
     if ($('solutions')) $('solutions').disabled = true;
-    $('save').disabled = $('library').disabled = true;
+    $('save').disabled = $('import').disabled = true;
     const previousKey = key();
     const dest = conflict ? crypto.randomUUID() : id;
     const current = value();
@@ -119,7 +119,7 @@
     } catch (error) {
       if (error.status === 409) { conflict = true; $('save').textContent = 'Сохранить копию'; }
       status(error.message);
-    } finally { saving = false; if ($('solutions')) $('solutions').disabled = false; $('save').disabled = $('library').disabled = false; }
+    } finally { saving = false; if ($('solutions')) $('solutions').disabled = false; $('save').disabled = $('import').disabled = false; }
   }
   function openTreeAfterSave(dest, version) {
     id = dest; revision = version; dirty = conflict = false;
@@ -148,34 +148,6 @@
     location.assign(target);
   });
   $('title').oninput = $('formulation').oninput = () => { tree.updateOrigin(); changed(); };
-  $('library').onclick = async () => {
-    try {
-      const result = await api('list', {});
-      $('entries').replaceChildren();
-      const ids = new Set(result.trees.map(row => row.id));
-      for (const storageKey of Object.keys(localStorage)) {
-        const prefix = space + '.draft.';
-        if (!storageKey.startsWith(prefix)) continue;
-        const draftId = storageKey.slice(prefix.length);
-        if (!ids.has(draftId)) {
-          const draft = JSON.parse(localStorage.getItem(storageKey));
-          result.trees.push({id: draftId, title: (draft.title || 'Новое дерево') + ' · черновик'});
-        }
-      }
-      for (const row of result.trees) {
-        const button = document.createElement('button');
-        button.textContent = row.title;
-        button.onclick = async () => {
-          try { await restore(row.id); $('trees').close(); }
-          catch (error) { $('trees').close(); status(error.message); }
-        };
-        $('entries').append(button);
-      }
-      if (!result.trees.length) $('entries').textContent = 'Сохранённых деревьев пока нет.';
-      $('trees').showModal();
-    } catch (error) { status(error.message); }
-  };
-  $('new').onclick = () => { openTree(fresh()); $('trees').close(); };
   $('export').onclick = () => {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify({format:space,version:1,...value()},null,2)],{type:'application/json'}));
@@ -185,7 +157,7 @@
   $('import').onclick = () => {
     const input = document.createElement('input'); input.type = 'file'; input.accept = '.json';
     input.onchange = async () => {
-      $('trees').close();
+      $('root-editor').close();
       try {
         const data = JSON.parse(await input.files[0].text());
         if (data.version !== 1 || !(metrics ? [space] : [space,'architect.design-document']).includes(data.format)) throw Error('Выберите JSON дерева.');
