@@ -341,9 +341,6 @@
     const label = (row.id ? 'Удалить документ «' : 'Удалить задачу «') + row.title + '»';
     remove.setAttribute('aria-label', label);
     remove.onclick = () => task(async () => {
-      const details = row.id ? 'Это действие нельзя отменить.' :
-        'Деревья и кейсы, которые используются только в этой задаче, будут удалены.';
-      if (!confirm(label + '? ' + details)) return;
       remove.disabled = true;
       const index = [...item.parentElement.children].indexOf(item);
       try {

@@ -362,10 +362,6 @@ def main():
                     page.reload()
                     cards = [page.locator('.task-row').filter(has=page.locator(f'.task-step[href*="{twin}"]')) for twin in twins]
                     remove = cards[0].get_by_role('button', name='Удалить задачу «Новое дерево»')
-                    page.once('dialog', lambda dialog: dialog.dismiss())
-                    remove.click()
-                    expect(remove).to_be_visible()
-                    page.once('dialog', lambda dialog: dialog.accept())
                     remove.click()
                     expect(page.locator('#message')).to_have_text('Задача удалена.')
                     page.reload()

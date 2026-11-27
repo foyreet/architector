@@ -195,18 +195,13 @@ def main():
             page.screenshot(path=str(artifacts / f'list-{width}.png'))
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
             remove = page.get_by_role('button', name='Удалить документ «' + title + '»', exact=True)
-            dialog(False)
-            remove.click()
-            assert len(documents()) == 1
             page.route('**/api/design-documents/delete', lambda route: route.fulfill(status=503, json={'error': 'Удаление недоступно'}))
-            dialog(True)
             remove.click()
             expect(page.locator('#message')).to_have_text('Удаление недоступно')
             expect(remove).to_be_enabled()
             assert len(documents()) == 1
             page.unroute('**/api/design-documents/delete')
             remove.focus()
-            dialog(True)
             page.keyboard.press('Enter')
             expect(page.locator('#message')).to_have_text('Документ удалён.')
             expect(page.locator('#create')).to_be_focused()
