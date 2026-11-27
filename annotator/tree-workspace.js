@@ -21,67 +21,11 @@
     if (!response.ok) throw Object.assign(Error(data.error || 'Ошибка запроса.'), {status: response.status});
     return data;
   }
-  const methodDialog = $('method-dialog'), methodText = $('method-text');
-  let method, methodLoad = 0, writingMethod = false;
-  function readMethodFromStart() {
-    methodText.focus();
-    methodText.setSelectionRange(0, 0);
-    methodText.scrollTop = 0;
-  }
-  function methodButtons() {
-    const text = methodText.value.trim();
-    methodText.disabled = !method || writingMethod;
-    $('save-method').disabled = !method || writingMethod || !text || text === method.text;
-    $('default-method').disabled = !method || writingMethod || methodText.value === method.default;
-    $('cancel-method').disabled = writingMethod;
-  }
-  $('edit-method').onclick = async () => {
-    method = null;
-    methodText.value = '';
-    $('method-message').textContent = 'Загрузка…';
-    methodButtons();
-    methodDialog.showModal();
-    const request = ++methodLoad;
-    try {
-      const loaded = await api('method', {});
-      if (request !== methodLoad || !methodDialog.open) return;
-      method = loaded;
-      methodText.value = method.text;
-      $('method-message').textContent = method.text === method.default ? 'Встроенная методика' : 'Своя методика';
-      methodButtons();
-      readMethodFromStart();
-    } catch (error) {
-      if (request === methodLoad) $('method-message').textContent = error.message;
-    }
-  };
-  methodText.oninput = () => {
-    $('method-message').textContent = methodText.value.trim() ? '' : 'Введите методику или верните встроенную.';
-    methodButtons();
-  };
-  $('default-method').onclick = () => {
-    methodText.value = method.default;
-    $('method-message').textContent = method.text === method.default ? 'Встроенная методика' : 'Нажмите «Сохранить», чтобы применить встроенную методику.';
-    methodButtons();
-    readMethodFromStart();
-  };
-  $('cancel-method').onclick = () => methodDialog.close();
-  methodDialog.addEventListener('cancel', event => { if (writingMethod) event.preventDefault(); });
-  $('save-method').onclick = async () => {
-    writingMethod = true;
-    methodButtons();
-    $('method-message').textContent = 'Сохранение…';
-    try {
-      const text = methodText.value.trim();
-      await api('save-method', {text:text === method.default ? null : text, previous:method.text});
-      methodDialog.close();
-      $('edit-method').title = text === method.default ? 'Встроенная методика' : 'Своя методика';
-    } catch (error) {
-      $('method-message').textContent = error.message;
-    } finally {
-      writingMethod = false;
-      methodButtons();
-    }
-  };
+  window.setupMethodEditor({
+    first:'tree',
+    load:async () => ({tree:await api('method', {})}),
+    save:changes => api('save-method', changes.tree)
+  });
   const tree = window.problemSpace(changed, (request, path) =>
     api(metrics ? 'suggest' : 'suggest-questions', {...value(), request, path}), metrics);
   function value() {
@@ -235,8 +179,7 @@
   document.addEventListener('keydown', event => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
       event.preventDefault();
-      if (methodDialog.open) $('save-method').click();
-      else save();
+      save();
     }
   });
   document.body.inert = true;

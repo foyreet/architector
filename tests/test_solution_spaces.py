@@ -48,3 +48,35 @@ class SolutionSpaces(unittest.TestCase):
             self.assertEqual(result['url'], record['url'])
             model.return_value = json.dumps([{**hit, 'quote': record['summary'], 'outcome': 'Неудача'}])
             self.assertEqual(self.call('research', case=self.case, source_revision=1)['sources'][0]['outcome'], 'Неудача')
+
+    def test_independent_methods_and_model_contracts(self):
+        defaults = self.call('method')
+        def edit(key, text):
+            return {key: {'text': text, 'previous': defaults[key]['text']}}
+        cases = 'Выделяй отдельный кейс для каждой роли пользователя.'
+        research = 'Ищи отчёты о сбоях.'
+        self.call('save-method', changes=edit('cases', cases) | edit('research', research))
+        with patch('solution_spaces.standalone_answer', return_value=json.dumps([self.case])) as model:
+            self.call('generate')
+            instruction = model.call_args.args[2]
+            self.assertIn(cases, instruction)
+            self.assertIn(research, instruction)
+            self.assertTrue(instruction.endswith(solutions.CASE_CONTRACT))
+        record = {'id':1, 'title':'Разбор сбоя', 'url':'https://example.org/report', 'provider':'Интернет', 'summary':'Отчёт'}
+        with patch('solution_spaces.search', return_value=([record], [])) as search, patch('solution_spaces.standalone_answer', return_value='[]') as model:
+            self.call('research', case=self.case, source_revision=1)
+            search.assert_called_once_with(self.case['business_query'], self.case['query'])
+            self.assertIn(research, model.call_args.args[2])
+            self.assertNotIn(cases, model.call_args.args[2])
+            self.assertTrue(model.call_args.args[2].endswith(solutions.RESEARCH_CONTRACT))
+        reset = {'cases':{'text':None, 'previous':cases}}
+        with self.assertRaises(ContractError) as conflict:
+            self.call('save-method', changes=reset | edit('research', 'Другая версия'))
+        self.assertEqual(conflict.exception.status, 409)
+        self.assertEqual(self.call('method')['cases']['text'], cases)
+        self.call('save-method', changes=reset)
+        with patch.dict(solutions.METHODS, cases='Новые встроенные правила'):
+            saved = self.call('method')
+            self.assertEqual(saved['cases']['text'], 'Новые встроенные правила')
+            self.assertEqual(saved['research']['text'], research)
+        self.assertEqual(solutions.request(self.hub, {'id':'other'}, {}, 'method'), defaults)
