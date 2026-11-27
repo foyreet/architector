@@ -304,9 +304,11 @@ def main():
                     expect(orphan).to_have_count(0)
                     assert project in page.locator('#back-schema').get_attribute('href')
                     assert not errors, errors
-                    for stage in ['Пространство проблем', 'Иерархия метрик']:
-                        page.locator('#open-stage summary').click()
-                        page.get_by_role('link', name=stage, exact=True).click()
+                    expect(page.locator('.list-heading').get_by_role('button')).to_have_count(1)
+                    expect(page.get_by_text('Открыть этап', exact=True)).to_have_count(0)
+                    expect(page.get_by_text('Импорт JSON', exact=True)).to_have_count(0)
+                    for step in (0, 2):
+                        row.locator('.task-step').nth(step).click()
                         page.locator('#tree-ai-open').click()
                         page.locator('#tree-request').fill('Разберём задачу')
                         edit = page.get_by_role('button', name='Методика', exact=True)

@@ -12,21 +12,6 @@
   const fields = window.DesignChat.fields;
   const query=new URLSearchParams(location.search),project=query.get('project');
   if(/^[a-f0-9-]{36}$/.test(project||''))$('back-schema').href+='?project='+encodeURIComponent(project);
-  const stageMenu = $('open-stage');
-  for (const link of stageMenu.querySelectorAll('a')) {
-    const url = new URL(link.href);
-    if (project) url.searchParams.set('project', project);
-    link.href = url;
-  }
-  document.addEventListener('click', event => {
-    if (!stageMenu.contains(event.target) || event.target.closest('a')) stageMenu.open = false;
-  });
-  stageMenu.addEventListener('keydown', event => {
-    if (event.key === 'Escape') {
-      stageMenu.open = false;
-      stageMenu.querySelector('summary').focus();
-    }
-  });
   let account=null,doc=null,release=null,dirty=false,conflicted=false,blocked=false,saving=null,working=false,mode='mine',preview=null;
   const draftKey=()=>`architect.design-document.${account.id}.${doc.id}`;
   function node(tag,text,cls=''){const e=document.createElement(tag);e.textContent=text;e.className=cls;return e;}
@@ -432,9 +417,6 @@
   $('reload-saved').onclick=()=>task(async()=>{if(!confirm('Загрузить сохранённую версию? Несохранённый текст в этой вкладке будет заменён.'))return;const r=await api('get',{id:doc.id});try{localStorage.removeItem(draftKey());}catch{}openEditor(r.document,false);});
   $('publish').textContent='Экспорт JSON';
   $('publish').onclick=()=>task(async()=>{const content=value();if(!content.title.trim()){error('Введите название документа.');$('title').focus();return;}const link=document.createElement('a');link.href=URL.createObjectURL(new Blob([JSON.stringify({format:'architect.design-document',version:1,...content},null,2)],{type:'application/json'}));link.download=content.title+'.json';link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);});
-  const upload=document.createElement('input');upload.type='file';upload.accept='.json,application/json';upload.hidden=true;document.body.append(upload);
-  const importButton=document.createElement('button');importButton.textContent='Импорт JSON';$('create').after(importButton);importButton.onclick=()=>upload.click();
-  upload.onchange=()=>task(async()=>{const file=upload.files[0];upload.value='';if(!file)return;const result=await api('import',{id:crypto.randomUUID(),package:JSON.parse(await file.text())});await open(result.document.id);});
   const closePreview=()=>{if(!$('publish-confirm').disabled)$('publish-dialog').close();};$('preview-close').onclick=closePreview;$('publish-cancel').onclick=closePreview;
   $('publish-dialog').addEventListener('cancel',e=>{if($('publish-confirm').disabled)e.preventDefault();});
   $('publish-confirm').onclick=async()=>{const button=$('publish-confirm');if(button.disabled)return;button.disabled=true;error('','publish-error');try{const r=await api('publish',{id:doc.id,revision:preview.revision,digest:preview.digest});$('publish-dialog').close();await openRelease(r.release_id);message('Документ опубликован в каталоге сообщества.');}catch(e){error(e.message,$('publish-dialog').open?'publish-error':'editor-error');}finally{button.disabled=false;}};

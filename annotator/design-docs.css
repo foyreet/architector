@@ -186,16 +186,6 @@ a.task-step:hover {text-decoration:underline; color:#2054c7}
 }
 @media(pointer:coarse){a.task-step {min-height:44px}}
 
-#open-stage {position:relative}
-#open-stage summary {padding:10px 14px; min-height:44px; background:white; border:1px solid #d7dfec; border-radius:8px; cursor:pointer}
-#open-stage nav {position:absolute; right:0; z-index:2; min-width:max-content; margin-top:4px; padding:4px; background:white; border:1px solid #d7dfec; border-radius:8px; box-shadow:0 4px 16px #26324b18}
-#open-stage a {display:block; padding:10px 12px; color:inherit}
-#open-stage a:hover {background:#edf2ff}
-@media(max-width:600px) {
-  #open-stage {width:100%}
-  #open-stage nav {position:static; min-width:0}
-}
-
 #method-dialog {width:min(720px,calc(100vw - 24px)); max-height:90dvh}
 #method-dialog[open] {display:flex; flex-direction:column}
 #method-text {flex:1 1 auto; min-height:6em; height:40dvh; margin:6px 0; resize:vertical; font:inherit; line-height:1.5}
