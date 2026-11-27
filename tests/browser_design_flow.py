@@ -75,6 +75,16 @@ def main():
                     if width == 390:
                         for label in page.locator('#design-flow .step-label').all():
                             assert label.bounding_box()['width'] > 10
+                    # Playwright dismisses unexpected confirm dialogs: one click must remove the whole branch.
+                    page.get_by_label('Вопрос', exact=True).fill('Временная ветвь')
+                    page.get_by_role('button', name='Добавить уточнение').click()
+                    page.get_by_label('Ответ', exact=True).fill('Временный ответ')
+                    page.locator('#question-editor').get_by_role('button', name='Закрыть').click()
+                    page.get_by_role('button', name='Временная ветвь', exact=True).click()
+                    page.get_by_role('button', name='Удалить ветвь вопросов').click()
+                    expect(page.locator('.branch-row')).to_have_count(1)
+                    expect(page.locator('#tree-progress')).to_have_text('Отвечено: 1 из 1')
+                    page.locator('#add-root').click()
                     # The solutions step saves the tree first and keeps the project.
                     page.locator('#solutions').click()
                     page.wait_for_url('**/solution-space.html**')
@@ -154,7 +164,6 @@ def main():
                     role.fill('онлайн')
                     expect(page.locator('.branch-row')).to_have_attribute('data-role', 'online')
                     expect(page.locator('#tree-progress')).to_have_text('С определением: 0 из 1')
-                    page.once('dialog', lambda d: d.accept())
                     page.get_by_role('button', name='Удалить метрику').click()
                     expect(page.locator('.branch-row')).to_have_count(0)
 
