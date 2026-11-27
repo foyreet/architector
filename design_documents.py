@@ -180,6 +180,50 @@ def document_overview(db, owner):
     return {'documents': documents, 'unlinked': unlinked}
 
 
+def rename_task(db, owner, body):
+    task_id = identity(body.get('id'))
+    title = body.get('title')
+    if not isinstance(title, str) or not title.strip():
+        raise ContractError('Введите название задачи.')
+    title = title.strip()
+    db.execute('BEGIN IMMEDIATE')
+    document = db.execute('SELECT title FROM design_documents WHERE owner=? AND id=?', (owner, task_id)).fetchone()
+    current = document or db.execute("""SELECT coalesce(d.title,p.title,m.title) AS title FROM design_task_drafts d
+                                        LEFT JOIN problem_spaces p ON p.id=d.tree_id AND p.owner=d.owner
+                                        LEFT JOIN metric_trees m ON m.id=d.metric_tree_id AND m.owner=d.owner
+                                        WHERE d.owner=? AND d.id=?""", (owner, task_id)).fetchone()
+    standalone = None
+    if not current:
+        for kind, table, key in [('problem', 'problem_spaces', 'tree_id'), ('metric', 'metric_trees', 'metric_tree_id')]:
+            tree = body.get(key)
+            if not tree or standalone_id(owner, kind, tree) != task_id:
+                continue
+            # An old list entry may already have been linked to a task or dismissed.
+            current = db.execute(f"""SELECT title FROM {table} WHERE owner=? AND id=?
+                                     AND NOT EXISTS (SELECT 1 FROM design_task_drafts WHERE owner=? AND {key}=?)
+                                     AND NOT EXISTS (SELECT 1 FROM design_documents WHERE owner=? AND json_extract(task_links,'$.{key}')=?)
+                                     AND NOT EXISTS (SELECT 1 FROM dismissed_tree_tasks WHERE owner=? AND kind=? AND tree_id=?)""",
+                                 (owner, tree, owner, tree, owner, tree, owner, kind, tree)).fetchone()
+            standalone = (key, tree)
+            break
+    if not current:
+        raise ContractError('Задача не найдена. Обновите список.', 404)
+    if current['title'] == title:
+        return {'title': title}
+    if current['title'] != body.get('previous_title'):
+        raise ContractError('Название уже изменилось в другой вкладке. Обновите список.', 409)
+    if document:
+        db.execute('UPDATE design_documents SET title=?,revision=revision+1,updated=? WHERE owner=? AND id=?',
+                   (title, time.time(), owner, task_id))
+    elif standalone:
+        key, tree = standalone
+        db.execute(f'INSERT INTO design_task_drafts(owner,id,title,created,{key}) VALUES(?,?,?,?,?)',
+                   (owner, task_id, title, time.time(), tree))
+    else:
+        db.execute('UPDATE design_task_drafts SET title=? WHERE owner=? AND id=?', (title, owner, task_id))
+    return {'title': title}
+
+
 def delete_draft_task(db, owner, body):
     task_id = identity(body.get('id'))
     members = body.get('members')
@@ -263,6 +307,9 @@ def request(hub, user, body, action):
                     if source:
                         return {'title': source['title']}
             return {'title': None}
+    if action == 'rename-task':
+        with hub.db() as db:
+            return rename_task(db, user['id'], body)
     if action == 'delete-draft':
         with hub.db() as db:
             return delete_draft_task(db, user['id'], body)
@@ -298,8 +345,12 @@ def request(hub, user, body, action):
                     raise ContractError('Идентификатор документа уже используется.', 409)
                 return {'document': public(previous)}
             draft = db.execute('SELECT * FROM design_task_drafts WHERE owner=? AND id=?', (user['id'], doc_id)).fetchone()
-            if action == 'create' and 'title' not in body and draft and draft['title']:
-                name = draft['title']
+            if action == 'create' and draft and draft['title']:
+                initial_title = body.get('initial_task_title')
+                if 'title' not in body or name == initial_title:
+                    name = draft['title']
+                elif initial_title is not None and initial_title != draft['title'] and name != draft['title']:
+                    raise ContractError('Название задачи уже изменилось в другой вкладке. Обновите страницу.', 409)
             from problem_spaces import problem_tree
             tree = problem_tree((package if action == 'import' else body).get('problem_tree', []))
             db.execute('INSERT INTO design_documents(id,owner,title,sections,revision,updated,source_release,problem_tree) VALUES(?,?,?,?,?,?,?,?)',

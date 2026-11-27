@@ -34,7 +34,7 @@
   function value(){return {task_links:assistant.taskLinks(),sources:assistant.sources(),title:$('title').value,sections:Object.fromEntries(fields.map(([k])=>[k,$('section-'+k).value]))};}
   function same(a,b){return JSON.stringify(a.task_links||{})===JSON.stringify(b.task_links||{})&&JSON.stringify(a.sources||{})===JSON.stringify(b.sources||{})&&a.title===b.title&&fields.every(([k])=>a.sections[k]===b.sections[k]);}
   function controls(){ $('link-task').disabled=$('compose-doc').disabled=!!saving||conflicted||blocked;$('add-chat').disabled=!!saving||conflicted||blocked;$('save').disabled=(!dirty&&!!doc?.revision)||!!saving||conflicted||blocked;$('publish').disabled=!!saving||conflicted||blocked;$('conflict').hidden=!conflicted;$('save-status').textContent=doc?(saving?'Сохранение…':dirty?'Есть несохранённые изменения':doc.revision?'Все изменения сохранены':'Новый документ · ещё не сохранён'):''; }
-  function cache(){if(!doc||release)return;try{if(dirty)localStorage.setItem(draftKey(),JSON.stringify({...value(),revision:doc.revision}));else localStorage.removeItem(draftKey());}catch{error('Браузер не сохранил резервную копию. Сохраните документ на сервер перед закрытием.');}}
+  function cache(){if(!doc||release)return;try{if(dirty)localStorage.setItem(draftKey(),JSON.stringify({...value(),revision:doc.revision,initial_task_title:doc.title}));else localStorage.removeItem(draftKey());}catch{error('Браузер не сохранил резервную копию. Сохраните документ на сервер перед закрытием.');}}
   function changed() {
     for (const key of ['dataset', 'metric_validation', 'validation']) {
       const insert = $(key + '-insert');
@@ -261,9 +261,10 @@
     if(saving)return saving;if(!dirty&&doc.revision)return true;if(conflicted||blocked)return false;
     const sent=value();if(!sent.title.trim()){error('Введите название документа.');$('title').focus();return false;}
     saving=(async()=>{try{
-      const initial = doc.revision ? {} : {initial_task_links:doc.task_links || {}};
+      const initial = doc.revision ? {} : {initial_task_links:doc.task_links || {}, initial_task_title:doc.title};
       const result = await api(doc.revision?'save':'create', {id:doc.id, revision:doc.revision, ...initial, ...sent});
       doc = result.document;
+      if ($('title').value === sent.title) $('title').value = doc.title;
       document.title = doc.title + ' · Дизайн-документ';
       if (JSON.stringify(assistant.taskLinks()) === JSON.stringify(sent.task_links) &&
           JSON.stringify(sent.task_links) !== JSON.stringify(doc.task_links)) assistant.load(assistant.sources(), doc.task_links);
@@ -295,6 +296,7 @@
           draft.sections.dataset=(draft.sections.dataset+'\n\n'+addition).replace(/^\n+/, '');
         delete draft.sections.data_features;
       }
+      if (draft && draft.title === draft.initial_task_title) draft.title = document.title;
       if (draft && !Object.hasOwn(draft,'task_links')) draft.task_links=document.task_links || {};
       if(draft&&typeof draft.title==='string'&&fields.every(([k])=>typeof draft.sections?.[k]==='string')){
       if(same(draft,document))localStorage.removeItem(draftKey());else{content=draft;dirty=true;conflicted=draft.revision!==document.revision;message('Восстановлены несохранённые изменения из этого браузера.');}
@@ -339,6 +341,11 @@
     item.refreshVisit = resume;
     heading.append(title);
     item.append(heading);
+    const actions = node('div', '', 'task-row-actions');
+    const rename = node('button', 'Переименовать');
+    rename.dataset.taskId = context.doc;
+    rename.setAttribute('aria-label', 'Переименовать задачу «' + row.title + '»');
+    rename.onclick = () => showNameDialog(row);
     const remove = node('button', 'Удалить', 'delete-document');
     const label = (row.id ? 'Удалить документ «' : 'Удалить задачу «') + row.title + '»';
     remove.setAttribute('aria-label', label);
@@ -366,7 +373,7 @@
         (links[Math.min(index, links.length - 1)] || $('create')).focus();
       } finally { remove.disabled = false; }
     });
-    item.append(remove);
+    actions.append(rename, remove);
 
     const steps = node('ol', '', 'task-steps');
     steps.setAttribute('aria-label', 'Этапы задачи «' + row.title + '»');
@@ -387,7 +394,7 @@
     addStep('metrics', 'Метрики', metric ? quantity(metric.count, 'показатель', 'показателя', 'показателей') :
       row.missing_metric ? 'дерево недоступно' : 'не выбраны', !!metric);
     addStep('document', 'Документ', row.id ? row.filled + ' из ' + quantity(fields.length, 'раздела', 'разделов', 'разделов') : 'не создан', !!row.filled);
-    item.append(steps);
+    item.append(steps, actions);
     return item;
   }
 
@@ -449,14 +456,20 @@
   });
   $('title').addEventListener('input',changed);
   $('save').onclick=()=>task(save);
-  let newTaskId;
-  $('create').onclick = () => {
-    newTaskId = crypto.randomUUID();
+  let namingRow, namingId;
+  function showNameDialog(row) {
+    namingRow = row;
+    namingId = row ? row.id || row.draft_id : crypto.randomUUID();
+    $('create-task-heading').textContent = row ? 'Переименовать задачу' : 'Создать задачу';
+    $('submit-task').textContent = row ? 'Сохранить' : 'Создать';
     $('create-task-form').reset();
     $('task-name').setCustomValidity('');
     $('create-task-error').hidden = true;
+    $('task-name').value = row?.title || '';
     $('create-task-dialog').showModal();
-  };
+    $('task-name').select();
+  }
+  $('create').onclick = () => showNameDialog(null);
   $('task-name').oninput = () => $('task-name').setCustomValidity('');
   $('cancel-task').onclick = () => $('create-task-dialog').close();
   $('create-task-dialog').oncancel = event => { if ($('submit-task').disabled) event.preventDefault(); };
@@ -472,8 +485,17 @@
     }
     $('submit-task').disabled = $('cancel-task').disabled = input.readOnly = true;
     try {
-      await api('create-task', {id:newTaskId, title});
-      location.assign(window.designFlow.url('problems', {doc:newTaskId, draft:true}));
+      if (namingRow) {
+        await api('rename-task', {id:namingId, title, previous_title:namingRow.title,
+          tree_id:namingRow.problem?.id, metric_tree_id:namingRow.metric?.id});
+        await list();
+        $('create-task-dialog').close();
+        $('documents').querySelector(`button[data-task-id="${namingId}"]`)?.focus();
+        message('Название сохранено.');
+      } else {
+        await api('create-task', {id:namingId, title});
+        location.assign(window.designFlow.url('problems', {doc:namingId, draft:true}));
+      }
     } catch (err) {
       $('create-task-error').textContent = err.message;
       $('create-task-error').hidden = false;

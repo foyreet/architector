@@ -139,6 +139,25 @@ class Documents(unittest.TestCase):
         self.assertEqual(self.call('task-title', task)['title'], 'Обновлённое имя')
         self.assertFalse(self.call('list', {'include_progress': True})['unlinked'])
 
+    def test_rename_task_and_concurrent_first_document_save(self):
+        task_id = str(uuid.uuid4())
+        self.call('create-task', {'id': task_id, 'title': 'До'})
+        rename = {'id': task_id, 'title': 'После', 'previous_title': 'До'}
+        with self.assertRaises(ContractError):
+            self.call('rename-task', rename, self.b)
+        self.call('rename-task', rename)
+        with self.assertRaises(ContractError) as stale:
+            self.call('rename-task', {**rename, 'title': 'Конфликт'})
+        self.assertEqual(stale.exception.status, 409)
+        sections = {key: 'Изменённый раздел' for key in docs.SECTIONS}
+        doc = self.call('create', {'id': task_id, 'sections': sections, 'title': 'До', 'initial_task_title': 'До'})['document']
+        self.assertEqual(doc['title'], 'После')
+        rename.update(previous_title='После', title='Сохранённая задача')
+        for _ in range(2):
+            self.call('rename-task', rename)
+        saved = self.call('get', {'id': task_id})['document']
+        self.assertEqual((saved['title'], saved['revision'], saved['sections']), (rename['title'], doc['revision'] + 1, sections))
+
     def test_validation(self):
         for changes in ({'title':''},{'sections':{}},{'sections':{k:0 for k in docs.SECTIONS}}):
             with self.subTest(changes=list(changes)),self.assertRaises(ContractError):self.call('save',{**self.doc,**changes})

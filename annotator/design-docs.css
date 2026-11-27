@@ -159,7 +159,7 @@ main#editor>#doc-outline{grid-column:1;grid-row:2/span 40;align-self:start;posit
   border:0; font-size:16px; color:inherit; overflow-wrap:anywhere;
 }
 .task-row .document-row:hover {color:#2054c7; text-decoration:underline}
-.task-row .delete-document {grid-column:2; grid-row:1 / span 2; margin-top:5px}
+.task-row-actions {grid-column:2; grid-row:1 / span 2; display:flex; flex-wrap:wrap; gap:8px; margin-top:5px}
 .task-steps {
   grid-column:1; display:flex; flex-wrap:wrap; align-items:center; gap:0 12px;
   list-style:none; padding:0; margin:0; font-size:13px;
@@ -173,7 +173,8 @@ a.task-step:hover {text-decoration:underline; color:#2054c7}
 .step-status {color:#53647c}
 @media(max-width:760px) {
   .task-row {padding:8px 12px}
-  .task-row .delete-document {grid-row:1; margin:0}
+  .task-row h3 {grid-column:1/-1}
+  .task-row-actions {grid-column:1/-1; grid-row:3; margin:6px 0 0}
   .task-steps {grid-column:1/-1; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 8px}
   .task-steps li+li::before {display:none}
   .task-step {display:grid; grid-template-columns:auto 1fr; column-gap:6px; row-gap:0; min-height:44px; align-content:center}
