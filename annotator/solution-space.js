@@ -165,6 +165,7 @@
   window.addEventListener('beforeunload', e => { if (dirty) e.preventDefault(); });
   async function start() {
     const data = await api('get');
+    window.designFlow.remember('solutions');
     $('editor').hidden = false;
     source = data.source; version = data.version; working = data.saved;
     $('title').textContent = source.title; $('problem').textContent = source.problem;
@@ -183,26 +184,29 @@
     const {trees} = await api('list');
     status('');
     const list = $('tree-list');
-    const attachDoc = params.has('attach') && !params.has('draft') && params.get('doc');
-    if (!trees.length || attachDoc) {
+    window.designFlow.remember('solutions');
+    const attachDoc = params.has('attach') && params.get('doc');
+    const draftTask = params.has('draft') && params.get('doc');
+    if (!trees.length || attachDoc || draftTask) {
       const create = element('a', 'Создать дерево проблем');
       const url = page('/problem-space.html');
       url.searchParams.set('new', '1');
       if (attachDoc) url.searchParams.set('attach', '1');
       create.href = url;
-      list.append(element('p', attachDoc ? 'Для этой задачи выберите сохранённое дерево проблем или создайте новое.' :
+      list.append(element('p', attachDoc || draftTask ? 'Для этой задачи выберите сохранённое дерево проблем или создайте новое.' :
         'Пока нет сохранённых деревьев.'), create);
     }
     for (const tree of trees) {
-      const link = document.createElement(attachDoc ? 'button' : 'a');
+      const link = document.createElement(attachDoc || draftTask ? 'button' : 'a');
       link.className = 'document-row';
       const target = page('/solution-space.html', tree.id);
-      if (attachDoc) {
+      if (attachDoc || draftTask) {
         link.onclick = async () => {
           if (list.inert) return;
           list.inert = true;
           try {
-            await api('attach', {doc:attachDoc, id:tree.id}, 'problem-spaces');
+            const task = draftTask ? {draft_task:draftTask, companion:params.get('metric')} : {doc:attachDoc};
+            await api('attach', {...task, id:tree.id}, 'problem-spaces');
             location.assign(target);
           } catch (error) { status(error.message); list.inert = false; }
         };

@@ -171,9 +171,6 @@ a.task-step:hover {text-decoration:underline; color:#2054c7}
 .task-step .step-number {width:20px; height:20px; font-size:11px}
 .step-number.started {background:#eaf0ff; border-color:#c1cef5; color:#2349ad}
 .step-status {color:#53647c}
-#unlinked {margin-top:36px}
-#unlinked h2 {font-size:17px}
-#unlinked>p {margin:4px 0 12px}
 @media(max-width:760px) {
   .task-row {padding:8px 12px}
   .task-row .delete-document {grid-row:1; margin:0}

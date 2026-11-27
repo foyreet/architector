@@ -151,10 +151,25 @@ def document_overview(db, owner):
                               missing_metric=bool(metric and metric not in metrics),
                               filled=sum(bool(value.strip()) for value in sections.values())))
 
-    unlinked = [dict(title=p['title'], updated=p['updated'], problem=p) for key, p in problems.items()
-                if key not in used_problems]
-    unlinked.extend(dict(title=m['title'], updated=m['updated'], metric=m) for key, m in metrics.items()
-                    if key not in used_metrics)
+    unlinked = []
+    for draft in db.execute('SELECT * FROM design_task_drafts WHERE owner=?', (owner,)):
+        problem = problems.get(draft['tree_id'])
+        metric = metrics.get(draft['metric_tree_id'])
+        members = [member for member in (problem, metric) if member]
+        if members:
+            unlinked.append(dict(draft_id=draft['id'], title=members[0]['title'],
+                                 updated=max(member['updated'] for member in members), problem=problem, metric=metric))
+            used_problems.add(draft['tree_id'])
+            used_metrics.add(draft['metric_tree_id'])
+
+    def standalone_id(kind, key):
+        return str(uuid.uuid5(uuid.NAMESPACE_URL, f'architector/task/{owner}/{kind}/{key}'))
+
+    for kind, collection, used in [('problem', problems, used_problems), ('metric', metrics, used_metrics)]:
+        for key, member in collection.items():
+            if key not in used:
+                unlinked.append({'draft_id': standalone_id(kind, key), 'title': member['title'],
+                                 'updated': member['updated'], kind: member})
     unlinked.sort(key=lambda row: row['updated'], reverse=True)
     return {'documents': documents, 'unlinked': unlinked}
 
@@ -198,6 +213,13 @@ def request(hub, user, body, action):
                        (doc_id, user['id'], name, json.dumps(sections, ensure_ascii=False), 1, time.time(), source, json.dumps(tree, ensure_ascii=False)))
             refs = sources((package if action == 'import' else body).get('sources', {}))
             links = task_links((package if action == 'import' else body).get('task_links', {}))
+            draft = db.execute('SELECT * FROM design_task_drafts WHERE owner=? AND id=?', (user['id'], doc_id)).fetchone()
+            if draft:
+                initial = task_links(body.get('initial_task_links', {}))
+                for key in ('tree_id', 'metric_tree_id'):
+                    if draft[key] and key not in initial:
+                        links.setdefault(key, draft[key])
+                db.execute('DELETE FROM design_task_drafts WHERE owner=? AND id=?', (user['id'], doc_id))
             db.execute('UPDATE design_documents SET sources=?, task_links=? WHERE id=?',
                        (json.dumps(refs, ensure_ascii=False), json.dumps(links), doc_id))
             if tree:

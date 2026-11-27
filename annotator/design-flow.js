@@ -31,6 +31,37 @@ window.designFlow = (() => {
   function refresh() {
     for (const a of nav.querySelectorAll('a[data-step]')) a.href = url(a.dataset.step);
   }
+  const historyPrefix = 'architect.task-visit.';
+  let activeStep;
+  function visitKey(task, step) {
+    return task.doc || (step === 'metrics' ? task.metric && 'metric.' + task.metric : task.tree && 'tree.' + task.tree);
+  }
+  function remember(step) {
+    activeStep = step;
+    const key = visitKey(state, step);
+    if (key && step) {
+      try { localStorage.setItem(historyPrefix + key, JSON.stringify({step, time:Date.now()})); } catch {}
+    }
+  }
+  function lastVisit(task) {
+    const keys = [task.doc];
+    if (task.draft) {
+      if (task.tree) keys.push('tree.' + task.tree);
+      if (task.metric) keys.push('metric.' + task.metric);
+    }
+    let latest = null;
+    for (const key of keys) {
+      try {
+        const entry = JSON.parse(localStorage.getItem(historyPrefix + key));
+        if (entry && Object.hasOwn(paths, entry.step) && Number.isFinite(entry.time) && (!latest || entry.time > latest.time)) latest = entry;
+      } catch {}
+    }
+    return latest;
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && activeStep) remember(activeStep);
+  });
+  window.addEventListener('pageshow', event => { if (event.persisted && activeStep) remember(activeStep); });
   function treeOpened(key, id, choosingForDocument = false) {
     // Opening another tree from the library starts a different context.
     if (!choosingForDocument && state[key] && state[key] !== id) {
@@ -39,10 +70,12 @@ window.designFlow = (() => {
       state[key === 'tree' ? 'metric' : 'tree'] = null;
     }
     state[key] = id;
+    remember(key === 'metric' ? 'metrics' : 'problems');
     refresh();
   }
   function documentOpened(id, draft, links) {
     Object.assign(state, {doc:id, draft, tree:links.tree_id, metric:links.metric_tree_id});
+    remember(id ? 'document' : null);
     refresh();
   }
   const settings = document.getElementById('tree-ai-settings');
@@ -52,5 +85,5 @@ window.designFlow = (() => {
     settings.href = target;
   }
   refresh();
-  return {url, treeOpened, documentOpened};
+  return {url, treeOpened, documentOpened, lastVisit, remember, historyPrefix};
 })();

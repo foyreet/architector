@@ -260,7 +260,13 @@
   async function save(){
     if(saving)return saving;if(!dirty&&doc.revision)return true;if(conflicted||blocked)return false;
     const sent=value();if(!sent.title.trim()){error('Введите название документа.');$('title').focus();return false;}
-    saving=(async()=>{try{const result=await api(doc.revision?'save':'create',{id:doc.id,revision:doc.revision,...sent});doc=result.document;syncSteps(assistant.taskLinks());updateURL({id:doc.id});dirty=!same(value(),doc);cache();error();message('Документ сохранён.');return true;}
+    saving=(async()=>{try{
+      const initial = doc.revision ? {} : {initial_task_links:doc.task_links || {}};
+      const result = await api(doc.revision?'save':'create', {id:doc.id, revision:doc.revision, ...initial, ...sent});
+      doc = result.document;
+      if (JSON.stringify(assistant.taskLinks()) === JSON.stringify(sent.task_links) &&
+          JSON.stringify(sent.task_links) !== JSON.stringify(doc.task_links)) assistant.load(assistant.sources(), doc.task_links);
+      syncSteps(assistant.taskLinks());updateURL({id:doc.id});dirty=!same(value(),doc);cache();error();message('Документ сохранён.');return true;}
       catch(e){if(e.status===409&&e.message.includes('другой вкладке'))conflicted=true;else if(e.status===401||e.status===404||e.status===409)blocked=true;error(e.message);return false;}
       finally{saving=null;controls();}})();controls();return saving;
   }
@@ -292,16 +298,23 @@
       if(draft&&typeof draft.title==='string'&&fields.every(([k])=>typeof draft.sections?.[k]==='string')){
       if(same(draft,document))localStorage.removeItem(draftKey());else{content=draft;dirty=true;conflicted=draft.revision!==document.revision;message('Восстановлены несохранённые изменения из этого браузера.');}
     }}catch{error('Не удалось прочитать локальный черновик.');}}
+    window.document.title = 'Дизайн-документ · Архитектор';
     $('design-flow').hidden=false;
     $('auth').hidden=true;$('list').hidden=true;$('editor').hidden=false;$('title-label').hidden=false;$('title').hidden=false;$('title').value=content.title;$('read-title').hidden=true;
     $('save').hidden=false;$('publish').hidden=false;$('copy').hidden=true;$('publication-info').hidden=!doc.source_release;
     $('publication-info').textContent=doc.source_release?'Личная копия публикации. Ваши изменения не затрагивают оригинал.':'';
-    renderSections($('sections'),content.sections,true);$('doc-assist').hidden=false;assistant.load(content.sources,content.task_links);syncSteps(assistant.taskLinks());updateURL(doc.revision?{id:doc.id}:{new:doc.id});$('back-list').textContent='← Мои документы';controls();window.scrollTo(0,0);
+    renderSections($('sections'),content.sections,true);$('doc-assist').hidden=false;assistant.load(content.sources,content.task_links);syncSteps(assistant.taskLinks());updateURL(doc.revision?{id:doc.id}:{new:doc.id});$('back-list').textContent='← К задачам';controls();window.scrollTo(0,0);
   }
   async function open(id){const result=await api('get',{id});openEditor(result.document);}
   function retryId(kind){const k='architect.design-pending.'+account.id+'.'+kind;let id;try{id=sessionStorage.getItem(k);}catch{}id ||= crypto.randomUUID();try{sessionStorage.setItem(k,id);}catch{}return {id,clear(){try{sessionStorage.removeItem(k);}catch{}}};}
   async function create(id=crypto.randomUUID(), taskLinks={}){
-    openEditor({id,task_links:taskLinks,title:'Новый дизайн-документ',sections:Object.fromEntries(fields.map(([k])=>[k,''])),revision:0});$('title').focus();$('title').select();
+    let title = 'Новый дизайн-документ';
+    const source = taskLinks.tree_id || taskLinks.metric_tree_id;
+    if (source) {
+      try { title = (await api('get', {id:source}, taskLinks.tree_id ? 'problem-spaces' : 'metric-trees')).title; }
+      catch (error) { if (error.status !== 404) throw error; }
+    }
+    openEditor({id,task_links:taskLinks,title,sections:Object.fromEntries(fields.map(([k])=>[k,''])),revision:0});$('title').focus();$('title').select();
   }
   const pluralRules = new Intl.PluralRules('ru');
   function quantity(count, one, few, many) {
@@ -310,12 +323,18 @@
 
   function taskRow(row) {
     const {problem, metric} = row;
-    const context = {tree:problem?.id, metric:metric?.id, doc:row.id};
+    const context = {tree:problem?.id, metric:metric?.id, doc:row.id || row.draft_id, draft:!row.id};
     const stepUrl = step => window.designFlow.url(step, context);
     const item = node('article', '', 'task-row');
     const heading = node('h3', '');
     const title = node('a', row.title, 'document-row');
-    title.href = stepUrl(row.id ? 'document' : problem ? 'problems' : 'metrics');
+    function resume() {
+      const visit = window.designFlow.lastVisit(context);
+      title.href = stepUrl(visit?.step || 'problems');
+      item.dataset.activity = Math.max(row.updated, problem?.updated || 0, metric?.updated || 0, (visit?.time || 0) / 1000);
+    }
+    resume();
+    item.refreshVisit = resume;
     heading.append(title);
     item.append(heading);
     if (row.id) {
@@ -337,10 +356,10 @@
 
     const steps = node('ol', '', 'task-steps');
     steps.setAttribute('aria-label', 'Этапы задачи «' + row.title + '»');
-    function addStep(key, label, status, available, active) {
+    function addStep(key, label, status, active) {
       const li = node('li', '');
-      const link = node(available || row.id ? 'a' : 'span', '', 'task-step');
-      if (available || row.id) link.href = stepUrl(key);
+      const link = node('a', '', 'task-step');
+      link.href = stepUrl(key);
       const number = node('span', steps.children.length + 1, 'step-number');
       number.setAttribute('aria-hidden', 'true');
       if (active) number.classList.add('started');
@@ -349,15 +368,24 @@
       steps.append(li);
     }
     addStep('problems', 'Проблемы', problem ? problem.answered + ' из ' + quantity(problem.questions, 'ответа', 'ответов', 'ответов') :
-      row.missing_problem ? 'дерево недоступно' : 'нет дерева', !!problem, !!problem);
-    addStep('solutions', 'Решения', problem?.cases ? quantity(problem.cases, 'кейс', 'кейса', 'кейсов') : 'нет кейсов', !!problem, !!problem?.cases);
+      row.missing_problem ? 'дерево недоступно' : 'нет дерева', !!problem);
+    addStep('solutions', 'Решения', problem?.cases ? quantity(problem.cases, 'кейс', 'кейса', 'кейсов') : 'нет кейсов', !!problem?.cases);
     addStep('metrics', 'Метрики', metric ? quantity(metric.count, 'показатель', 'показателя', 'показателей') :
-      row.missing_metric ? 'дерево недоступно' : 'не выбраны', !!metric, !!metric);
-    addStep('document', 'Документ', row.id ? row.filled + ' из ' + quantity(fields.length, 'раздела', 'разделов', 'разделов') : 'не создан', true, !!row.filled);
+      row.missing_metric ? 'дерево недоступно' : 'не выбраны', !!metric);
+    addStep('document', 'Документ', row.id ? row.filled + ' из ' + quantity(fields.length, 'раздела', 'разделов', 'разделов') : 'не создан', !!row.filled);
     item.append(steps);
     return item;
   }
 
+  const byActivity = (first, second) => second.dataset.activity - first.dataset.activity;
+  window.addEventListener('storage', event => {
+    if (!$('list').hidden && event.key?.startsWith(window.designFlow.historyPrefix)) {
+      const rows = [...$('documents').querySelectorAll('.task-row')];
+      for (const row of rows) row.refreshVisit();
+      const ordered = [...rows].sort(byActivity);
+      if (ordered.some((row, i) => row !== rows[i])) $('documents').append(...ordered);
+    }
+  });
   async function list(next='mine') {
     if (!await leaveEditor()) return;
     const mine = next === 'mine';
@@ -369,15 +397,13 @@
     $('design-flow').hidden=true;
     $('mine').setAttribute('aria-current',mine?'page':'false');$('catalog').setAttribute('aria-current',mine?'false':'page');
     updateURL({view:mode});
+    document.title = 'Задачи · Архитектор';
     const documents = $('documents');
     documents.replaceChildren();
-    const trees = result.unlinked || [];
-    $('unlinked').hidden = !trees.length;
-    $('unlinked-trees').replaceChildren();
-    for (const tree of trees) $('unlinked-trees').append(taskRow(tree));
     if (mine) {
-      for (const row of result.documents) documents.append(taskRow(row));
-      if (!result.documents.length) documents.append(node('p', 'Сохранённых дизайн-документов пока нет.', 'muted'));
+      const rows = [...result.documents, ...result.unlinked].map(taskRow);
+      if (rows.length) documents.append(...rows.sort(byActivity));
+      else documents.append(node('p', 'Задач пока нет.', 'muted'));
     } else {
       for (const row of result.releases) {
         const button = node('button', '', 'document-row');
@@ -393,6 +419,7 @@
   async function openRelease(id){
     const result=await api('release',{release_id:id},true);if(result.kind!=='design_document')throw Error('Это не публикация дизайн-документа.');
     release=result;doc=null;dirty=false;conflicted=false;blocked=false;error();message();
+    window.document.title = 'Дизайн-документ · Архитектор';
     $('design-flow').hidden=false;
     $('auth').hidden=true;$('list').hidden=true;$('editor').hidden=false;$('title-label').hidden=true;$('title').hidden=true;$('read-title').hidden=false;$('read-title').textContent=result.name;
     $('save').hidden=true;$('publish').hidden=true;$('copy').hidden=false;$('publication-info').hidden=false;$('publication-info').textContent=`@${result.username} · версия ${result.number} · Опубликованный документ`;
@@ -412,7 +439,7 @@
   };$('mine').onclick=()=>task(()=>list('mine'));$('catalog').onclick=()=>task(()=>list('catalog'));
   $('search-form').onsubmit=e=>{e.preventDefault();task(()=>list('catalog'));};$('back-list').onclick=()=>task(()=>list(release?'catalog':'mine'));
   $('back-schema').onclick=e=>{if(!doc||(!dirty&&!saving))return;e.preventDefault();task(async()=>{if(await leaveEditor()){discardDraft();location.href=$('back-schema').href;}});};
-  $('copy').onclick=()=>task(async()=>{const attempt=retryId('copy.'+release.id),r=await api('copy',{id:attempt.id,release_id:release.id});attempt.clear();openEditor(r.document);message('Документ сохранён в «Мои документы».');});
+  $('copy').onclick=()=>task(async()=>{const attempt=retryId('copy.'+release.id),r=await api('copy',{id:attempt.id,release_id:release.id});attempt.clear();openEditor(r.document);message('Документ сохранён в списке задач.');});
   $('save-separate').onclick=()=>task(async()=>{const attempt=retryId('separate.'+doc.id),oldKey=draftKey();const r=await api('create',{id:attempt.id,...value()});try{localStorage.removeItem(oldKey);}catch{}attempt.clear();openEditor(r.document,false);message('Ваш вариант сохранён отдельным документом.');});
   $('reload-saved').onclick=()=>task(async()=>{if(!confirm('Загрузить сохранённую версию? Несохранённый текст в этой вкладке будет заменён.'))return;const r=await api('get',{id:doc.id});try{localStorage.removeItem(draftKey());}catch{}openEditor(r.document,false);});
   $('publish').textContent='Экспорт JSON';

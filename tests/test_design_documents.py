@@ -62,6 +62,26 @@ class Documents(unittest.TestCase):
         self.call('delete', self.doc)
         self.assertEqual([row['problem']['id'] for row in overview()['unlinked']], [tree_id])
 
+    def test_task_keeps_saved_stages_together_and_respects_explicit_unlink(self):
+        from problem_spaces import request as problem
+        from metric_trees import request as metric
+        task_id, tree_id, metric_id, other_id = (str(uuid.uuid4()) for _ in range(4))
+        tree = {'id': tree_id, 'draft_task': task_id, 'title': 'Название', 'problem_tree': [], 'revision': 0}
+        problem(self.hub, self.a, tree, 'save')
+        with self.assertRaises(ContractError) as error:
+            problem(self.hub, self.a, {**tree, 'id': other_id}, 'save')
+        self.assertEqual(error.exception.status, 412)
+        metric(self.hub, self.a, {'id': metric_id, 'draft_task': task_id, 'title': 'Цель', 'goal': '',
+                                  'metrics': [], 'revision': 0}, 'save')
+        rows = self.call('list', {'include_progress': True})['unlinked']
+        self.assertEqual([(r['draft_id'], r['problem']['id'], r['metric']['id']) for r in rows],
+                         [(task_id, tree_id, metric_id)])
+        # The metric was saved in another tab; the user explicitly removed only the problem tree.
+        doc = self.call('create', {'id': task_id, 'initial_task_links': {'tree_id': tree_id}, 'task_links': {}})
+        self.assertEqual(doc['document']['task_links'], {'metric_tree_id': metric_id})
+        rows = self.call('list', {'include_progress': True})['unlinked']
+        self.assertEqual([r['problem']['id'] for r in rows], [tree_id])
+
     def test_validation(self):
         for changes in ({'title':''},{'sections':{}},{'sections':{k:0 for k in docs.SECTIONS}}):
             with self.subTest(changes=list(changes)),self.assertRaises(ContractError):self.call('save',{**self.doc,**changes})

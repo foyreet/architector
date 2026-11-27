@@ -50,6 +50,9 @@ class Community:
             db.row_factory = sqlite3.Row
             try:
                 db.execute('CREATE TABLE IF NOT EXISTS design_documents(id TEXT PRIMARY KEY, owner TEXT NOT NULL, title TEXT NOT NULL, sections TEXT NOT NULL, revision INTEGER NOT NULL, updated REAL NOT NULL, source_release TEXT)')
+                db.execute('''CREATE TABLE IF NOT EXISTS design_task_drafts(
+                    owner TEXT NOT NULL, id TEXT NOT NULL, tree_id TEXT, metric_tree_id TEXT,
+                    PRIMARY KEY(owner,id))''')
                 if 'sources' not in {r['name'] for r in db.execute('PRAGMA table_info(design_documents)')}:
                     db.execute("ALTER TABLE design_documents ADD COLUMN sources TEXT NOT NULL DEFAULT '{}'")
                 if 'task_links' not in {r['name'] for r in db.execute('PRAGMA table_info(design_documents)')}:

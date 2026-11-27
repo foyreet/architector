@@ -89,7 +89,12 @@
     const previousKey = key();
     const dest = conflict ? crypto.randomUUID() : id;
     const sent = JSON.stringify(value());
-    const attach = url.searchParams.has('attach') ? {doc:url.searchParams.get('doc')} : {};
+    const attach = {};
+    if (url.searchParams.has('attach')) attach.doc = url.searchParams.get('doc');
+    if (url.searchParams.has('draft') && !conflict) {
+      attach.draft_task = url.searchParams.get('doc');
+      attach.companion = url.searchParams.get(metrics ? 'tree' : 'metric');
+    }
     try {
       const result = attach.doc && !dirty && revision
         ? await api('attach', {id:dest, ...attach})

@@ -142,6 +142,14 @@ def main():
                     draft_params = parse_qs(urlsplit(draft_url).query)
                     assert draft_params['new'] == [task_id] and draft_params['tree'] == [tree]
                     assert draft_params['metric'] == [metric_id] and draft_params['project'] == [project]
+                    hub = context.new_page()
+                    hub.goto(origin + '/design-docs.html')
+                    progress = hub.locator('.task-row').filter(has=hub.locator(f'.task-step[href*="{task_id}"]'))
+                    expect(progress).to_have_count(1)
+                    expect(progress.locator('.task-step').nth(2)).to_have_attribute('href', re.compile(metric_id))
+                    expect(progress.locator('.task-step').nth(0)).to_have_attribute('href', re.compile(tree))
+                    expect(progress.locator('.document-row')).to_have_attribute('href', re.compile('design-docs.html'))
+                    hub.close()
                     page.locator('#title').fill('Документ с первого этапа')
                     page.locator('#save').click()
                     expect(page.locator('#save-status')).to_have_text('Все изменения сохранены')
@@ -287,11 +295,23 @@ def main():
                     assert saved_doc['task_links'] == {'metric_tree_id':new_metric, 'tree_id':tree}
                     assert saved_doc['sections'] == blank['sections']
 
+                    # The two tasks share a problem tree and resume at different stages.
+                    page.goto(hub_url)
+                    saved.locator('.document-row').click()
+                    expect(page.locator('#title')).to_have_text('Дерево шагов ' + str(width))
+                    assert parse_qs(urlsplit(page.url).query)['doc'] == [document_id]
+                    page.goto(hub_url)
+                    page.reload()
+                    row.locator('.document-row').click()
+                    expect(page.locator('#title')).to_have_value('Метрики этого документа')
+                    assert parse_qs(urlsplit(page.url).query)['doc'] == [blank['id']]
+
                     # A standalone metric becomes part of a task only after its document is saved.
                     standalone = str(uuid.uuid4())
                     api('metric-trees/save', {'id':standalone, 'title':'Отдельная метрика', 'goal':'Рост', 'metrics':[], 'revision':0})
                     page.goto(origin + '/design-docs.html?project=' + project)
-                    orphan = page.locator('#unlinked .task-row').filter(has_text='Отдельная метрика')
+                    orphan = page.locator('#documents .task-row').filter(has=page.locator(f'.task-step[href*="{standalone}"]'))
+                    expect(orphan.locator('a.task-step')).to_have_count(4)
                     orphan.get_by_role('link', name='Документ не создан').click()
                     expect(page.locator('#design-flow a[data-step=metrics]')).to_have_attribute(
                         'href', re.compile(standalone))
@@ -301,7 +321,8 @@ def main():
                     new_id = parse_qs(urlsplit(page.url).query)['id'][0]
                     assert api('design-documents/get', {'id':new_id})['document']['task_links'] == {'metric_tree_id':standalone}
                     page.locator('#back-list').click()
-                    expect(orphan).to_have_count(0)
+                    expect(orphan).to_have_count(1)
+                    expect(orphan.locator('.document-row')).to_have_text('Отдельная метрика')
                     assert project in page.locator('#back-schema').get_attribute('href')
                     assert not errors, errors
                     expect(page.locator('.list-heading').get_by_role('button')).to_have_count(1)
