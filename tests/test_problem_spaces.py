@@ -52,3 +52,46 @@ class Spaces(unittest.TestCase):
                 model.return_value = '[]'
                 with self.assertRaises(ContractError):
                     problem_spaces.request(hub, LOCAL_USER, body, 'suggest-questions')
+
+    def test_edit_reset_and_independent_response_contracts(self):
+        import metric_trees
+
+        with tempfile.TemporaryDirectory() as root:
+            hub = Community(root)
+            for module, other, action, body, model_path, answer in (
+                (problem_spaces, metric_trees, 'suggest-questions',
+                 {'title':'Вопросы', 'request':'Уточни', 'problem_tree':[]},
+                 'codex_chat.standalone_answer', [{'question':'Почему?', 'children':[]}]),
+                (metric_trees, problem_spaces, 'suggest',
+                 {'title':'Показатели', 'request':'Уточни', 'goal':'Рост', 'metrics':[], 'path':[]},
+                 'metric_trees.standalone_answer', [{**dict.fromkeys(metric_trees.FIELDS, ''), 'name':'Выручка', 'children':[]}]),
+            ):
+                with self.subTest(mode=action):
+                    def setting(action='method', **body):
+                        return module.request(hub, LOCAL_USER, body, action)
+                    default = setting()['text']
+                    self.assertNotIn('JSON', default)
+                    custom = 'Начни с конкретного примера.'
+                    setting('save-method', previous=default, text=custom)
+                    self.assertEqual(module.request(Community(root), LOCAL_USER, {}, 'method')['text'], custom)
+                    self.assertEqual(other.request(hub, LOCAL_USER, {}, 'method')['text'], other.DEFAULT_METHOD)
+                    with self.assertRaises(ContractError) as conflict:
+                        setting('save-method', previous=default, text='Из другой вкладки')
+                    self.assertEqual(conflict.exception.status, 409)
+                    with self.assertRaises(ContractError):
+                        setting('save-method', previous=custom, text='  ')
+                    with patch(model_path, return_value=json.dumps(answer)) as model:
+                        module.request(hub, LOCAL_USER, body, action)
+                        self.assertIn(custom, model.call_args.args[2])
+                        self.assertTrue(model.call_args.args[2].endswith(module.RESPONSE_CONTRACT))
+                        model.return_value = '"произвольный текст"'
+                        with self.assertRaises(ContractError) as malformed:
+                            module.request(hub, LOCAL_USER, body, action)
+                        self.assertEqual(malformed.exception.status, 502)
+                        setting('save-method', previous=custom, text=None)
+                        model.return_value = json.dumps(answer)
+                        module.request(hub, LOCAL_USER, body, action)
+                        self.assertIn(default, model.call_args.args[2])
+                        self.assertNotIn(custom, model.call_args.args[2])
+                    with patch.object(module, 'DEFAULT_METHOD', 'Обновлённая встроенная'):
+                        self.assertEqual(setting()['text'], 'Обновлённая встроенная')

@@ -12,6 +12,21 @@
   const fields = window.DesignChat.fields;
   const query=new URLSearchParams(location.search),project=query.get('project');
   if(/^[a-f0-9-]{36}$/.test(project||''))$('back-schema').href+='?project='+encodeURIComponent(project);
+  const stageMenu = $('open-stage');
+  for (const link of stageMenu.querySelectorAll('a')) {
+    const url = new URL(link.href);
+    if (project) url.searchParams.set('project', project);
+    link.href = url;
+  }
+  document.addEventListener('click', event => {
+    if (!stageMenu.contains(event.target) || event.target.closest('a')) stageMenu.open = false;
+  });
+  stageMenu.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      stageMenu.open = false;
+      stageMenu.querySelector('summary').focus();
+    }
+  });
   let account=null,doc=null,release=null,dirty=false,conflicted=false,blocked=false,saving=null,working=false,mode='mine',preview=null;
   const draftKey=()=>`architect.design-document.${account.id}.${doc.id}`;
   function node(tag,text,cls=''){const e=document.createElement(tag);e.textContent=text;e.className=cls;return e;}

@@ -15,8 +15,9 @@ with tempfile.TemporaryDirectory(prefix='local-ux-data-') as data:
    for width,height in ((1440,900),(1024,768)):
     c=b.new_context(viewport={'width':width,'height':height});p=c.new_page();errs=[];external=[];p.on('pageerror',lambda e:errs.append(str(e)));p.on('request',lambda r:external.append(r.url) if not r.url.startswith(origin) else None)
     p.goto(origin+'/architecture.html');expect(p.locator('#learning')).to_be_enabled();p.wait_for_timeout(500)
-    p.locator('#workspace-tools summary').click()
-    p.locator('#problem-space-open').click()
+    p.locator('#design-documents-open').click()
+    p.locator('#open-stage summary').click()
+    p.get_by_role('link', name='Пространство проблем', exact=True).click()
     p.wait_for_url('**/problem-space.html**')
     p.locator('#add-root').click()
     p.get_by_label('Вопрос',exact=True).fill('Кто принимает решение?')

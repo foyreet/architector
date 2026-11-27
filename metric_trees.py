@@ -1,12 +1,13 @@
 """Metric hierarchies and additive proposals from the configured model."""
 import json
 
+import tree_methods
 from block_contracts import ContractError
 from codex_chat import standalone_answer
 from problem_spaces import stored_tree
 
 FIELDS = ('name', 'role', 'definition', 'unit', 'direction', 'measurement', 'relation', 'check')
-INSTRUCTIONS = """Помоги выстроить иерархию метрик ML-системы по описанию пользователя.
+DEFAULT_METHOD = """Помоги выстроить иерархию метрик ML-системы по описанию пользователя.
 Иди от конечной цели к показателям компании и продукта, затем к измеримым факторам.
 Уровни ветвей могут различаться. Укажи, как считается метрика, единицу, направление улучшения,
 источник данных, выборку и окно наблюдения. Различай связь по формуле, гипотезу влияния,
@@ -14,10 +15,11 @@ INSTRUCTIONS = """Помоги выстроить иерархию метрик 
 Отличай онлайн-результат продукта от офлайн-оценки и функции потерь при обучении.
 Учитывай цену ошибок, чувствительность к составу выборки, стабильность и конфликтующие показатели,
 когда это существенно. Не выдумывай наблюдаемые эффекты, пороги, причинность или измеренные значения.
-Предложи только новые дочерние узлы для выбранного родителя (путь из индексов с нуля, [] — бизнес-цель).
-Верни только JSON-массив новых узлов. У каждого строки name, role, definition, unit, direction,
-measurement, relation (связь с родителем), check (проверка связи) и массив children.
 Пиши по-русски. Неизвестные детали отметь как требующие уточнения."""
+
+RESPONSE_CONTRACT = """Предложи только новые дочерние узлы для выбранного родителя (путь из индексов с нуля, [] — бизнес-цель).
+Верни только непустой JSON-массив новых узлов. У каждого строки name, role, definition, unit, direction,
+measurement, relation (связь с родителем), check (проверка связи) и массив children."""
 
 
 def validate(nodes):
@@ -44,6 +46,8 @@ def content(body):
 def request(hub, user, body, action):
     if not user:
         raise ContractError('Рабочее пространство недоступно.', 401)
+    if action in ('method', 'save-method'):
+        return tree_methods.method_settings(hub, user, 'metrics', DEFAULT_METHOD, body if action == 'save-method' else None)
     if action != 'suggest':
         return stored_tree(hub, user, body, action, metrics=True)
     context = content(body)
@@ -55,7 +59,8 @@ def request(hub, user, body, action):
         if type(index) is not int or not 0 <= index < len(nodes):
             raise ContractError('Выбранная ветвь отсутствует.')
         nodes = nodes[index]['children']
-    reply = standalone_answer(hub.root, json.dumps({**context, 'request': prompt, 'path': path}, ensure_ascii=False), INSTRUCTIONS).strip()
+    instructions = tree_methods.instructions(hub, user, 'metrics', DEFAULT_METHOD, RESPONSE_CONTRACT)
+    reply = standalone_answer(hub.root, json.dumps({**context, 'request': prompt, 'path': path}, ensure_ascii=False), instructions).strip()
     try:
         result = validate(json.loads(reply[7:-3] if reply.startswith('```json') and reply.endswith('```') else reply))
         if not result:

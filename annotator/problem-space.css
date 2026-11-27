@@ -123,3 +123,16 @@
   .tree-empty{width:min(340px,calc(100vw - 48px));margin-left:0}
 }
 @supports (field-sizing:content){.space-page #title{width:auto;min-width:160px;field-sizing:content}}
+
+.method-heading {display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px}
+#tree-ai .method-heading h2 {margin:0}
+#method-dialog {width:min(720px,calc(100vw - 24px)); max-height:90dvh}
+#method-dialog[open] {display:flex; flex-direction:column}
+#method-text {flex:1 1 auto; min-height:6em; height:40dvh; margin:6px 0; resize:vertical; font:inherit; line-height:1.5}
+#method-message {min-height:1.5em; margin:4px 0 10px; color:#526480}
+.method-actions {display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:8px}
+#default-method {margin-right:auto}
+@media(max-width:480px) {
+  #method-text {font-size:16px}
+  .method-actions button {padding-inline:10px}
+}
