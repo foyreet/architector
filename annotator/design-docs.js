@@ -423,7 +423,9 @@
     location.href='/architecture.html?project='+encodeURIComponent(selected)+'&chat=1';
   });
   $('title').addEventListener('input',changed);
-  $('save').onclick=()=>task(save);$('create').onclick=()=>task(()=>create());$('mine').onclick=()=>task(()=>list('mine'));$('catalog').onclick=()=>task(()=>list('catalog'));
+  $('save').onclick=()=>task(save);$('create').onclick=()=>{
+    location.assign(window.designFlow.url('problems', {doc:crypto.randomUUID(), draft:true}));
+  };$('mine').onclick=()=>task(()=>list('mine'));$('catalog').onclick=()=>task(()=>list('catalog'));
   $('search-form').onsubmit=e=>{e.preventDefault();task(()=>list('catalog'));};$('back-list').onclick=()=>task(()=>list(release?'catalog':'mine'));
   $('back-schema').onclick=e=>{if(!doc||(!dirty&&!saving))return;e.preventDefault();task(async()=>{if(await leaveEditor()){discardDraft();location.href=$('back-schema').href;}});};
   $('copy').onclick=()=>task(async()=>{const attempt=retryId('copy.'+release.id),r=await api('copy',{id:attempt.id,release_id:release.id});attempt.clear();openEditor(r.document);message('Документ сохранён в «Мои документы».');});
@@ -446,7 +448,13 @@
         const id = query.get(param);
         if (/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(id)) links[key] = id;
       }
-      await create(/^[a-f0-9-]{36}$/.test(query.get('new'))?query.get('new'):undefined, links);
+      const draftId = query.get('new');
+      if (/^[a-f0-9-]{36}$/.test(draftId)) {
+        // Another visit to step four may already have saved this task.
+        try { await open(draftId); return; }
+        catch (error) { if (error.status !== 404) throw error; }
+        await create(draftId, links);
+      } else await create(undefined, links);
     }else await list(query.get('view')==='catalog'?'catalog':'mine');}
   async function login(register){try{await api(register?'register':'login',{username:$('username').value,password:$('password').value},true);$('password').value='';await start();}catch(e){message(e.message);}}
   $('login-form').onsubmit=e=>{e.preventDefault();login(false);};$('register').onclick=()=>{if($('login-form').reportValidity())login(true);};

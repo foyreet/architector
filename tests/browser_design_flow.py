@@ -39,7 +39,10 @@ def main():
                     page.on('pageerror', lambda error: errors.append(str(error)))
 
                     # Problem tree: the empty canvas explains the method, answers are counted.
-                    page.goto(origin + '/problem-space.html?new=1&project=' + project)
+                    page.goto(origin + '/design-docs.html?project=' + project)
+                    page.locator('#create').click()
+                    page.wait_for_url('**/problem-space.html**')
+                    task_id = parse_qs(urlsplit(page.url).query)['doc'][0]
                     expect(page.locator('#design-flow [aria-current=step]')).to_have_text('1Проблемы')
                     expect(page.locator('.tree-empty')).to_contain_text('Общие вопросы')
                     page.locator('#title').fill('Дерево шагов ' + str(width))
@@ -83,6 +86,25 @@ def main():
                     tree = parse_qs(urlsplit(page.url).query)['id'][0]
                     assert project in page.locator('#tree-ai-settings').get_attribute('href')
                     assert tree in page.locator('#design-flow a[data-step=problems]').get_attribute('href')
+
+                    # All four steps belong to this new task. Save a metric while leaving step three.
+                    page.locator('#design-flow a[data-step=metrics]').click()
+                    page.locator('#title').fill('Метрики задачи ' + str(width))
+                    page.locator('#add-root').click()
+                    metric_id = parse_qs(urlsplit(page.url).query)['id'][0]
+                    page.locator('#design-flow a[data-step=document]').click()
+                    expect(page.locator('#save-status')).to_contain_text('ещё не сохранён')
+                    draft_url = page.url
+                    draft_params = parse_qs(urlsplit(draft_url).query)
+                    assert draft_params['new'] == [task_id] and draft_params['tree'] == [tree]
+                    assert draft_params['metric'] == [metric_id] and draft_params['project'] == [project]
+                    page.locator('#title').fill('Документ с первого этапа')
+                    page.locator('#save').click()
+                    expect(page.locator('#save-status')).to_have_text('Все изменения сохранены')
+                    page.goto(draft_url)
+                    expect(page.locator('#title')).to_have_value('Документ с первого этапа')
+                    expect(page.locator('#save-status')).to_have_text('Все изменения сохранены')
+                    assert parse_qs(urlsplit(page.url).query)['id'] == [task_id]
 
                     # An unsaved tree id falls back to the saved trees.
                     page.goto(origin + '/solution-space.html?id=00000000-0000-4000-8000-000000000000')
