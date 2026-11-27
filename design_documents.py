@@ -118,10 +118,14 @@ def tree_nodes(encoded):
         pending.extend(node['children'])
 
 
+def standalone_id(owner, kind, key):
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f'architector/task/{owner}/{kind}/{key}'))
+
+
 def document_overview(db, owner):
     db.execute('BEGIN')
     problems = {}
-    for row in db.execute("""SELECT p.id, p.title, p.updated, p.tree,
+    for row in db.execute("""SELECT p.id, p.title, p.updated, p.tree, p.revision, coalesce(s.version, 0) AS case_version,
                                     coalesce(json_array_length(s.content, '$.options'), 0) AS cases
                              FROM problem_spaces p LEFT JOIN solution_spaces s ON s.tree_id=p.id
                              WHERE p.owner=?""", (owner,)):
@@ -130,12 +134,13 @@ def document_overview(db, owner):
             questions += 1
             answered += bool(node['answer'].strip())
         problems[row['id']] = dict(id=row['id'], title=row['title'], updated=row['updated'],
-                                   answered=answered, questions=questions, cases=row['cases'])
+                                   answered=answered, questions=questions, cases=row['cases'],
+                                   revision=row['revision'], case_version=row['case_version'])
 
     metrics = {}
-    for row in db.execute('SELECT id,title,updated,tree FROM metric_trees WHERE owner=?', (owner,)):
+    for row in db.execute('SELECT id,title,updated,tree,revision FROM metric_trees WHERE owner=?', (owner,)):
         metrics[row['id']] = dict(id=row['id'], title=row['title'], updated=row['updated'],
-                                  count=sum(1 for _ in tree_nodes(row['tree'])))
+                                  count=sum(1 for _ in tree_nodes(row['tree'])), revision=row['revision'])
 
     documents, used_problems, used_metrics = [], set(), set()
     for row in db.execute("""SELECT id,title,revision,updated,sections,task_links FROM design_documents
@@ -151,16 +156,163 @@ def document_overview(db, owner):
                               missing_metric=bool(metric and metric not in metrics),
                               filled=sum(bool(value.strip()) for value in sections.values())))
 
-    unlinked = [dict(title=p['title'], updated=p['updated'], problem=p) for key, p in problems.items()
-                if key not in used_problems]
-    unlinked.extend(dict(title=m['title'], updated=m['updated'], metric=m) for key, m in metrics.items()
-                    if key not in used_metrics)
+    unlinked = []
+    for draft in db.execute('SELECT * FROM design_task_drafts WHERE owner=?', (owner,)):
+        problem = problems.get(draft['tree_id'])
+        metric = metrics.get(draft['metric_tree_id'])
+        members = [member for member in (problem, metric) if member]
+        if draft['title'] or members:
+            unlinked.append(dict(draft_id=draft['id'], title=draft['title'] or members[0]['title'],
+                                 updated=max((m['updated'] for m in members), default=draft['created']),
+                                 problem=problem, metric=metric))
+            used_problems.add(draft['tree_id'])
+            used_metrics.add(draft['metric_tree_id'])
+
+    for row in db.execute('SELECT kind,tree_id FROM dismissed_tree_tasks WHERE owner=?', (owner,)):
+        (used_problems if row['kind'] == 'problem' else used_metrics).add(row['tree_id'])
+
+    for kind, collection, used in [('problem', problems, used_problems), ('metric', metrics, used_metrics)]:
+        for key, member in collection.items():
+            if key not in used:
+                unlinked.append({'draft_id': standalone_id(owner, kind, key), 'title': member['title'],
+                                 'updated': member['updated'], kind: member})
     unlinked.sort(key=lambda row: row['updated'], reverse=True)
     return {'documents': documents, 'unlinked': unlinked}
 
 
+def rename_task(db, owner, body):
+    task_id = identity(body.get('id'))
+    title = body.get('title')
+    if not isinstance(title, str) or not title.strip():
+        raise ContractError('Введите название задачи.')
+    title = title.strip()
+    db.execute('BEGIN IMMEDIATE')
+    document = db.execute('SELECT title FROM design_documents WHERE owner=? AND id=?', (owner, task_id)).fetchone()
+    current = document or db.execute("""SELECT coalesce(d.title,p.title,m.title) AS title FROM design_task_drafts d
+                                        LEFT JOIN problem_spaces p ON p.id=d.tree_id AND p.owner=d.owner
+                                        LEFT JOIN metric_trees m ON m.id=d.metric_tree_id AND m.owner=d.owner
+                                        WHERE d.owner=? AND d.id=?""", (owner, task_id)).fetchone()
+    standalone = None
+    if not current:
+        for kind, table, key in [('problem', 'problem_spaces', 'tree_id'), ('metric', 'metric_trees', 'metric_tree_id')]:
+            tree = body.get(key)
+            if not tree or standalone_id(owner, kind, tree) != task_id:
+                continue
+            # An old list entry may already have been linked to a task or dismissed.
+            current = db.execute(f"""SELECT title FROM {table} WHERE owner=? AND id=?
+                                     AND NOT EXISTS (SELECT 1 FROM design_task_drafts WHERE owner=? AND {key}=?)
+                                     AND NOT EXISTS (SELECT 1 FROM design_documents WHERE owner=? AND json_extract(task_links,'$.{key}')=?)
+                                     AND NOT EXISTS (SELECT 1 FROM dismissed_tree_tasks WHERE owner=? AND kind=? AND tree_id=?)""",
+                                 (owner, tree, owner, tree, owner, tree, owner, kind, tree)).fetchone()
+            standalone = (key, tree)
+            break
+    if not current:
+        raise ContractError('Задача не найдена. Обновите список.', 404)
+    if current['title'] == title:
+        return {'title': title}
+    if current['title'] != body.get('previous_title'):
+        raise ContractError('Название уже изменилось в другой вкладке. Обновите список.', 409)
+    if document:
+        db.execute('UPDATE design_documents SET title=?,revision=revision+1,updated=? WHERE owner=? AND id=?',
+                   (title, time.time(), owner, task_id))
+    elif standalone:
+        key, tree = standalone
+        db.execute(f'INSERT INTO design_task_drafts(owner,id,title,created,{key}) VALUES(?,?,?,?,?)',
+                   (owner, task_id, title, time.time(), tree))
+    else:
+        db.execute('UPDATE design_task_drafts SET title=? WHERE owner=? AND id=?', (title, owner, task_id))
+    return {'title': title}
+
+
+def delete_draft_task(db, owner, body):
+    task_id = identity(body.get('id'))
+    members = body.get('members')
+    if not isinstance(members, dict) or members.keys() - {'problem', 'metric'}:
+        raise ContractError('Укажите сохранённые деревья задачи.')
+    db.execute('BEGIN IMMEDIATE')
+    changed = 'Задача изменилась. Обновите список перед удалением.'
+    if db.execute('SELECT 1 FROM design_documents WHERE owner=? AND id=?', (owner, task_id)).fetchone():
+        raise ContractError(changed, 409)
+    draft = db.execute('SELECT * FROM design_task_drafts WHERE owner=? AND id=?', (owner, task_id)).fetchone()
+    if not members and not draft:
+        raise ContractError('Задача не найдена.', 404)
+    removed = {}
+    for kind, table, key in [('problem', 'problem_spaces', 'tree_id'), ('metric', 'metric_trees', 'metric_tree_id')]:
+        if kind not in members:
+            if draft and draft[key]:
+                raise ContractError(changed, 409)
+            continue
+        member = members[kind]
+        if not isinstance(member, dict) or type(member.get('revision')) is not int:
+            raise ContractError('Укажите версию дерева задачи.')
+        tree_id = identity(member.get('id'))
+        if draft:
+            if draft[key] != tree_id:
+                raise ContractError(changed, 409)
+        elif len(members) != 1 or standalone_id(owner, kind, tree_id) != task_id:
+            raise ContractError('Задача не найдена.', 404)
+        row = db.execute(f'SELECT revision FROM {table} WHERE owner=? AND id=?', (owner, tree_id)).fetchone()
+        if not row or row['revision'] != member.get('revision'):
+            raise ContractError(changed, 409)
+        # A saved document or another task can use the same tree and its cases.
+        shared = db.execute(f"""SELECT 1 FROM design_task_drafts WHERE owner=? AND id<>? AND {key}=?
+                                UNION ALL SELECT 1 FROM design_documents WHERE owner=? AND json_extract(task_links, '$.{key}')=?
+                                LIMIT 1""", (owner, task_id, tree_id, owner, tree_id)).fetchone()
+        if shared:
+            if not draft:
+                raise ContractError(changed, 409)
+            continue
+        # Section sources have their own links, even after the task's selected trees change.
+        source_path = '$.tree_id' if kind == 'problem' else '$.metric_tree.id'
+        cited = db.execute('''SELECT 1 FROM design_documents d, json_each(d.sources) ref
+                              WHERE d.owner=? AND json_extract(ref.value, ?)=? LIMIT 1''',
+                           (owner, source_path, tree_id)).fetchone()
+        if cited:
+            db.execute('INSERT OR IGNORE INTO dismissed_tree_tasks(owner,kind,tree_id) VALUES(?,?,?)',
+                       (owner, kind, tree_id))
+            continue
+        if kind == 'problem':
+            cases = db.execute('SELECT version FROM solution_spaces WHERE tree_id=?', (tree_id,)).fetchone()
+            if (cases['version'] if cases else 0) != member.get('case_version'):
+                raise ContractError(changed, 409)
+            db.execute('DELETE FROM solution_spaces WHERE tree_id=?', (tree_id,))
+        db.execute(f'DELETE FROM {table} WHERE owner=? AND id=?', (owner, tree_id))
+        removed[kind] = tree_id
+    db.execute('DELETE FROM design_task_drafts WHERE owner=? AND id=?', (owner, task_id))
+    return {'deleted': task_id, 'removed_trees': removed}
+
+
 def request(hub, user, body, action):
     if user is None: raise ContractError('Войдите в аккаунт Архитектора, чтобы работать с документами.', 401)
+    if action in ('create-task', 'task-title'):
+        owner, task_id = user['id'], identity(body.get('id'))
+        with hub.db() as db:
+            db.execute('BEGIN IMMEDIATE' if action == 'create-task' else 'BEGIN')
+            document = db.execute('SELECT title FROM design_documents WHERE owner=? AND id=?', (owner, task_id)).fetchone()
+            if document:
+                return {'title': document['title']}
+            if action == 'create-task':
+                title = body.get('title')
+                if not isinstance(title, str) or not title.strip():
+                    raise ContractError('Введите название задачи.')
+                db.execute('INSERT INTO design_task_drafts(owner,id,title,created) VALUES(?,?,?,?) ON CONFLICT(owner,id) DO NOTHING',
+                           (owner, task_id, title.strip(), time.time()))
+            draft = db.execute('SELECT * FROM design_task_drafts WHERE owner=? AND id=?', (owner, task_id)).fetchone()
+            if draft and draft['title']:
+                return {'title': draft['title']}
+            for kind, table, key in [('problem', 'problem_spaces', 'tree_id'), ('metric', 'metric_trees', 'metric_tree_id')]:
+                tree = draft[key] if draft else body.get(key)
+                if tree and (draft or standalone_id(owner, kind, tree) == task_id):
+                    source = db.execute(f'SELECT title FROM {table} WHERE owner=? AND id=?', (owner, tree)).fetchone()
+                    if source:
+                        return {'title': source['title']}
+            return {'title': None}
+    if action == 'rename-task':
+        with hub.db() as db:
+            return rename_task(db, user['id'], body)
+    if action == 'delete-draft':
+        with hub.db() as db:
+            return delete_draft_task(db, user['id'], body)
     if action in ('method', 'save-method', 'compose', 'review'):
         from design_assistant import request as assist
         return assist(hub, user, body, action)
@@ -192,12 +344,25 @@ def request(hub, user, body, action):
                 if previous['owner'] != user['id'] or previous['source_release'] != source:
                     raise ContractError('Идентификатор документа уже используется.', 409)
                 return {'document': public(previous)}
+            draft = db.execute('SELECT * FROM design_task_drafts WHERE owner=? AND id=?', (user['id'], doc_id)).fetchone()
+            if action == 'create' and draft and draft['title']:
+                initial_title = body.get('initial_task_title')
+                if 'title' not in body or name == initial_title:
+                    name = draft['title']
+                elif initial_title is not None and initial_title != draft['title'] and name != draft['title']:
+                    raise ContractError('Название задачи уже изменилось в другой вкладке. Обновите страницу.', 409)
             from problem_spaces import problem_tree
             tree = problem_tree((package if action == 'import' else body).get('problem_tree', []))
             db.execute('INSERT INTO design_documents(id,owner,title,sections,revision,updated,source_release,problem_tree) VALUES(?,?,?,?,?,?,?,?)',
                        (doc_id, user['id'], name, json.dumps(sections, ensure_ascii=False), 1, time.time(), source, json.dumps(tree, ensure_ascii=False)))
             refs = sources((package if action == 'import' else body).get('sources', {}))
             links = task_links((package if action == 'import' else body).get('task_links', {}))
+            if draft:
+                initial = task_links(body.get('initial_task_links', {}))
+                for key in ('tree_id', 'metric_tree_id'):
+                    if draft[key] and key not in initial:
+                        links.setdefault(key, draft[key])
+                db.execute('DELETE FROM design_task_drafts WHERE owner=? AND id=?', (user['id'], doc_id))
             db.execute('UPDATE design_documents SET sources=?, task_links=? WHERE id=?',
                        (json.dumps(refs, ensure_ascii=False), json.dumps(links), doc_id))
             if tree:

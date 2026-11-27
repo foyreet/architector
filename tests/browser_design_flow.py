@@ -41,11 +41,22 @@ def main():
                     # Problem tree: the empty canvas explains the method, answers are counted.
                     page.goto(origin + '/design-docs.html?project=' + project)
                     page.locator('#create').click()
+                    page.locator('#task-name').fill('   ')
+                    page.locator('#task-name').press('Enter')
+                    expect(page.locator('#create-task-dialog')).to_be_visible()
+                    page.keyboard.press('Escape')
+                    expect(page.locator('#create')).to_be_focused()
+                    page.locator('#create').click()
+                    page.locator('#task-name').fill('Дерево шагов ' + str(width))
+                    page.locator('#task-name').press('Enter')
                     page.wait_for_url('**/problem-space.html**')
                     task_id = parse_qs(urlsplit(page.url).query)['doc'][0]
                     expect(page.locator('#design-flow [aria-current=step]')).to_have_text('1Проблемы')
                     expect(page.locator('.tree-empty')).to_contain_text('Общие вопросы')
-                    page.locator('#title').fill('Дерево шагов ' + str(width))
+                    expect(page.locator('.space-actions button')).to_have_text(['Предложить вопросы с AI'])
+                    expect(page.locator('.tree-root #add-root')).to_have_text('+ Вопрос')
+                    expect(page.locator('#title')).to_be_hidden()
+                    expect(page.locator('#tree-origin')).to_contain_text('Дерево шагов ' + str(width))
                     page.locator('#add-root').click()
                     expect(page.locator('.tree-empty')).to_have_count(0)
                     page.get_by_label('Вопрос', exact=True).fill('Зачем бизнесу прогноз?')
@@ -79,7 +90,10 @@ def main():
                     page.get_by_label('Вопрос', exact=True).fill('Временная ветвь')
                     page.get_by_role('button', name='Добавить уточнение').click()
                     page.get_by_label('Ответ', exact=True).fill('Временный ответ')
-                    page.locator('#question-editor').get_by_role('button', name='Закрыть').click()
+                    page.get_by_role('button', name='+ Вопрос', exact=True).click()
+                    expect(page.locator('#tree-branches > ul > li')).to_have_count(3)
+                    expect(page.get_by_label('Вопрос', exact=True)).to_be_focused()
+                    page.get_by_role('button', name='Удалить вопрос', exact=True).click()
                     page.get_by_role('button', name='Временная ветвь', exact=True).click()
                     page.get_by_role('button', name='Удалить ветвь вопросов').click()
                     expect(page.locator('.branch-row')).to_have_count(1)
@@ -133,7 +147,8 @@ def main():
 
                     # All four steps belong to this new task. Save a metric while leaving step three.
                     page.locator('#design-flow a[data-step=metrics]').click()
-                    page.locator('#title').fill('Метрики задачи ' + str(width))
+                    expect(page.locator('#title')).to_be_hidden()
+                    expect(page.locator('#tree-origin')).to_contain_text('Дерево шагов ' + str(width))
                     page.locator('#add-root').click()
                     metric_id = parse_qs(urlsplit(page.url).query)['id'][0]
                     page.locator('#design-flow a[data-step=document]').click()
@@ -142,6 +157,15 @@ def main():
                     draft_params = parse_qs(urlsplit(draft_url).query)
                     assert draft_params['new'] == [task_id] and draft_params['tree'] == [tree]
                     assert draft_params['metric'] == [metric_id] and draft_params['project'] == [project]
+                    hub = context.new_page()
+                    hub.goto(origin + '/design-docs.html')
+                    progress = hub.locator('.task-row').filter(has=hub.locator(f'.task-step[href*="{task_id}"]'))
+                    expect(progress).to_have_count(1)
+                    expect(progress.locator('.task-step').nth(2)).to_have_attribute('href', re.compile(metric_id))
+                    expect(progress.locator('.task-step').nth(0)).to_have_attribute('href', re.compile(tree))
+                    expect(progress.locator('.document-row')).to_have_attribute('href', re.compile('design-docs.html'))
+                    hub.close()
+                    expect(page.locator('#title')).to_have_value('Дерево шагов ' + str(width))
                     page.locator('#title').fill('Документ с первого этапа')
                     page.locator('#save').click()
                     expect(page.locator('#save-status')).to_have_text('Все изменения сохранены')
@@ -158,6 +182,8 @@ def main():
                     # Metric tree: role suggestions and role colours.
                     page.goto(origin + '/metric-tree.html?new=1')
                     expect(page.locator('.tree-empty')).to_contain_text('Бизнес-метрика')
+                    expect(page.locator('.space-actions button')).to_have_text(['Предложить метрики с AI'])
+                    expect(page.locator('.tree-root #add-root')).to_have_text('+ Метрика')
                     page.locator('#add-root').click()
                     role = page.get_by_label('Роль', exact=True)
                     expect(role).to_have_attribute('list', 'metric-role-options')
@@ -166,6 +192,12 @@ def main():
                     expect(page.locator('#tree-progress')).to_have_text('С определением: 0 из 1')
                     page.get_by_role('button', name='Удалить метрику').click()
                     expect(page.locator('.branch-row')).to_have_count(0)
+
+                    page.get_by_role('button', name='+ Метрика', exact=True).click()
+                    page.get_by_role('button', name='Добавить дочернюю метрику').click()
+                    page.get_by_role('button', name='+ Метрика', exact=True).click()
+                    expect(page.locator('#tree-branches > ul > li')).to_have_count(2)
+                    expect(page.get_by_label('Название метрики', exact=True)).to_be_focused()
 
                     # Design document: the outline follows filled sections.
                     page.goto(origin + '/design-docs.html?new=1')
@@ -240,7 +272,13 @@ def main():
                     page.locator('#back-list').click()
                     saved = page.locator('#documents .task-row').filter(
                         has=page.locator(f'a[href*="{document_id}"]'))
-                    expect(saved.locator('.task-step')).to_have_count(4)
+                    steps = saved.locator('.task-step')
+                    expect(steps).to_have_count(4)
+                    positions = steps.evaluate_all('links => links.map(link => Math.round(link.getBoundingClientRect().top))')
+                    if width > 760:
+                        assert len(set(positions)) == 1, positions
+                    else:
+                        assert positions[0] == positions[1] < positions[2] == positions[3], positions
                     expect(saved.locator('.task-step').nth(0)).to_contain_text('1 из 2 ответов')
                     expect(saved.locator('.task-step').nth(1)).to_contain_text('1 кейс')
                     expect(saved.locator('.task-step').nth(2)).to_contain_text('0 показателей')
@@ -248,13 +286,63 @@ def main():
                     expect(page.locator('#design-flow')).to_be_hidden()
                     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
                     saved.locator('.task-step').nth(1).click()
-                    expect(page.locator('#title')).to_have_text('Дерево шагов ' + str(width))
+                    expect(page.locator('#title')).to_have_text('Новый дизайн-документ')
+
+                    # A saved document with no links opens its own stages instead of the document editor.
+                    sections = api('design-documents/get', {'id':document_id})['document']['sections']
+                    blank = api('design-documents/create', {'id':str(uuid.uuid4()), 'title':'Без связей ' + str(width),
+                                                            'sections':sections})['document']
+                    hub_url = origin + '/design-docs.html?project=' + project
+                    row = page.locator('#documents .task-row').filter(has_text=blank['title'])
+                    for index, path in enumerate(('problem-space', 'solution-space', 'metric-tree', 'design-docs')):
+                        page.goto(hub_url)
+                        row.locator('.task-step').nth(index).click()
+                        page.wait_for_url('**/' + path + '.html**')
+                        params = parse_qs(urlsplit(page.url).query)
+                        assert params['project'] == [project]
+                        if index != 3:
+                            assert params['doc'] == [blank['id']]
+                        else:
+                            expect(page.locator('#title')).to_have_value(blank['title'])
+                    assert api('design-documents/get', blank)['document']['task_links'] == {}
+                    page.goto(hub_url)
+                    row.locator('.task-step').nth(1).click()
+                    page.get_by_role('button', name=re.compile('Дерево шагов ' + str(width))).click()
+                    expect(page.locator('#editor')).to_be_visible()
+                    expect(page.locator('#title')).to_have_text(blank['title'])
+                    page.goto(hub_url)
+                    row.locator('.task-step').nth(0).click()
+                    expect(page.locator('#title')).to_have_value(blank['title'])
+                    page.goto(hub_url)
+                    row.locator('.task-step').nth(2).click()
+                    expect(page.locator('#tree-origin')).to_contain_text(blank['title'])
+                    page.locator('#save').click()
+                    expect(page.locator('#status')).to_have_text('Сохранено')
+                    new_metric = parse_qs(urlsplit(page.url).query)['id'][0]
+                    page.goto(hub_url)
+                    row.locator('.task-step').nth(2).click()
+                    expect(page.locator('#title')).to_have_value(blank['title'])
+                    saved_doc = api('design-documents/get', blank)['document']
+                    assert saved_doc['task_links'] == {'metric_tree_id':new_metric, 'tree_id':tree}
+                    assert saved_doc['sections'] == blank['sections']
+
+                    # The two tasks share a problem tree and resume at different stages.
+                    page.goto(hub_url)
+                    saved.locator('.document-row').click()
+                    expect(page.locator('#title')).to_have_text('Новый дизайн-документ')
+                    assert parse_qs(urlsplit(page.url).query)['doc'] == [document_id]
+                    page.goto(hub_url)
+                    page.reload()
+                    row.locator('.document-row').click()
+                    expect(page.locator('#title')).to_have_value(blank['title'])
+                    assert parse_qs(urlsplit(page.url).query)['doc'] == [blank['id']]
 
                     # A standalone metric becomes part of a task only after its document is saved.
                     standalone = str(uuid.uuid4())
                     api('metric-trees/save', {'id':standalone, 'title':'Отдельная метрика', 'goal':'Рост', 'metrics':[], 'revision':0})
                     page.goto(origin + '/design-docs.html?project=' + project)
-                    orphan = page.locator('#unlinked .task-row').filter(has_text='Отдельная метрика')
+                    orphan = page.locator('#documents .task-row').filter(has=page.locator(f'.task-step[href*="{standalone}"]'))
+                    expect(orphan.locator('a.task-step')).to_have_count(4)
                     orphan.get_by_role('link', name='Документ не создан').click()
                     expect(page.locator('#design-flow a[data-step=metrics]')).to_have_attribute(
                         'href', re.compile(standalone))
@@ -264,12 +352,15 @@ def main():
                     new_id = parse_qs(urlsplit(page.url).query)['id'][0]
                     assert api('design-documents/get', {'id':new_id})['document']['task_links'] == {'metric_tree_id':standalone}
                     page.locator('#back-list').click()
-                    expect(orphan).to_have_count(0)
+                    expect(orphan).to_have_count(1)
+                    expect(orphan.locator('.document-row')).to_have_text('Отдельная метрика')
                     assert project in page.locator('#back-schema').get_attribute('href')
                     assert not errors, errors
-                    for stage in ['Пространство проблем', 'Иерархия метрик']:
-                        page.locator('#open-stage summary').click()
-                        page.get_by_role('link', name=stage, exact=True).click()
+                    expect(page.locator('.list-heading').get_by_role('button')).to_have_count(1)
+                    expect(page.get_by_text('Открыть этап', exact=True)).to_have_count(0)
+                    expect(page.get_by_text('Импорт JSON', exact=True)).to_have_count(0)
+                    for step in (0, 2):
+                        row.locator('.task-step').nth(step).click()
                         page.locator('#tree-ai-open').click()
                         page.locator('#tree-request').fill('Разберём задачу')
                         edit = page.get_by_role('button', name='Методика', exact=True)
@@ -295,6 +386,31 @@ def main():
                         page.locator('#save-method').click()
                         expect(page.locator('#method-dialog')).to_be_hidden()
                         page.goto(origin + '/design-docs.html?project=' + project)
+                    # Delete one of two standalone tasks with the same title, by its own card.
+                    twins = [str(uuid.uuid4()) for _ in range(2)]
+                    for twin in twins:
+                        api('problem-spaces/save', {'id':twin, 'title':'Новое дерево', 'revision':0, 'problem_tree':[]})
+                    page.reload()
+                    cards = [page.locator('.task-row').filter(has=page.locator(f'.task-step[href*="{twin}"]')) for twin in twins]
+                    rename = cards[0].get_by_role('button', name='Переименовать задачу «Новое дерево»')
+                    rename.click()
+                    expect(page.locator('#task-name')).to_have_value('Новое дерево')
+                    page.locator('#task-name').fill('Отмена')
+                    page.keyboard.press('Escape')
+                    expect(rename).to_be_focused()
+                    rename.click()
+                    page.locator('#task-name').fill('Переименованная задача')
+                    page.locator('#task-name').press('Enter')
+                    expect(cards[0].get_by_role('button', name='Переименовать задачу «Переименованная задача»')).to_be_focused()
+                    page.reload()
+                    expect(cards[0].locator('.document-row')).to_have_text('Переименованная задача')
+                    expect(cards[1].locator('.document-row')).to_have_text('Новое дерево')
+                    remove = cards[0].get_by_role('button', name='Удалить задачу «Переименованная задача»')
+                    remove.click()
+                    expect(page.locator('#message')).to_have_text('Задача удалена.')
+                    page.reload()
+                    expect(cards[1]).to_be_visible()
+                    expect(cards[0]).to_have_count(0)
                     assert not errors, errors
                     print(width, 'PASS design flow', flush=True)
                     context.close()

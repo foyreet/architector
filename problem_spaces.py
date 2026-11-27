@@ -4,7 +4,7 @@ import time
 
 import tree_methods
 from block_contracts import ContractError
-from design_documents import identity
+from design_documents import identity, owned
 
 
 def problem_tree(nodes, depth=1):
@@ -105,6 +105,49 @@ def request(hub, user, body, action):
     return stored_tree(hub, user, body, action, metrics=False)
 
 
+def attach_stage(db, user, doc_id, tree_id, metrics):
+    # Called in the same write transaction as the tree save.
+    doc = owned(db, user, doc_id)
+    links = json.loads(doc['task_links'])
+    key = 'metric_tree_id' if metrics else 'tree_id'
+    previous = links.get(key)
+    if previous == tree_id:
+        return
+    table = 'metric_trees' if metrics else 'problem_spaces'
+    if previous and db.execute(f'SELECT 1 FROM {table} WHERE id=? AND owner=?', (previous, user['id'])).fetchone():
+        raise ContractError('К документу уже привязано другое дерево. Откройте этап заново из списка документов.', 412)
+    links[key] = tree_id
+    if not metrics:
+        links.pop('cases', None)
+        links.pop('case_version', None)
+    db.execute('UPDATE design_documents SET task_links=?,revision=revision+1,updated=? WHERE id=?',
+               (json.dumps(links), time.time(), doc_id))
+
+
+def bind_tree(db, user, body, tree_id, metrics):
+    if 'draft_task' not in body:
+        if 'doc' in body:
+            attach_stage(db, user, body['doc'], tree_id, metrics)
+        return
+    task_id = identity(body['draft_task'])
+    owner = user['id']
+    if db.execute('SELECT 1 FROM design_documents WHERE id=?', (task_id,)).fetchone():
+        attach_stage(db, user, task_id, tree_id, metrics)
+        return
+    key, other = ('metric_tree_id', 'tree_id') if metrics else ('tree_id', 'metric_tree_id')
+    companion = body.get('companion')
+    if companion:
+        table = 'problem_spaces' if metrics else 'metric_trees'
+        if not db.execute(f'SELECT 1 FROM {table} WHERE id=? AND owner=?', (identity(companion), owner)).fetchone():
+            companion = None
+    existing = db.execute('SELECT * FROM design_task_drafts WHERE owner=? AND id=?', (owner, task_id)).fetchone()
+    if existing and (existing[key] not in (None, tree_id) or (companion and existing[other] not in (None, companion))):
+        raise ContractError('В этой задаче уже выбрано другое дерево. Откройте её снова из списка задач.', 412)
+    db.execute(f"""INSERT INTO design_task_drafts(owner,id,{key},{other}) VALUES(?,?,?,?)
+                   ON CONFLICT(owner,id) DO UPDATE SET {key}=excluded.{key},{other}=coalesce(excluded.{other},{other})""",
+               (owner, task_id, tree_id, companion))
+
+
 def stored_tree(hub, user, body, action, *, metrics):
     table = 'metric_trees' if metrics else 'problem_spaces'
     nodes_key = 'metrics' if metrics else 'problem_tree'
@@ -123,6 +166,13 @@ def stored_tree(hub, user, body, action, *, metrics):
                 raise ContractError('Дерево не найдено.', 404)
             return {'id': tree_id, 'title': row['title'], goal_key: row['problem'],
                     nodes_key: json.loads(row['tree']), 'revision': row['revision']}
+        if action == 'attach':
+            if not row:
+                raise ContractError('Дерево не найдено.', 404)
+            if not ('doc' in body or 'draft_task' in body):
+                raise ContractError('Укажите задачу.')
+            bind_tree(db, user, body, tree_id, metrics)
+            return {'revision': row['revision']}
         if action != 'save':
             raise ContractError('Маршрут дерева не найден.', 404)
         if metrics:
@@ -133,6 +183,7 @@ def stored_tree(hub, user, body, action, *, metrics):
         revision = body.get('revision')
         if type(revision) is not int or revision < 0:
             raise ContractError('Некорректная версия дерева.')
+        bind_tree(db, user, body, tree_id, metrics)
         if row and revision == row['revision'] - 1 and row['title'] == value['title'] and row['problem'] == value[goal_key] and json.loads(row['tree']) == value[nodes_key]:
             return {'revision': row['revision']}
         if revision != (row['revision'] if row else 0):

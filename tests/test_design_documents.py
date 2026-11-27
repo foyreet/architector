@@ -62,6 +62,102 @@ class Documents(unittest.TestCase):
         self.call('delete', self.doc)
         self.assertEqual([row['problem']['id'] for row in overview()['unlinked']], [tree_id])
 
+    def test_task_keeps_saved_stages_together_and_respects_explicit_unlink(self):
+        from problem_spaces import request as problem
+        from metric_trees import request as metric
+        task_id, tree_id, metric_id, other_id = (str(uuid.uuid4()) for _ in range(4))
+        tree = {'id': tree_id, 'draft_task': task_id, 'title': 'Название', 'problem_tree': [], 'revision': 0}
+        problem(self.hub, self.a, tree, 'save')
+        with self.assertRaises(ContractError) as error:
+            problem(self.hub, self.a, {**tree, 'id': other_id}, 'save')
+        self.assertEqual(error.exception.status, 412)
+        metric(self.hub, self.a, {'id': metric_id, 'draft_task': task_id, 'title': 'Цель', 'goal': '',
+                                  'metrics': [], 'revision': 0}, 'save')
+        rows = self.call('list', {'include_progress': True})['unlinked']
+        self.assertEqual([(r['draft_id'], r['problem']['id'], r['metric']['id']) for r in rows],
+                         [(task_id, tree_id, metric_id)])
+        # The metric was saved in another tab; the user explicitly removed only the problem tree.
+        doc = self.call('create', {'id': task_id, 'initial_task_links': {'tree_id': tree_id}, 'task_links': {}})
+        self.assertEqual(doc['document']['task_links'], {'metric_tree_id': metric_id})
+        rows = self.call('list', {'include_progress': True})['unlinked']
+        self.assertEqual([r['problem']['id'] for r in rows], [tree_id])
+
+    def test_delete_draft_keeps_shared_tree_and_rejects_stale_members(self):
+        from problem_spaces import request as problem
+        from metric_trees import request as metric
+        task, tree, goal = (str(uuid.uuid4()) for _ in range(3))
+        problem(self.hub, self.a, {'id': tree, 'draft_task': task, 'title': 'Задача', 'revision': 0,
+                                   'problem_tree': []}, 'save')
+        metric(self.hub, self.a, {'id': goal, 'draft_task': task, 'title': 'Метрики', 'revision': 0,
+                                  'goal': '', 'metrics': []}, 'save')
+        with self.hub.db() as db:
+            db.execute('INSERT INTO solution_spaces VALUES(?,?,?)', (tree, '{"options":[]}', 1))
+        members = {'problem': {'id': tree, 'revision': 1, 'case_version': 1}, 'metric': {'id': goal, 'revision': 1}}
+        payload = {'id': task, 'members': members}
+        with self.assertRaises(ContractError):
+            self.call('delete-draft', payload, self.b)
+        # Failing on the second tree must roll back deletion of the first tree and its cases.
+        with self.assertRaises(ContractError) as stale:
+            self.call('delete-draft', {**payload, 'members': {**members, 'metric': {'id': goal, 'revision': 2}}})
+        self.assertEqual(stale.exception.status, 409)
+        with self.hub.db() as db:
+            self.assertEqual(db.execute('SELECT version FROM solution_spaces WHERE tree_id=?', (tree,)).fetchone()[0], 1)
+        self.save(task_links={'metric_tree_id': goal})
+        self.assertEqual(self.call('delete-draft', payload)['removed_trees'], {'problem': tree})
+        self.assertEqual(metric(self.hub, self.a, {'id': goal}, 'get')['revision'], 1)
+        with self.hub.db() as db:
+            self.assertIsNone(db.execute('SELECT version FROM solution_spaces WHERE tree_id=?', (tree,)).fetchone())
+        self.assertFalse(self.call('list', {'include_progress': True})['unlinked'])
+
+    def test_delete_standalone_preserves_document_source(self):
+        from problem_spaces import request as problem
+        tree = str(uuid.uuid4())
+        problem(self.hub, self.a, {'id': tree, 'title': 'Источник', 'revision': 0, 'problem_tree': []}, 'save')
+        self.save(sources={'problem': {'tree_id': tree, 'revision': 1, 'version': 0,
+                                       'title': 'Источник', 'answers': [], 'cases': []}})
+        row, = self.call('list', {'include_progress': True})['unlinked']
+        result = self.call('delete-draft', {'id': row['draft_id'], 'members': {'problem': row['problem']}})
+        self.assertEqual(result['removed_trees'], {})
+        self.assertFalse(self.call('list', {'include_progress': True})['unlinked'])
+        self.assertEqual(problem(self.hub, self.a, {'id': tree}, 'get')['title'], 'Источник')
+
+    def test_named_task_exists_before_its_stages(self):
+        task_id = str(uuid.uuid4())
+        with self.assertRaises(ContractError):
+            self.call('create-task', {'id': task_id, 'title': '  '})
+        task = {'id': task_id, 'title': '  Прогноз продаж  '}
+        for _ in range(2):
+            self.assertEqual(self.call('create-task', task)['title'], 'Прогноз продаж')
+        row, = self.call('list', {'include_progress': True})['unlinked']
+        self.assertEqual((row['draft_id'], row['title'], row['problem'], row['metric']),
+                         (task_id, 'Прогноз продаж', None, None))
+        self.assertIsNone(self.call('task-title', task, self.b)['title'])
+        self.assertEqual(self.call('task-title', task)['title'], row['title'])
+        document = self.call('create', {'id': task_id})['document']
+        self.assertEqual(document['title'], row['title'])
+        self.call('save', {**document, 'title': 'Обновлённое имя'})
+        self.assertEqual(self.call('task-title', task)['title'], 'Обновлённое имя')
+        self.assertFalse(self.call('list', {'include_progress': True})['unlinked'])
+
+    def test_rename_task_and_concurrent_first_document_save(self):
+        task_id = str(uuid.uuid4())
+        self.call('create-task', {'id': task_id, 'title': 'До'})
+        rename = {'id': task_id, 'title': 'После', 'previous_title': 'До'}
+        with self.assertRaises(ContractError):
+            self.call('rename-task', rename, self.b)
+        self.call('rename-task', rename)
+        with self.assertRaises(ContractError) as stale:
+            self.call('rename-task', {**rename, 'title': 'Конфликт'})
+        self.assertEqual(stale.exception.status, 409)
+        sections = {key: 'Изменённый раздел' for key in docs.SECTIONS}
+        doc = self.call('create', {'id': task_id, 'sections': sections, 'title': 'До', 'initial_task_title': 'До'})['document']
+        self.assertEqual(doc['title'], 'После')
+        rename.update(previous_title='После', title='Сохранённая задача')
+        for _ in range(2):
+            self.call('rename-task', rename)
+        saved = self.call('get', {'id': task_id})['document']
+        self.assertEqual((saved['title'], saved['revision'], saved['sections']), (rename['title'], doc['revision'] + 1, sections))
+
     def test_validation(self):
         for changes in ({'title':''},{'sections':{}},{'sections':{k:0 for k in docs.SECTIONS}}):
             with self.subTest(changes=list(changes)),self.assertRaises(ContractError):self.call('save',{**self.doc,**changes})

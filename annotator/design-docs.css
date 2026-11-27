@@ -149,6 +149,9 @@ main#editor>#doc-outline{grid-column:1;grid-row:2/span 40;align-self:start;posit
 }
 @media(max-width:600px){.doc-section{scroll-margin-top:156px}}
 
+@media(min-width:761px) {
+  #list {max-width:1120px; padding-inline:16px}
+}
 .task-row {
   display:grid; grid-template-columns:minmax(0,1fr) auto; gap:0 16px;
   align-items:start; padding:10px 16px; background:white; border-bottom:1px solid #d7dfec;
@@ -159,9 +162,9 @@ main#editor>#doc-outline{grid-column:1;grid-row:2/span 40;align-self:start;posit
   border:0; font-size:16px; color:inherit; overflow-wrap:anywhere;
 }
 .task-row .document-row:hover {color:#2054c7; text-decoration:underline}
-.task-row .delete-document {grid-column:2; grid-row:1 / span 2; margin-top:5px}
+.task-row-actions {grid-column:2; grid-row:1; display:flex; flex-wrap:wrap; gap:8px}
 .task-steps {
-  grid-column:1; display:flex; flex-wrap:wrap; align-items:center; gap:0 12px;
+  grid-column:1/-1; display:flex; flex-wrap:wrap; align-items:center; gap:0 12px;
   list-style:none; padding:0; margin:0; font-size:13px;
 }
 .task-steps li {display:flex; gap:12px; align-items:center}
@@ -171,30 +174,21 @@ a.task-step:hover {text-decoration:underline; color:#2054c7}
 .task-step .step-number {width:20px; height:20px; font-size:11px}
 .step-number.started {background:#eaf0ff; border-color:#c1cef5; color:#2349ad}
 .step-status {color:#53647c}
-#unlinked {margin-top:36px}
-#unlinked h2 {font-size:17px}
-#unlinked>p {margin:4px 0 12px}
-@media(max-width:760px) {
-  .task-row {padding:8px 12px}
-  .task-row .delete-document {grid-row:1; margin:0}
-  .task-steps {grid-column:1/-1; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 8px}
+@media(max-width:900px) {
+  .task-steps {display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:0 8px}
   .task-steps li+li::before {display:none}
   .task-step {display:grid; grid-template-columns:auto 1fr; column-gap:6px; row-gap:0; min-height:44px; align-content:center}
   .task-step .step-number {grid-row:1 / span 2}
   .step-status {grid-column:2}
+}
+@media(max-width:760px) {
+  .task-row {padding:8px 12px}
+  .task-row h3 {grid-column:1/-1}
+  .task-row-actions {grid-column:1/-1; grid-row:3; margin:6px 0 0}
+  .task-steps {grid-template-columns:repeat(2,minmax(0,1fr))}
   header:has(#design-flow[hidden]) #account {display:block; font-size:13px}
 }
 @media(pointer:coarse){a.task-step {min-height:44px}}
-
-#open-stage {position:relative}
-#open-stage summary {padding:10px 14px; min-height:44px; background:white; border:1px solid #d7dfec; border-radius:8px; cursor:pointer}
-#open-stage nav {position:absolute; right:0; z-index:2; min-width:max-content; margin-top:4px; padding:4px; background:white; border:1px solid #d7dfec; border-radius:8px; box-shadow:0 4px 16px #26324b18}
-#open-stage a {display:block; padding:10px 12px; color:inherit}
-#open-stage a:hover {background:#edf2ff}
-@media(max-width:600px) {
-  #open-stage {width:100%}
-  #open-stage nav {position:static; min-width:0}
-}
 
 #method-dialog {width:min(720px,calc(100vw - 24px)); max-height:90dvh}
 #method-dialog[open] {display:flex; flex-direction:column}
@@ -207,3 +201,7 @@ a.task-step:hover {text-decoration:underline; color:#2054c7}
   .method-actions button {padding-inline:10px}
 }
 #method-kind {font:inherit; padding:8px; margin:6px 0 12px; border:1px solid #bdc9df; border-radius:8px; background:white; color:inherit}
+
+#create-task-dialog {width:min(420px,calc(100vw - 32px))}
+#create-task-dialog h2 {margin-top:0}
+#create-task-dialog .actions {justify-content:flex-end;margin-top:16px}

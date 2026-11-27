@@ -14,8 +14,6 @@
     return url;
   }
   $('back').href = page('/architecture.html');
-  $('switch-tree').hidden = !id;
-  $('switch-tree').href = page('/solution-space.html');
   const labels = {title:'Кейс', validation:'Критерий готовности', rationale:'Почему это нужно', approach:'Возможный подход',
     tradeoffs:'Ограничения и компромиссы', assumptions:'Предположения', business_query:'Запрос по бизнес-задаче', query:'Запрос по технической задаче'};
   const status = text => { $('status').textContent = text; };
@@ -27,8 +25,8 @@
     item.textContent = text;
     return item;
   }
-  async function api(action, data = {}) {
-    const response = await fetch('/api/solution-spaces/' + action, {method:'POST',
+  async function api(action, data = {}, resource = 'solution-spaces') {
+    const response = await fetch('/api/' + resource + '/' + action, {method:'POST',
       headers:{'Content-Type':'application/json','X-Architect-Request':'1'}, body: JSON.stringify({id, ...data})});
     const result = await response.json();
     if (!response.ok) throw Object.assign(Error(result.error || 'Ошибка запроса'), {status: response.status});
@@ -165,9 +163,10 @@
   window.addEventListener('beforeunload', e => { if (dirty) e.preventDefault(); });
   async function start() {
     const data = await api('get');
+    window.designFlow.remember('solutions');
     $('editor').hidden = false;
     source = data.source; version = data.version; working = data.saved;
-    $('title').textContent = source.title; $('problem').textContent = source.problem;
+    $('title').textContent = taskTitle || source.title; $('problem').textContent = source.problem;
     for (const a of source.answers) $('answers').append(element('strong', a.path.join(' → ')),element('p', a.answer));
     if (working) { cards($('options'), working, true); $('workspace').hidden = false; }
     if (!source.answers.length) generateNote('Запишите хотя бы один ответ в дереве, чтобы построить кейсы.');
@@ -183,17 +182,33 @@
     const {trees} = await api('list');
     status('');
     const list = $('tree-list');
-    if (!trees.length) {
+    window.designFlow.remember('solutions');
+    const attachDoc = params.has('attach') && params.get('doc');
+    const draftTask = params.has('draft') && params.get('doc');
+    if (!trees.length || attachDoc || draftTask) {
       const create = element('a', 'Создать дерево проблем');
       const url = page('/problem-space.html');
       url.searchParams.set('new', '1');
+      if (attachDoc) url.searchParams.set('attach', '1');
       create.href = url;
-      list.append(element('p', 'Пока нет сохранённых деревьев.'), create);
+      list.append(element('p', attachDoc || draftTask ? 'Для этой задачи выберите сохранённое дерево проблем или создайте новое.' :
+        'Пока нет сохранённых деревьев.'), create);
     }
     for (const tree of trees) {
-      const link = document.createElement('a');
+      const link = document.createElement(attachDoc || draftTask ? 'button' : 'a');
       link.className = 'document-row';
-      link.href = page('/solution-space.html', tree.id);
+      const target = page('/solution-space.html', tree.id);
+      if (attachDoc || draftTask) {
+        link.onclick = async () => {
+          if (list.inert) return;
+          list.inert = true;
+          try {
+            const task = draftTask ? {draft_task:draftTask, companion:params.get('metric')} : {doc:attachDoc};
+            await api('attach', {...task, id:tree.id}, 'problem-spaces');
+            location.assign(target);
+          } catch (error) { status(error.message); list.inert = false; }
+        };
+      } else link.href = target;
       link.append(element('strong', tree.title), element('small', tree.has_cases ? 'Есть сохранённые кейсы' : 'Кейсы ещё не созданы'));
       list.append(link);
     }
@@ -201,9 +216,18 @@
   // A step link may point at a tree that exists only as an unsaved draft: offer the saved ones instead.
   async function fallback(error) {
     if (error.status !== 404) throw error;
-    $('switch-tree').hidden = true;
     await library();
     status('Это дерево ещё не сохранено. Выберите сохранённое дерево или вернитесь к вопросам.');
   }
-  (id ? start().catch(fallback) : library()).catch(e => status(e.message));
+  let taskTitle;
+  async function openStage() {
+    taskTitle = await window.designFlow.taskTitle();
+    if (taskTitle) {
+      $('title').textContent = taskTitle;
+      document.title = taskTitle + ' · ' + document.title;
+    }
+    if (id) await start().catch(fallback);
+    else await library();
+  }
+  openStage().catch(e => status(e.message));
 })();
