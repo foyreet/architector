@@ -53,6 +53,8 @@ def main():
                     task_id = parse_qs(urlsplit(page.url).query)['doc'][0]
                     expect(page.locator('#design-flow [aria-current=step]')).to_have_text('1Проблемы')
                     expect(page.locator('.tree-empty')).to_contain_text('Общие вопросы')
+                    expect(page.locator('.space-actions button')).to_have_text(['Предложить вопросы с AI'])
+                    expect(page.locator('.tree-root #add-root')).to_have_text('+ Вопрос')
                     expect(page.locator('#title')).to_be_hidden()
                     expect(page.locator('#tree-origin')).to_contain_text('Дерево шагов ' + str(width))
                     page.locator('#add-root').click()
@@ -88,7 +90,10 @@ def main():
                     page.get_by_label('Вопрос', exact=True).fill('Временная ветвь')
                     page.get_by_role('button', name='Добавить уточнение').click()
                     page.get_by_label('Ответ', exact=True).fill('Временный ответ')
-                    page.locator('#question-editor').get_by_role('button', name='Закрыть').click()
+                    page.get_by_role('button', name='+ Вопрос', exact=True).click()
+                    expect(page.locator('#tree-branches > ul > li')).to_have_count(3)
+                    expect(page.get_by_label('Вопрос', exact=True)).to_be_focused()
+                    page.get_by_role('button', name='Удалить вопрос', exact=True).click()
                     page.get_by_role('button', name='Временная ветвь', exact=True).click()
                     page.get_by_role('button', name='Удалить ветвь вопросов').click()
                     expect(page.locator('.branch-row')).to_have_count(1)
@@ -177,6 +182,8 @@ def main():
                     # Metric tree: role suggestions and role colours.
                     page.goto(origin + '/metric-tree.html?new=1')
                     expect(page.locator('.tree-empty')).to_contain_text('Бизнес-метрика')
+                    expect(page.locator('.space-actions button')).to_have_text(['Предложить метрики с AI'])
+                    expect(page.locator('.tree-root #add-root')).to_have_text('+ Метрика')
                     page.locator('#add-root').click()
                     role = page.get_by_label('Роль', exact=True)
                     expect(role).to_have_attribute('list', 'metric-role-options')
@@ -185,6 +192,12 @@ def main():
                     expect(page.locator('#tree-progress')).to_have_text('С определением: 0 из 1')
                     page.get_by_role('button', name='Удалить метрику').click()
                     expect(page.locator('.branch-row')).to_have_count(0)
+
+                    page.get_by_role('button', name='+ Метрика', exact=True).click()
+                    page.get_by_role('button', name='Добавить дочернюю метрику').click()
+                    page.get_by_role('button', name='+ Метрика', exact=True).click()
+                    expect(page.locator('#tree-branches > ul > li')).to_have_count(2)
+                    expect(page.get_by_label('Название метрики', exact=True)).to_be_focused()
 
                     # Design document: the outline follows filled sections.
                     page.goto(origin + '/design-docs.html?new=1')
@@ -295,6 +308,7 @@ def main():
                     page.goto(hub_url)
                     row.locator('.task-step').nth(1).click()
                     page.get_by_role('button', name=re.compile('Дерево шагов ' + str(width))).click()
+                    expect(page.locator('#editor')).to_be_visible()
                     expect(page.locator('#title')).to_have_text(blank['title'])
                     page.goto(hub_url)
                     row.locator('.task-step').nth(0).click()

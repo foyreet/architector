@@ -28,6 +28,8 @@
 #tree-viewport:focus-visible{outline:2px solid #285bef;outline-offset:-2px}
 #tree-map{width:max-content;min-height:100%;display:flex;align-items:center;padding:32px 24px 84px;--edge:#9fb1cc;--gap:18px}
 
+.tree-root{position:relative;flex:none;display:grid;justify-items:start}
+.tree-root #add-root{position:absolute;top:calc(100% + 6px);left:0;white-space:nowrap}
 #tree-origin,.branch-row{position:relative;flex:none;border-radius:10px}
 #tree-origin{width:165px;padding:14px 16px;color:white;background:#253e65;font-weight:650;text-align:left;border:0;overflow-wrap:break-word;hyphens:auto}
 #tree-origin:hover{background:#1d3356}
@@ -40,7 +42,7 @@
 #tree-branches ul>li::before{content:'';position:absolute;left:0;top:0;bottom:0;border-left:2px solid var(--edge)}
 #tree-branches ul>li:first-child::before{top:50%}
 #tree-branches ul>li:last-child::before{bottom:50%}
-#tree-branches ul>li::after,#tree-origin:has(+ #tree-branches ul>li)::after,.branch-row:has(+ul)::after{content:'';position:absolute;top:50%;width:var(--gap);border-top:2px solid var(--edge)}
+#tree-branches ul>li::after,.tree-root:has(+ #tree-branches ul>li) #tree-origin::after,.branch-row:has(+ul)::after{content:'';position:absolute;top:50%;width:var(--gap);border-top:2px solid var(--edge)}
 #tree-branches ul>li::after{left:0}
 #tree-origin::after,.branch-row::after{left:100%}
 
@@ -107,11 +109,15 @@
   .space-actions{gap:6px;padding:6px 8px}
   #tree-progress{margin-left:0}
   .space-actions button{font-size:13px;padding:6px 10px}
-  #space .problem-layout:is(:has(#question-editor:not(:empty):not([hidden])),:has(#tree-ai:not([hidden]))){grid-template-columns:minmax(0,1fr)}
-  #space #question-editor:not(:empty),#space #tree-ai{grid-column:1/-1;position:absolute;z-index:4;left:0;right:0;bottom:0;max-height:60%;border:1px solid #d7dfec;border-radius:12px 12px 0 0;box-shadow:0 -8px 24px #2334502a}
+  #space .problem-layout:is(:has(#question-editor:not(:empty):not([hidden])),:has(#tree-ai:not([hidden]))){grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) fit-content(55%)}
+  #space #question-editor:not(:empty),#space #tree-ai{grid-column:1/-1;grid-row:2;border:1px solid #d7dfec;border-radius:12px 12px 0 0;box-shadow:0 -8px 24px #2334502a}
   #question-editor :is(input,textarea,select){font-size:16px}
   .tree-controls button{padding:6px 8px;font-size:13px}
+  #tree-map{padding-inline:12px;--gap:12px}
+  #tree-origin{width:clamp(118px,calc(100vw - 248px),165px)}
+  .branch-row{width:min(200px,52vw)}
   #tree-map:has(.tree-empty){flex-direction:column;align-items:flex-start;gap:16px}
+  #tree-map:has(.tree-empty) #add-root{position:static;margin-top:6px}
   .tree-empty{width:min(340px,calc(100vw - 48px));margin-left:0}
 }
 

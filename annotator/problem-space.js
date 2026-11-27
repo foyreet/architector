@@ -279,8 +279,8 @@ window.problemSpace = function (changed, suggest, metrics = false) {
     }
     const hint = document.createElement('p');
     hint.textContent = metrics
-      ? 'Добавьте метрику вручную или попросите AI предложить иерархию.'
-      : 'Добавьте общий вопрос вручную или попросите AI предложить первые вопросы.';
+      ? 'Нажмите «+ Метрика» под бизнес-целью или попросите AI предложить иерархию.'
+      : 'Нажмите «+ Вопрос» под проблемой или попросите AI предложить первые вопросы.';
     guide.append(title, steps, hint);
     return guide;
   }
