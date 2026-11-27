@@ -47,7 +47,7 @@ window.CodexChat = ({api, account, project, diagram, flush, fit, applyProposal})
     $('codex-design-title').textContent=doc?'📄 '+doc.title:'';
     $('codex-design-title').title=doc?.title||'';
     $('codex-design-state').textContent=!doc?'':value.unavailable?'Источник недоступен. Используется прикреплённая версия.':value.changed?'Документ изменён · Обновите, чтобы использовать правки':doc.source_type==='release'?'Публикация · версия '+doc.revision:'Прикреплённая версия';
-    $('codex-design-update').hidden=!doc||doc.source_type==='release';controls();
+    controls();
   }
   $('codex-design-read').onclick=()=>{if(designState.document)window.DesignChat.read(designState.document);};
   async function changeDesign(action){
@@ -57,20 +57,8 @@ window.CodexChat = ({api, account, project, diagram, flush, fit, applyProposal})
     catch(e){if(token===generation){error(e.message);await refresh();}}
     finally{designBusy=false;controls();}
   }
-  $('codex-design-update').onclick=()=>changeDesign('update');$('codex-design-remove').onclick=()=>changeDesign('remove');
-  $('codex-attach').setAttribute('aria-controls','codex-attach-menu');$('codex-attach').setAttribute('aria-expanded','false');
-  const closeAttach=()=>{$('codex-attach-menu').hidden=true;$('codex-attach').setAttribute('aria-expanded','false');};
-  $('codex-attach').onclick=()=>{const hidden=!$('codex-attach-menu').hidden;$('codex-attach-menu').hidden=hidden;$('codex-attach').setAttribute('aria-expanded',String(!hidden));};
-  $('codex-attach-file').onclick=()=>{closeAttach();$('codex-file').click();};
-  $('codex-attach-design').onclick=()=>{
-    closeAttach();const token=generation,identity=scope,selected=body();
-    window.DesignChat.choose(api,async source=>{
-      if(token!==generation||identity!==key())throw Error('Чат изменился. Выберите документ заново.');
-      designBusy=true;controls();
-      try{const value=await window.DesignChat.attach(api,selected,source);if(token===generation&&value)renderDesign(value);return value;}
-      finally{designBusy=false;controls();}
-    });
-  };
+  $('codex-design-remove').onclick=()=>changeDesign('remove');
+  $('codex-attach').onclick=()=>$('codex-file').click();
   $('codex-file').onchange = async () => {
     const files = Array.from($('codex-file').files || []); $('codex-file').value = '';
     if (!files.length) return;
@@ -221,10 +209,8 @@ window.CodexChat = ({api, account, project, diagram, flush, fit, applyProposal})
     $('codex-send').disabled = !connected || pending || sending || uploading || designBusy || listening || modelsLoading || (modelSelect.value && !models.some(m => m.id === modelSelect.value)) || !field.value.trim();
     $('codex-connect').disabled = opening || !!login;
     $('codex-attachments').querySelectorAll('button').forEach(button => button.disabled = pending || sending || uploading);
-    $('codex-attach').disabled = !account.user || pending || sending || uploading || designBusy;
-    $('codex-attach-file').disabled = !connected;
-    for(const id of ['codex-design-update','codex-design-remove'])$(id).disabled=pending||sending||uploading||designBusy;
-    $('codex-attach-design').disabled = pending||sending||uploading||designBusy;
+    $('codex-attach').disabled = !connected || !account.user || pending || sending || uploading || designBusy;
+    $('codex-design-remove').disabled=pending||sending||uploading||designBusy;
     $('codex-clear').disabled = pending || sending || uploading;
     $('codex-disconnect').disabled = pending || sending || uploading;
     $('codex-pending').hidden = !pending;
@@ -400,7 +386,7 @@ window.CodexChat = ({api, account, project, diagram, flush, fit, applyProposal})
     viewportMode();
     drafts.set(scope, field.value);
     scope = key(); generation++; rendered = ''; connected = false; pending = false;
-    field.value = drafts.get(scope) || ''; designState={document:null,version:0};renderDesign(designState);closeAttach();error(); controls(); renderAttachments();
+    field.value = drafts.get(scope) || ''; designState={document:null,version:0};renderDesign(designState);error(); controls(); renderAttachments();
     $('codex-messages').replaceChildren(); $('codex-empty').hidden = false;
     screen.classList.remove('codex-has-history');
     $('codex-context').textContent = project()?.meta.name || 'Черновик в браузере';
@@ -418,7 +404,7 @@ window.CodexChat = ({api, account, project, diagram, flush, fit, applyProposal})
     drafts.set(scope, field.value); clearTimeout(timer); generation++;
   });
   screen.addEventListener('keydown', event => {
-    if (event.key === 'Escape') { event.preventDefault(); if(!$('codex-attach-menu').hidden){closeAttach();$('codex-attach').focus();}else $('codex-chat-close').click(); }
+    if (event.key === 'Escape') { event.preventDefault(); $('codex-chat-close').click(); }
     event.stopPropagation();
   });
   // The chat stays open while the project changes; never submit a draft in a new scope.
@@ -475,7 +461,7 @@ window.CodexChat = ({api, account, project, diagram, flush, fit, applyProposal})
   window.addEventListener('focus', () => { if (screen.open) refresh(); });
   return {open,reset() {
     abortVoice(); models = []; modelsLoaded = false; modelsFailed = false;
-    designState={document:null,version:0};renderDesign(designState);closeAttach();
+    designState={document:null,version:0};renderDesign(designState);
     generation++; clearTimeout(timer); drafts.clear(); attachmentDrafts.clear(); renderAttachments(); appliedProposals.clear(); staleProposals.clear(); proposalViews.clear(); field.value = ''; scope = ''; connected = false;
     login = null; pending = false; $('codex-messages').replaceChildren(); $('codex-login').hidden = true;
     $('codex-login-code').textContent = ''; $('codex-login-link').removeAttribute('href');

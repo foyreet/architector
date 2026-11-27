@@ -525,5 +525,4 @@ body.run-view #inspector-form select:disabled{opacity:1;color:inherit}
 }
 
 /* The document action stays readable in both expanded and mobile navigation. */
-#design-documents-open .sidebar-label { white-space: normal; overflow-wrap: anywhere; line-height: 1.3; }
 
